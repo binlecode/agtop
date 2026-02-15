@@ -1,187 +1,108 @@
-# GUIDE: Homebrew Bottling for `asitop`
+# GUIDE: Homebrew Release Flow for `silitop`
 
-This guide shows how to package and publish `asitop` as a Homebrew formula using common Homebrew practices for Python CLI tools.
+This is the minimal workflow to publish a new `silitop` version and make `brew upgrade silitop` work.
 
-## Scope
+## Key Rule
 
-- Packaging and release workflow only.
-- No runtime behavior changes for `asitop`.
-- Homebrew formula name is `silitop` to avoid collision with `homebrew/core/asitop`.
-- Python package name remains `asitop`.
-- Pinned source tarball + pinned Python resources.
+Homebrew upgrades from the tap formula version in `Formula/silitop.rb`, not from `setup.py` alone.
+
+If users see:
+
+```bash
+Warning: binlecode/silitop/silitop <version> already installed
+```
+
+your tap formula was not bumped (or users have not run `brew update` yet).
 
 ## Prerequisites
 
-- macOS with Homebrew installed.
-- GitHub CLI (`gh`) logged in.
-- A GitHub source repo that contains `Formula/silitop.rb` (this guide assumes `binlecode/silitop`).
+- macOS + Homebrew
+- `gh` logged in
+- Repo: `binlecode/silitop`
 
-Run preflight checks:
+Quick checks:
 
 ```bash
 brew --version
-python3 --version
-which powermetrics
-sysctl -n machdep.cpu.brand_string
 gh auth status
 ```
 
-## Step 1: Set Release Variables
+## Release Checklist (Maintainer)
+
+Set variables:
 
 ```bash
-export GITHUB_USER="binlecode"
-export SRC_REPO="$GITHUB_USER/silitop" # source code repo
-export TAP_NAME="$GITHUB_USER/silitop" # Homebrew tap name
-export TAP_URL="https://github.com/$SRC_REPO.git" # custom remote override
-export VERSION="0.0.23"
+export VERSION="0.0.25"
+export SRC_REPO="binlecode/silitop"
 export TARBALL_URL="https://github.com/$SRC_REPO/archive/refs/tags/v$VERSION.tar.gz"
 ```
 
-## Step 2: Create/Publish Git Tag Release
-
-Push your source changes first, then create release tag:
+1. Push source changes (code + `setup.py` + `CHANGELOG.md`).
 
 ```bash
 git push origin main
-gh release create "v$VERSION" -R "$SRC_REPO" --target main --title "v$VERSION" --notes "Release v$VERSION"
 ```
 
-## Step 3: Compute Tarball SHA256
+2. Create and push the release tag.
 
 ```bash
-curl -fL "$TARBALL_URL" -o "/tmp/asitop-v$VERSION.tar.gz"
-shasum -a 256 "/tmp/asitop-v$VERSION.tar.gz"
+git tag "v$VERSION"
+git push origin "v$VERSION"
 ```
 
-Copy that SHA256 value for the formula.
-
-## Step 4: Add/Update Formula in Repo Tap
-
-Use `Formula/silitop.rb` in your tap repository.
-
-Template:
-
-```ruby
-class Silitop < Formula
-  include Language::Python::Virtualenv
-
-  desc "Performance monitoring CLI tool for Apple Silicon"
-  homepage "https://github.com/binlecode/silitop"
-  url "https://github.com/binlecode/silitop/archive/refs/tags/v0.0.23.tar.gz"
-  sha256 "<TARBALL_SHA256>"
-  license "MIT"
-
-  depends_on "python@3.13"
-
-  resource "blessed" do
-    url "https://files.pythonhosted.org/packages/dd/19/e926a0dbbf93c7aeb15d4dfff0d0e3de02653b3ba540b687307d0819c1ff/blessed-1.30.0.tar.gz"
-    sha256 "4d547019d7b40fc5420ea2ba2bc180fdccc31d6715298e2b49ffa7b020d44667"
-  end
-
-  resource "dashing" do
-    url "https://files.pythonhosted.org/packages/bd/01/1c966934ab5ebe5a8fa3012c5de32bfa86916dba0428bdc6cdfe9489f768/dashing-0.1.0.tar.gz"
-    sha256 "2514608e0f29a775dbd1b1111561219ce83d53cfa4baa2fe4101fab84fd56f1b"
-  end
-
-  resource "psutil" do
-    url "https://files.pythonhosted.org/packages/aa/c6/d1ddf4abb55e93cebc4f2ed8b5d6dbad109ecb8d63748dd2b20ab5e57ebe/psutil-7.2.2.tar.gz"
-    sha256 "0746f5f8d406af344fd547f1c8daa5f5c33dbc293bb8d6a16d80b4bb88f59372"
-  end
-
-  resource "wcwidth" do
-    url "https://files.pythonhosted.org/packages/35/a2/8e3becb46433538a38726c948d3399905a4c7cabd0df578ede5dc51f0ec2/wcwidth-0.6.0.tar.gz"
-    sha256 "cdc4e4262d6ef9a1a57e018384cbeb1208d8abbc64176027e2c2455c81313159"
-  end
-
-  def install
-    virtualenv_install_with_resources(using: "python@3.13")
-    mv bin/"asitop", bin/"silitop"
-  end
-
-  test do
-    output = shell_output("#{bin}/silitop --help")
-    assert_match "Performance monitoring CLI tool for Apple Silicon", output
-  end
-end
-```
-
-Note: `using: "python@3.13"` avoids `FormulaUnknownPythonError` on some setups.
-
-## Step 5: (Optional) Refresh Python Resources
-
-When dependencies change:
+3. Compute tag tarball SHA256.
 
 ```bash
-export HOMEBREW_NO_INSTALL_FROM_API=1
-brew update-python-resources binlecode/silitop/silitop --package-name asitop
+curl -fL "$TARBALL_URL" | shasum -a 256
 ```
 
-Preview only:
+4. Update `Formula/silitop.rb`.
 
-```bash
-brew update-python-resources --print-only binlecode/silitop/silitop --package-name asitop
-```
+- `url` -> `.../v$VERSION.tar.gz`
+- `sha256` -> value from step 3
 
-## Step 6: Validate Locally
-
-```bash
-export HOMEBREW_NO_AUTO_UPDATE=1
-export HOMEBREW_NO_INSTALL_FROM_API=1
-
-brew install --build-from-source --verbose binlecode/silitop/silitop
-brew test binlecode/silitop/silitop
-brew audit --strict --online binlecode/silitop/silitop
-```
-
-Expected:
-
-- Install succeeds.
-- `brew test` runs `silitop --help`.
-- `brew audit` exits cleanly.
-
-## Step 7: Publish Formula Update
+5. Commit and push formula update.
 
 ```bash
 git add Formula/silitop.rb
-git commit -m "Formula: bump silitop formula to v$VERSION"
+git commit -m "Formula: bump silitop to $VERSION"
 git push origin main
 ```
 
-## Step 8: End-User Install
+## End-User Upgrade
 
-If users install from your repo tap:
+```bash
+brew update
+brew upgrade silitop
+brew info silitop
+```
+
+Verify `brew info silitop` shows the new stable version.
+
+## First-Time Install
 
 ```bash
 brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git
-brew install binlecode/silitop/silitop
+brew install silitop
 ```
 
-Run:
+## Quick Validation
 
 ```bash
 silitop --help
 sudo silitop --interval 1 --avg 30 --power-scale profile
 ```
 
-## Step 9: Ongoing Release Routine
-
-For every new release:
-
-1. Cut a new tag/release (for example `v0.0.24`).
-2. Update formula `url` and `sha256`.
-3. Refresh resources if dependencies changed.
-4. Re-run install/test/audit.
-5. Push formula update.
-
 ## Troubleshooting
 
-- `gh` token invalid:
-  - `gh auth logout -h github.com -u <user>`
-  - `gh auth login --web`
-- Git pushes using wrong credential helper:
-  - `gh auth setup-git`
-- Homebrew can’t infer Python in virtualenv:
-  - Use `virtualenv_install_with_resources(using: "python@3.13")`
-- `brew tap binlecode/asitop` creates an old/incorrect tap name:
-  - Use explicit custom remote: `brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git`
-  - If already wrong, reset: `brew untap binlecode/asitop && brew untap binlecode/silitop && brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git`
+- `brew upgrade silitop` says `already installed`:
+  - Confirm `Formula/silitop.rb` was pushed with the new `url` and `sha256`.
+  - Run `brew update`, then retry `brew upgrade silitop`.
+  - Check `brew info silitop`.
+
+- `brew update` has ref errors like `refs/remotes/origin/main`:
+  - Run `brew tap --repair` then `brew update-reset` and retry `brew update`.
+  - If still broken, untap/retap the failing tap.
+
+- Wrong tap name:
+  - Use `binlecode/silitop` (not `binlecode/asitop`).
