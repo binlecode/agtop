@@ -15,6 +15,17 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ### Fixed
 - No changes yet.
 
+## [0.0.25] - 2026-02-15
+
+### Added
+- No changes yet.
+
+### Changed
+- No changes yet.
+
+### Fixed
+- Avoided startup crashes when stale `/tmp/asitop_powermetrics*` files cannot be removed due to permissions.
+
 ## [0.0.24] - 2026-02-15
 
 ### Added
