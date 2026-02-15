@@ -4,10 +4,10 @@ long_description = 'Performance monitoring CLI tool for Apple Silicon'
 
 setup(
     name='asitop',
-    version='0.0.22',
-    author='Timothy Liu',
-    author_email='tlkh.xms@gmail.com',
-    url='https://github.com/tlkh/asitop',
+    version='0.0.24',
+    author='Timothy Liu, binlecode',
+    author_email='tlkh.xms@gmail.com, bin.le.code@gmail.com',
+    url='https://github.com/binlecode/silitop',
     description='Performance monitoring CLI tool for Apple Silicon',
     long_description=long_description,
     long_description_content_type="text/markdown",

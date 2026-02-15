@@ -6,13 +6,15 @@ This guide shows how to package and publish `asitop` as a Homebrew formula using
 
 - Packaging and release workflow only.
 - No runtime behavior changes for `asitop`.
+- Homebrew formula name is `silitop` to avoid collision with `homebrew/core/asitop`.
+- Python package name remains `asitop`.
 - Pinned source tarball + pinned Python resources.
 
 ## Prerequisites
 
 - macOS with Homebrew installed.
 - GitHub CLI (`gh`) logged in.
-- A GitHub repo where the formula will live (this guide assumes `binlecode/asitop`).
+- A GitHub source repo that contains `Formula/silitop.rb` (this guide assumes `binlecode/silitop`).
 
 Run preflight checks:
 
@@ -28,7 +30,9 @@ gh auth status
 
 ```bash
 export GITHUB_USER="binlecode"
-export SRC_REPO="$GITHUB_USER/asitop"
+export SRC_REPO="$GITHUB_USER/silitop" # source code repo
+export TAP_NAME="$GITHUB_USER/silitop" # Homebrew tap name
+export TAP_URL="https://github.com/$SRC_REPO.git" # custom remote override
 export VERSION="0.0.23"
 export TARBALL_URL="https://github.com/$SRC_REPO/archive/refs/tags/v$VERSION.tar.gz"
 ```
@@ -53,17 +57,17 @@ Copy that SHA256 value for the formula.
 
 ## Step 4: Add/Update Formula in Repo Tap
 
-Use `Formula/asitop.rb` in your repository (repo-as-tap layout).
+Use `Formula/silitop.rb` in your tap repository.
 
 Template:
 
 ```ruby
-class Asitop < Formula
+class Silitop < Formula
   include Language::Python::Virtualenv
 
   desc "Performance monitoring CLI tool for Apple Silicon"
-  homepage "https://github.com/binlecode/asitop"
-  url "https://github.com/binlecode/asitop/archive/refs/tags/v0.0.23.tar.gz"
+  homepage "https://github.com/binlecode/silitop"
+  url "https://github.com/binlecode/silitop/archive/refs/tags/v0.0.23.tar.gz"
   sha256 "<TARBALL_SHA256>"
   license "MIT"
 
@@ -91,10 +95,11 @@ class Asitop < Formula
 
   def install
     virtualenv_install_with_resources(using: "python@3.13")
+    mv bin/"asitop", bin/"silitop"
   end
 
   test do
-    output = shell_output("#{bin}/asitop --help")
+    output = shell_output("#{bin}/silitop --help")
     assert_match "Performance monitoring CLI tool for Apple Silicon", output
   end
 end
@@ -108,13 +113,13 @@ When dependencies change:
 
 ```bash
 export HOMEBREW_NO_INSTALL_FROM_API=1
-brew update-python-resources binlecode/asitop/asitop --package-name asitop
+brew update-python-resources binlecode/silitop/silitop --package-name asitop
 ```
 
 Preview only:
 
 ```bash
-brew update-python-resources --print-only binlecode/asitop/asitop --package-name asitop
+brew update-python-resources --print-only binlecode/silitop/silitop --package-name asitop
 ```
 
 ## Step 6: Validate Locally
@@ -123,22 +128,22 @@ brew update-python-resources --print-only binlecode/asitop/asitop --package-name
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_FROM_API=1
 
-brew install --build-from-source --verbose binlecode/asitop/asitop
-brew test binlecode/asitop/asitop
-brew audit --strict --online binlecode/asitop/asitop
+brew install --build-from-source --verbose binlecode/silitop/silitop
+brew test binlecode/silitop/silitop
+brew audit --strict --online binlecode/silitop/silitop
 ```
 
 Expected:
 
 - Install succeeds.
-- `brew test` runs `asitop --help`.
+- `brew test` runs `silitop --help`.
 - `brew audit` exits cleanly.
 
 ## Step 7: Publish Formula Update
 
 ```bash
-git add Formula/asitop.rb
-git commit -m "Formula: bump asitop to v$VERSION"
+git add Formula/silitop.rb
+git commit -m "Formula: bump silitop formula to v$VERSION"
 git push origin main
 ```
 
@@ -147,21 +152,15 @@ git push origin main
 If users install from your repo tap:
 
 ```bash
-brew tap binlecode/asitop https://github.com/binlecode/asitop.git
-brew install asitop
-```
-
-Or fully-qualified:
-
-```bash
-brew install binlecode/asitop/asitop
+brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git
+brew install binlecode/silitop/silitop
 ```
 
 Run:
 
 ```bash
-asitop --help
-sudo asitop --interval 1 --avg 30 --power-scale profile
+silitop --help
+sudo silitop --interval 1 --avg 30 --power-scale profile
 ```
 
 ## Step 9: Ongoing Release Routine
@@ -183,3 +182,6 @@ For every new release:
   - `gh auth setup-git`
 - Homebrew can’t infer Python in virtualenv:
   - Use `virtualenv_install_with_resources(using: "python@3.13")`
+- `brew tap binlecode/asitop` creates an old/incorrect tap name:
+  - Use explicit custom remote: `brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git`
+  - If already wrong, reset: `brew untap binlecode/asitop && brew untap binlecode/silitop && brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git`

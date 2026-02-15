@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the `binlecode/asitop` fork should be documented in this file.
+All notable changes to the `binlecode/silitop` fork should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
@@ -14,6 +14,16 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ### Fixed
 - No changes yet.
+
+## [0.0.24] - 2026-02-15
+
+### Added
+- Added maintainer metadata for `binlecode` in package author fields.
+
+### Changed
+- Renamed repository from `binlecode/asitop` to `binlecode/silitop`.
+- Renamed Homebrew tap formula from `asitop` to `silitop` to avoid collision with `homebrew/core/asitop`.
+- Updated Homebrew install and bottling docs to use `binlecode/silitop/silitop`.
 
 ## [0.0.23] - 2026-02-15
 
@@ -33,10 +43,10 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [0.0.22] - 2026-02-15
 
-Fork baseline release tracking started in `binlecode/asitop`.
+Fork baseline release tracking started in `binlecode/silitop`.
 
 ### Added
-- Homebrew formula at `Formula/asitop.rb` for tap-based installation.
+- Homebrew formula at `Formula/silitop.rb` for tap-based installation.
 - Formula test to verify CLI help output.
 
 ### Changed

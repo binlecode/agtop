@@ -1,4 +1,4 @@
-# asitop
+# silitop
 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/asitop)
 
@@ -6,11 +6,14 @@ Performance monitoring CLI tool for Apple Silicon
 
 ![](images/asitop.png)
 
+Homebrew tap formula/binary name: `silitop`  
+Upstream PyPI/Homebrew-core package name: `asitop`
+
 ```shell
 pip install asitop
 ```
 
-## What is `asitop`
+## What is `silitop`
 
 A Python-based `nvtop`-inspired command line tool for Apple Silicon Macs.
 
@@ -26,27 +29,27 @@ A Python-based `nvtop`-inspired command line tool for Apple Silicon Macs.
   * Chart for CPU/GPU power
   * Peak power, rolling average display
 
-`asitop` uses the built-in [`powermetrics`](https://www.unix.com/man-page/osx/1/powermetrics/) utility on macOS, which allows access to a variety of hardware performance counters. Note that it requires `sudo` to run due to `powermetrics` needing root access to run. `asitop` is lightweight and has minimal performance impact.
+`silitop` uses the built-in [`powermetrics`](https://www.unix.com/man-page/osx/1/powermetrics/) utility on macOS, which allows access to a variety of hardware performance counters. Note that it requires `sudo` to run due to `powermetrics` needing root access to run. `silitop` is lightweight and has minimal performance impact.
 
-`asitop` is intended for Apple Silicon Macs on modern macOS versions. Runtime metrics are sourced from
+`silitop` is intended for Apple Silicon Macs on modern macOS versions. Runtime metrics are sourced from
 `powermetrics`, so available fields can vary by macOS version and chip generation.
 
 ## Installation and Usage
 
-Install with Homebrew (recommended on macOS):
+Install with Homebrew from the public `silitop` tap:
 
 ```shell
-brew install binlecode/asitop/asitop
+brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git
+brew install binlecode/silitop/silitop
 ```
 
-Optional (tap once, then use short name):
+Install with Homebrew/core (official upstream formula):
 
 ```shell
-brew tap binlecode/asitop
 brew install asitop
 ```
 
-Install with pip:
+Install with pip (upstream package name):
 
 ```shell
 pip install asitop
@@ -55,6 +58,10 @@ pip install asitop
 Upgrade / uninstall with Homebrew:
 
 ```shell
+brew update && brew upgrade silitop
+brew uninstall silitop
+
+# if installed from Homebrew/core instead:
 brew update && brew upgrade asitop
 brew uninstall asitop
 ```
@@ -62,15 +69,13 @@ brew uninstall asitop
 After installation, run in Terminal:
 
 ```shell
-# to enter password before start
-# this mode is recommended!
-sudo asitop
-
-# it will prompt password on start
-asitop
+# tap formula command name
+sudo silitop
+silitop
 
 # advanced options
-asitop [-h] [--interval INTERVAL] [--color COLOR] [--avg AVG] [--power-scale {auto,profile}]
+silitop [-h] [--interval INTERVAL] [--color COLOR] [--avg AVG] [--power-scale {auto,profile}]
+# upstream/Homebrew-core users run the same flags under `asitop`
 optional arguments:
   -h, --help           show this help message and exit
   --interval INTERVAL  Display interval and sampling interval for powermetrics (seconds)

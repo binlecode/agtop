@@ -1,9 +1,9 @@
-class Asitop < Formula
+class Silitop < Formula
   include Language::Python::Virtualenv
 
   desc "Performance monitoring CLI tool for Apple Silicon"
-  homepage "https://github.com/binlecode/asitop"
-  url "https://github.com/binlecode/asitop/archive/refs/tags/v0.0.23.tar.gz"
+  homepage "https://github.com/binlecode/silitop"
+  url "https://github.com/binlecode/silitop/archive/refs/tags/v0.0.23.tar.gz"
   sha256 "b80bc88603bedc6c112bbcfb368178fcd50797acb09f18d2070e4950f72a325c"
   license "MIT"
 
@@ -31,10 +31,11 @@ class Asitop < Formula
 
   def install
     virtualenv_install_with_resources(using: "python@3.13")
+    mv bin/"asitop", bin/"silitop"
   end
 
   test do
-    output = shell_output("#{bin}/asitop --help")
+    output = shell_output("#{bin}/silitop --help")
     assert_match "Performance monitoring CLI tool for Apple Silicon", output
   end
 end
