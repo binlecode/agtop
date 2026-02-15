@@ -30,7 +30,7 @@ class Asitop < Formula
   end
 
   def install
-    virtualenv_install_with_resources
+    virtualenv_install_with_resources(using: "python@3.13")
   end
 
   test do
