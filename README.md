@@ -33,7 +33,33 @@ A Python-based `nvtop`-inspired command line tool for Apple Silicon Macs.
 
 ## Installation and Usage
 
-`asitop` is a Python-based command line tool. You need `pip` to download and install `asitop`. macOS already comes with Python, to install `pip`, you can follow an [online guide](https://phoenixnap.com/kb/install-pip-mac). After you install `asitop` via `pip`, you can use it via the Terminal.
+Install with Homebrew (recommended on macOS):
+
+```shell
+brew install binlecode/asitop/asitop
+```
+
+Optional (tap once, then use short name):
+
+```shell
+brew tap binlecode/asitop
+brew install asitop
+```
+
+Install with pip:
+
+```shell
+pip install asitop
+```
+
+Upgrade / uninstall with Homebrew:
+
+```shell
+brew update && brew upgrade asitop
+brew uninstall asitop
+```
+
+After installation, run in Terminal:
 
 ```shell
 # to enter password before start
