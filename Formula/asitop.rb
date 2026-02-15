@@ -3,8 +3,8 @@ class Asitop < Formula
 
   desc "Performance monitoring CLI tool for Apple Silicon"
   homepage "https://github.com/binlecode/asitop"
-  url "https://github.com/binlecode/asitop/archive/refs/tags/v0.0.22.tar.gz"
-  sha256 "103ab69407232f34be2870aa95f11cac3df2952838537eed88ca4cc6a290d467"
+  url "https://github.com/binlecode/asitop/archive/refs/tags/v0.0.23.tar.gz"
+  sha256 "b80bc88603bedc6c112bbcfb368178fcd50797acb09f18d2070e4950f72a325c"
   license "MIT"
 
   depends_on "python@3.13"
