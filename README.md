@@ -12,7 +12,7 @@ pip install asitop
 
 ## What is `asitop`
 
-A Python-based `nvtop`-inspired command line tool for Apple Silicon (aka M1) Macs.
+A Python-based `nvtop`-inspired command line tool for Apple Silicon Macs.
 
 * Utilization info:
   * CPU (E-cluster and P-cluster), GPU
@@ -28,7 +28,8 @@ A Python-based `nvtop`-inspired command line tool for Apple Silicon (aka M1) Mac
 
 `asitop` uses the built-in [`powermetrics`](https://www.unix.com/man-page/osx/1/powermetrics/) utility on macOS, which allows access to a variety of hardware performance counters. Note that it requires `sudo` to run due to `powermetrics` needing root access to run. `asitop` is lightweight and has minimal performance impact.
 
-**`asitop` only works on Apple Silicon Macs on macOS Monterey!**
+`asitop` is intended for Apple Silicon Macs on modern macOS versions. Runtime metrics are sourced from
+`powermetrics`, so available fields can vary by macOS version and chip generation.
 
 ## Installation and Usage
 
@@ -43,13 +44,21 @@ sudo asitop
 asitop
 
 # advanced options
-asitop [-h] [--interval INTERVAL] [--color COLOR] [--avg AVG]
+asitop [-h] [--interval INTERVAL] [--color COLOR] [--avg AVG] [--power-scale {auto,profile}]
 optional arguments:
   -h, --help           show this help message and exit
   --interval INTERVAL  Display interval and sampling interval for powermetrics (seconds)
   --color COLOR        Choose display color (0~8)
   --avg AVG            Interval for averaged values (seconds)
+  --power-scale {auto,profile}
+                       Power chart scaling. "auto" uses rolling peak; "profile" uses chip reference values.
 ```
+
+## Compatibility
+
+- Chip families: `M1`, `M2`, `M3`, and `M4` are recognized directly.
+- Unknown future Apple Silicon names fall back to tier-based defaults (`base`/`Pro`/`Max`/`Ultra`) so charts remain usable.
+- `powermetrics` output may differ across macOS releases; some metrics can be unavailable depending on OS/chip.
 
 ## How it works
 

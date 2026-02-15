@@ -3,6 +3,12 @@ import argparse
 from collections import deque
 from dashing import VSplit, HSplit, HGauge, HChart, VGauge
 from .utils import *
+from .power_scaling import (
+    DEFAULT_CPU_FLOOR_W,
+    DEFAULT_GPU_FLOOR_W,
+    clamp_percent,
+    power_to_percent,
+)
 
 parser = argparse.ArgumentParser(
     description='asitop: Performance monitoring CLI tool for Apple Silicon')
@@ -16,6 +22,8 @@ parser.add_argument('--show_cores', type=bool, default=False,
                     help='Choose show cores mode')
 parser.add_argument('--max_count', type=int, default=0,
                     help='Max show count to restart powermetrics')
+parser.add_argument('--power-scale', choices=["auto", "profile"], default="auto",
+                    help='Power chart scaling mode: auto uses rolling peak, profile uses SoC reference')
 args = parser.parse_args()
 
 
@@ -34,27 +42,34 @@ def main():
     gpu_ane_gauges = [gpu_gauge, ane_gauge]
 
     soc_info_dict = get_soc_info()
-    e_core_count = soc_info_dict["e_core_count"]
+    e_core_count = max(0, int(soc_info_dict["e_core_count"]))
     e_core_gauges = [VGauge(val=0, color=args.color, border_color=args.color) for _ in range(e_core_count)]
-    p_core_count = soc_info_dict["p_core_count"]
-    p_core_gauges = [VGauge(val=0, color=args.color, border_color=args.color) for _ in range(min(p_core_count, 8))]
-    p_core_split = [HSplit(
-        *p_core_gauges,
-    )]
+    p_core_count = max(0, int(soc_info_dict["p_core_count"]))
+    p_core_gauges = []
+    p_core_gauges_ext = []
+    p_core_split = []
+    if p_core_count > 0:
+        p_core_gauges = [VGauge(val=0, color=args.color, border_color=args.color) for _ in range(min(p_core_count, 8))]
+        p_core_split = [HSplit(
+            *p_core_gauges,
+        )]
     if p_core_count > 8:
         p_core_gauges_ext = [VGauge(val=0, color=args.color, border_color=args.color) for _ in range(p_core_count - 8)]
         p_core_split.append(HSplit(
             *p_core_gauges_ext,
         ))
-    processor_gauges = [cpu1_gauge,
-                        HSplit(*e_core_gauges),
-                        cpu2_gauge,
-                        *p_core_split,
-                        *gpu_ane_gauges
-                        ] if args.show_cores else [
-        HSplit(cpu1_gauge, cpu2_gauge),
-        HSplit(*gpu_ane_gauges)
-    ]
+    if args.show_cores:
+        processor_gauges = [cpu1_gauge]
+        if e_core_gauges:
+            processor_gauges.append(HSplit(*e_core_gauges))
+        processor_gauges.append(cpu2_gauge)
+        processor_gauges.extend(p_core_split)
+        processor_gauges.extend(gpu_ane_gauges)
+    else:
+        processor_gauges = [
+            HSplit(cpu1_gauge, cpu2_gauge),
+            HSplit(*gpu_ane_gauges)
+        ]
     processor_split = VSplit(
         *processor_gauges,
         title="Processor Utilization",
@@ -129,8 +144,8 @@ def main():
         "GPU)"
     ])
     usage_gauges.title = cpu_title
-    cpu_max_power = soc_info_dict["cpu_max_power"]
-    gpu_max_power = soc_info_dict["gpu_max_power"]
+    cpu_chart_ref_w = soc_info_dict["cpu_chart_ref_w"]
+    gpu_chart_ref_w = soc_info_dict["gpu_chart_ref_w"]
     ane_max_power = 8.0
     """max_cpu_bw = soc_info_dict["cpu_max_bw"]
     max_gpu_bw = soc_info_dict["gpu_max_bw"]
@@ -142,10 +157,11 @@ def main():
 
     print("\n[2/3] Starting powermetrics process\n")
 
+    sample_interval = max(1, args.interval)
     timecode = str(int(time.time()))
 
     powermetrics_process = run_powermetrics_process(timecode,
-                                                    interval=args.interval * 1000)
+                                                    interval=sample_interval * 1000)
 
     print("\n[3/3] Waiting for first reading...\n")
 
@@ -163,9 +179,10 @@ def main():
         avg = sum(inlist) / len(inlist)
         return avg
 
-    avg_package_power_list = deque([], maxlen=int(args.avg / args.interval))
-    avg_cpu_power_list = deque([], maxlen=int(args.avg / args.interval))
-    avg_gpu_power_list = deque([], maxlen=int(args.avg / args.interval))
+    avg_window = max(1, int(args.avg / sample_interval))
+    avg_package_power_list = deque([], maxlen=avg_window)
+    avg_cpu_power_list = deque([], maxlen=avg_window)
+    avg_gpu_power_list = deque([], maxlen=avg_window)
 
     clear_console()
 
@@ -178,7 +195,7 @@ def main():
                     powermetrics_process.terminate()
                     timecode = str(int(time.time()))
                     powermetrics_process = run_powermetrics_process(
-                        timecode, interval=args.interval * 1000)
+                        timecode, interval=sample_interval * 1000)
                 count += 1
             ready = parse_powermetrics(timecode=timecode)
             if ready:
@@ -213,22 +230,36 @@ def main():
                     if args.show_cores:
                         core_count = 0
                         for i in cpu_metrics_dict["e_core"]:
-                            e_core_gauges[core_count % 4].title = "".join([
+                            if not e_core_gauges:
+                                break
+                            gauge = e_core_gauges[core_count % len(e_core_gauges)]
+                            core_active = cpu_metrics_dict.get("E-Cluster" + str(i) + "_active", 0)
+                            gauge.title = "".join([
                                 "Core-" + str(i + 1) + " ",
-                                str(cpu_metrics_dict["E-Cluster" + str(i) + "_active"]),
+                                str(core_active),
                                 "%",
                             ])
-                            e_core_gauges[core_count % 4].value = cpu_metrics_dict["E-Cluster" + str(i) + "_active"]
+                            gauge.value = core_active
                             core_count += 1
                         core_count = 0
                         for i in cpu_metrics_dict["p_core"]:
-                            core_gauges = p_core_gauges if core_count < 8 else p_core_gauges_ext
-                            core_gauges[core_count % 8].title = "".join([
+                            if core_count < len(p_core_gauges):
+                                core_gauges = p_core_gauges
+                                gauge_idx = core_count
+                            else:
+                                core_gauges = p_core_gauges_ext
+                                gauge_idx = core_count - len(p_core_gauges)
+                            if not core_gauges:
+                                core_count += 1
+                                continue
+                            gauge = core_gauges[gauge_idx % len(core_gauges)]
+                            core_active = cpu_metrics_dict.get("P-Cluster" + str(i) + "_active", 0)
+                            gauge.title = "".join([
                                 ("Core-" if p_core_count < 6 else 'C-') + str(i + 1) + " ",
-                                str(cpu_metrics_dict["P-Cluster" + str(i) + "_active"]),
+                                str(core_active),
                                 "%",
                             ])
-                            core_gauges[core_count % 8].value = cpu_metrics_dict["P-Cluster" + str(i) + "_active"]
+                            gauge.value = core_active
                             core_count += 1
 
                     gpu_gauge.title = "".join([
@@ -240,14 +271,14 @@ def main():
                     ])
                     gpu_gauge.value = gpu_metrics_dict["active"]
 
-                    ane_util_percent = int(
-                        cpu_metrics_dict["ane_W"] / args.interval / ane_max_power * 100)
+                    ane_util_percent = clamp_percent(
+                        cpu_metrics_dict["ane_W"] / sample_interval / ane_max_power * 100)
                     ane_gauge.title = "".join([
                         "ANE Usage: ",
                         str(ane_util_percent),
                         "% @ ",
                         '{0:.1f}'.format(
-                            cpu_metrics_dict["ane_W"] / args.interval),
+                            cpu_metrics_dict["ane_W"] / sample_interval),
                         " W"
                     ])
                     ane_gauge.value = ane_util_percent
@@ -347,7 +378,7 @@ def main():
                     """
 
                     package_power_W = cpu_metrics_dict["package_W"] / \
-                                      args.interval
+                                      sample_interval
                     if package_power_W > package_peak_power:
                         package_peak_power = package_power_W
                     avg_package_power_list.append(package_power_W)
@@ -363,11 +394,16 @@ def main():
                         thermal_throttle,
                     ])
 
-                    cpu_power_percent = int(
-                        cpu_metrics_dict["cpu_W"] / args.interval / cpu_max_power * 100)
-                    cpu_power_W = cpu_metrics_dict["cpu_W"] / args.interval
+                    cpu_power_W = cpu_metrics_dict["cpu_W"] / sample_interval
                     if cpu_power_W > cpu_peak_power:
                         cpu_peak_power = cpu_power_W
+                    cpu_power_percent = power_to_percent(
+                        power_w=cpu_power_W,
+                        mode=args.power_scale,
+                        profile_ref_w=cpu_chart_ref_w,
+                        peak_w=cpu_peak_power,
+                        floor_w=DEFAULT_CPU_FLOOR_W,
+                    )
                     avg_cpu_power_list.append(cpu_power_W)
                     avg_cpu_power = get_avg(avg_cpu_power_list)
                     cpu_power_chart.title = "".join([
@@ -381,11 +417,16 @@ def main():
                     ])
                     cpu_power_chart.append(cpu_power_percent)
 
-                    gpu_power_percent = int(
-                        cpu_metrics_dict["gpu_W"] / args.interval / gpu_max_power * 100)
-                    gpu_power_W = cpu_metrics_dict["gpu_W"] / args.interval
+                    gpu_power_W = cpu_metrics_dict["gpu_W"] / sample_interval
                     if gpu_power_W > gpu_peak_power:
                         gpu_peak_power = gpu_power_W
+                    gpu_power_percent = power_to_percent(
+                        power_w=gpu_power_W,
+                        mode=args.power_scale,
+                        profile_ref_w=gpu_chart_ref_w,
+                        peak_w=gpu_peak_power,
+                        floor_w=DEFAULT_GPU_FLOOR_W,
+                    )
                     avg_gpu_power_list.append(gpu_power_W)
                     avg_gpu_power = get_avg(avg_gpu_power_list)
                     gpu_power_chart.title = "".join([
@@ -401,7 +442,7 @@ def main():
 
                     ui.display()
 
-            time.sleep(args.interval)
+            time.sleep(sample_interval)
 
     except KeyboardInterrupt:
         print("Stopping...")

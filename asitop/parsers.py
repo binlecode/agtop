@@ -1,9 +1,33 @@
+def _to_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _to_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _active_percent(idle_ratio):
+    idle = _to_float(idle_ratio, default=1.0)
+    active = (1.0 - idle) * 100.0
+    return _to_int(max(0.0, min(100.0, active)))
+
+
 def parse_thermal_pressure(powermetrics_parse):
-    return powermetrics_parse["thermal_pressure"]
+    if not isinstance(powermetrics_parse, dict):
+        return "Unknown"
+    return powermetrics_parse.get("thermal_pressure", "Unknown")
 
 
 def parse_bandwidth_metrics(powermetrics_parse):
-    bandwidth_metrics = powermetrics_parse["bandwidth_counters"]
+    if not isinstance(powermetrics_parse, dict):
+        return {}
+    bandwidth_metrics = powermetrics_parse.get("bandwidth_counters", [])
     bandwidth_metrics_dict = {}
     data_fields = ["PCPU0 DCS RD", "PCPU0 DCS WR",
                    "PCPU1 DCS RD", "PCPU1 DCS WR",
@@ -30,10 +54,10 @@ def parse_bandwidth_metrics(powermetrics_parse):
                    "JPG DCS RD", "JPG DCS WR",
                    "DCS RD", "DCS WR"]
     for h in data_fields:
-        bandwidth_metrics_dict[h] = 0
+        bandwidth_metrics_dict[h] = 0.0
     for l in bandwidth_metrics:
-        if l["name"] in data_fields:
-            bandwidth_metrics_dict[l["name"]] = l["value"]/(1e9)
+        if l.get("name") in data_fields:
+            bandwidth_metrics_dict[l["name"]] = _to_float(l.get("value")) / 1e9
     bandwidth_metrics_dict["PCPU DCS RD"] = bandwidth_metrics_dict["PCPU DCS RD"] + \
         bandwidth_metrics_dict["PCPU0 DCS RD"] + \
         bandwidth_metrics_dict["PCPU1 DCS RD"] + \
@@ -76,65 +100,93 @@ def parse_bandwidth_metrics(powermetrics_parse):
 
 
 def parse_cpu_metrics(powermetrics_parse):
-    e_core = []
-    p_core = []
-    cpu_metrics = powermetrics_parse["processor"]
-    cpu_metric_dict = {}
-    # cpu_clusters
-    cpu_clusters = cpu_metrics["clusters"]
-    for cluster in cpu_clusters:
-        name = cluster["name"]
-        cpu_metric_dict[name+"_freq_Mhz"] = int(cluster["freq_hz"]/(1e6))
-        cpu_metric_dict[name+"_active"] = int((1 - cluster["idle_ratio"])*100)
-        for cpu in cluster["cpus"]:
-            name = 'E-Cluster' if name[0] == 'E' else 'P-Cluster'
-            core = e_core if name[0] == 'E' else p_core
-            core.append(cpu["cpu"])
-            cpu_metric_dict[name + str(cpu["cpu"]) + "_freq_Mhz"] = int(cpu["freq_hz"] / (1e6))
-            cpu_metric_dict[name + str(cpu["cpu"]) + "_active"] = int((1 - cpu["idle_ratio"]) * 100)
-    cpu_metric_dict["e_core"] = e_core
-    cpu_metric_dict["p_core"] = p_core
-    if "E-Cluster_active" not in cpu_metric_dict:
-        # M1 Ultra
-        cpu_metric_dict["E-Cluster_active"] = int(
-            (cpu_metric_dict["E0-Cluster_active"] + cpu_metric_dict["E1-Cluster_active"])/2)
-    if "E-Cluster_freq_Mhz" not in cpu_metric_dict:
-        # M1 Ultra
-        cpu_metric_dict["E-Cluster_freq_Mhz"] = max(
-            cpu_metric_dict["E0-Cluster_freq_Mhz"], cpu_metric_dict["E1-Cluster_freq_Mhz"])
-    if "P-Cluster_active" not in cpu_metric_dict:
-        if "P2-Cluster_active" in cpu_metric_dict:
-            # M1 Ultra
-            cpu_metric_dict["P-Cluster_active"] = int((cpu_metric_dict["P0-Cluster_active"] + cpu_metric_dict["P1-Cluster_active"] +
-                                                      cpu_metric_dict["P2-Cluster_active"] + cpu_metric_dict["P3-Cluster_active"]) / 4)
-        else:
-            cpu_metric_dict["P-Cluster_active"] = int(
-                (cpu_metric_dict["P0-Cluster_active"] + cpu_metric_dict["P1-Cluster_active"])/2)
-    if "P-Cluster_freq_Mhz" not in cpu_metric_dict:
-        if "P2-Cluster_freq_Mhz" in cpu_metric_dict:
-            # M1 Ultra
-            freqs = [
-                cpu_metric_dict["P0-Cluster_freq_Mhz"],
-                cpu_metric_dict["P1-Cluster_freq_Mhz"],
-                cpu_metric_dict["P2-Cluster_freq_Mhz"],
-                cpu_metric_dict["P3-Cluster_freq_Mhz"]]
-            cpu_metric_dict["P-Cluster_freq_Mhz"] = max(freqs)
-        else:
-            cpu_metric_dict["P-Cluster_freq_Mhz"] = max(
-                cpu_metric_dict["P0-Cluster_freq_Mhz"], cpu_metric_dict["P1-Cluster_freq_Mhz"])
-    # power
-    cpu_metric_dict["ane_W"] = cpu_metrics["ane_energy"]/1000
-    #cpu_metric_dict["dram_W"] = cpu_metrics["dram_energy"]/1000
-    cpu_metric_dict["cpu_W"] = cpu_metrics["cpu_energy"]/1000
-    cpu_metric_dict["gpu_W"] = cpu_metrics["gpu_energy"]/1000
-    cpu_metric_dict["package_W"] = cpu_metrics["combined_power"]/1000
+    cpu_metric_dict = {
+        "E-Cluster_active": 0,
+        "E-Cluster_freq_Mhz": 0,
+        "P-Cluster_active": 0,
+        "P-Cluster_freq_Mhz": 0,
+        "ane_W": 0.0,
+        "cpu_W": 0.0,
+        "gpu_W": 0.0,
+        "package_W": 0.0,
+        "e_core": [],
+        "p_core": [],
+    }
+    if not isinstance(powermetrics_parse, dict):
+        return cpu_metric_dict
+
+    cpu_metrics = powermetrics_parse.get("processor", {})
+    clusters = cpu_metrics.get("clusters", [])
+    e_cluster_active = []
+    p_cluster_active = []
+    e_cluster_freq = []
+    p_cluster_freq = []
+
+    for cluster in clusters:
+        cluster_name = str(cluster.get("name", ""))
+        if not cluster_name:
+            continue
+        is_e_cluster = cluster_name.startswith("E")
+        is_p_cluster = cluster_name.startswith("P")
+        cluster_prefix = "E-Cluster" if is_e_cluster else "P-Cluster"
+        cluster_freq_mhz = _to_int(_to_float(cluster.get("freq_hz")) / 1e6)
+        cluster_active = _active_percent(cluster.get("idle_ratio"))
+        cpu_metric_dict[cluster_name + "_freq_Mhz"] = cluster_freq_mhz
+        cpu_metric_dict[cluster_name + "_active"] = cluster_active
+
+        if is_e_cluster:
+            e_cluster_active.append(cluster_active)
+            e_cluster_freq.append(cluster_freq_mhz)
+        elif is_p_cluster:
+            p_cluster_active.append(cluster_active)
+            p_cluster_freq.append(cluster_freq_mhz)
+
+        for cpu in cluster.get("cpus", []):
+            cpu_index = _to_int(cpu.get("cpu"), default=-1)
+            if cpu_index < 0:
+                continue
+            cpu_freq_mhz = _to_int(_to_float(cpu.get("freq_hz")) / 1e6)
+            cpu_active = _active_percent(cpu.get("idle_ratio"))
+            cpu_metric_dict[cluster_prefix + str(cpu_index) + "_freq_Mhz"] = cpu_freq_mhz
+            cpu_metric_dict[cluster_prefix + str(cpu_index) + "_active"] = cpu_active
+            if is_e_cluster:
+                cpu_metric_dict["e_core"].append(cpu_index)
+            elif is_p_cluster:
+                cpu_metric_dict["p_core"].append(cpu_index)
+
+    if e_cluster_active:
+        cpu_metric_dict["E-Cluster_active"] = _to_int(sum(e_cluster_active) / len(e_cluster_active))
+        cpu_metric_dict["E-Cluster_freq_Mhz"] = _to_int(max(e_cluster_freq))
+    if p_cluster_active:
+        cpu_metric_dict["P-Cluster_active"] = _to_int(sum(p_cluster_active) / len(p_cluster_active))
+        cpu_metric_dict["P-Cluster_freq_Mhz"] = _to_int(max(p_cluster_freq))
+
+    cpu_metric_dict["e_core"] = sorted(set(cpu_metric_dict["e_core"]))
+    cpu_metric_dict["p_core"] = sorted(set(cpu_metric_dict["p_core"]))
+
+    ane_energy = _to_float(cpu_metrics.get("ane_energy", 0.0))
+    cpu_energy = _to_float(cpu_metrics.get("cpu_energy", 0.0))
+    gpu_energy = _to_float(cpu_metrics.get("gpu_energy", 0.0))
+    package_energy = cpu_metrics.get("combined_power")
+    if package_energy is None:
+        package_energy = ane_energy + cpu_energy + gpu_energy
+    package_energy = _to_float(package_energy, 0.0)
+
+    cpu_metric_dict["ane_W"] = ane_energy / 1000.0
+    cpu_metric_dict["cpu_W"] = cpu_energy / 1000.0
+    cpu_metric_dict["gpu_W"] = gpu_energy / 1000.0
+    cpu_metric_dict["package_W"] = package_energy / 1000.0
     return cpu_metric_dict
 
 
 def parse_gpu_metrics(powermetrics_parse):
-    gpu_metrics = powermetrics_parse["gpu"]
+    gpu_metrics = {}
+    if isinstance(powermetrics_parse, dict):
+        gpu_metrics = powermetrics_parse.get("gpu", {})
+    freq_value = _to_float(gpu_metrics.get("freq_hz", 0.0))
+    freq_mhz = _to_int(freq_value / 1e6) if freq_value > 100000 else _to_int(freq_value)
     gpu_metrics_dict = {
-        "freq_MHz": int(gpu_metrics["freq_hz"]),
-        "active": int((1 - gpu_metrics["idle_ratio"])*100),
+        "freq_MHz": freq_mhz,
+        "active": _active_percent(gpu_metrics.get("idle_ratio")),
     }
     return gpu_metrics_dict
