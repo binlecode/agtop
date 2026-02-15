@@ -3,8 +3,8 @@ class Silitop < Formula
 
   desc "Performance monitoring CLI tool for Apple Silicon"
   homepage "https://github.com/binlecode/silitop"
-  url "https://github.com/binlecode/silitop/archive/refs/tags/v0.0.24.tar.gz"
-  sha256 "52774ba2d673646617e270ee2a628c1ce2d44d0b3669fd7fd55a33408c039db6"
+  url "https://github.com/binlecode/silitop/archive/refs/tags/v0.0.25.tar.gz"
+  sha256 "8555d3626075ea323bf1e3ba415643052292f13cf597f8c54d7f6ce508ec7c8d"
   license "MIT"
 
   depends_on "python@3.13"
