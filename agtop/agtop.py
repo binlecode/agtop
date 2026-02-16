@@ -1,8 +1,19 @@
 import time
+import os
 import argparse
 from collections import deque
+from blessed import Terminal
 from dashing import VSplit, HSplit, HGauge, HChart, VGauge
 from .utils import *
+from .color_modes import (
+    COLOR_MODE_BASIC,
+    COLOR_MODE_MONO,
+    COLOR_MODE_TRUECOLOR,
+    COLOR_MODE_256,
+    detect_color_mode,
+    parse_color_mode_override,
+    value_to_color_index,
+)
 from .power_scaling import (
     DEFAULT_CPU_FLOOR_W,
     DEFAULT_GPU_FLOOR_W,
@@ -11,7 +22,7 @@ from .power_scaling import (
 )
 
 parser = argparse.ArgumentParser(
-    description='asitop: Performance monitoring CLI tool for Apple Silicon')
+    description='agtop: Performance monitoring CLI tool for Apple Silicon')
 parser.add_argument('--interval', type=int, default=1,
                     help='Display interval and sampling interval for powermetrics (seconds)')
 parser.add_argument('--color', type=int, default=2,
@@ -28,33 +39,63 @@ args = parser.parse_args()
 
 
 def main():
-    print("\nASITOP - Performance monitoring CLI tool for Apple Silicon")
-    print("You can update ASITOP by running `pip install asitop --upgrade`")
-    print("Get help at `https://github.com/tlkh/asitop`")
-    print("P.S. You are recommended to run ASITOP with `sudo asitop`\n")
-    print("\n[1/3] Loading ASITOP\n")
+    terminal = Terminal()
+    raw_mode_override = os.getenv("AGTOP_COLOR_MODE")
+    mode_override = parse_color_mode_override(raw_mode_override)
+    normalized_raw_mode = raw_mode_override.strip().lower() if raw_mode_override is not None else ""
+    if raw_mode_override is not None and mode_override is None and normalized_raw_mode not in {"", "auto"}:
+        print("Warning: invalid AGTOP_COLOR_MODE={!r}; using auto detection.".format(raw_mode_override))
+    color_mode = mode_override or detect_color_mode(os.environ, terminal)
+    dynamic_color_enabled = color_mode in {COLOR_MODE_BASIC, COLOR_MODE_256, COLOR_MODE_TRUECOLOR}
+    experimental_gradient = os.getenv("AGTOP_EXPERIMENTAL_GRADIENT") == "1"
+    GaugeClass = HGauge
+    VGaugeClass = VGauge
+    HChartClass = HChart
+    if experimental_gradient and color_mode == COLOR_MODE_TRUECOLOR:
+        try:
+            from .experimental_gradient import (
+                GradientHGauge,
+                GradientVGauge,
+                GradientHChart,
+            )
+            GaugeClass = GradientHGauge
+            VGaugeClass = GradientVGauge
+            HChartClass = GradientHChart
+        except Exception as e:
+            print("Warning: experimental gradient init failed: {}. Using default renderer.".format(e))
+            experimental_gradient = False
+    elif experimental_gradient:
+        print("Warning: AGTOP_EXPERIMENTAL_GRADIENT=1 requires truecolor mode; using default renderer.")
+        experimental_gradient = False
+    base_color = 0 if color_mode == COLOR_MODE_MONO else args.color
+
+    print("\nAGTOP - Performance monitoring CLI tool for Apple Silicon")
+    print("Update with your package manager (for Homebrew: `brew upgrade agtop`)")
+    print("Get help at `https://github.com/binlecode/agtop`")
+    print("P.S. You are recommended to run AGTOP with `sudo agtop`\n")
+    print("\n[1/3] Loading AGTOP\n")
     print("\033[?25l")
 
-    cpu1_gauge = HGauge(title="E-CPU Usage", val=0, color=args.color)
-    cpu2_gauge = HGauge(title="P-CPU Usage", val=0, color=args.color)
-    gpu_gauge = HGauge(title="GPU Usage", val=0, color=args.color)
-    ane_gauge = HGauge(title="ANE", val=0, color=args.color)
+    cpu1_gauge = GaugeClass(title="E-CPU Usage", val=0, color=base_color)
+    cpu2_gauge = GaugeClass(title="P-CPU Usage", val=0, color=base_color)
+    gpu_gauge = GaugeClass(title="GPU Usage", val=0, color=base_color)
+    ane_gauge = GaugeClass(title="ANE", val=0, color=base_color)
     gpu_ane_gauges = [gpu_gauge, ane_gauge]
 
     soc_info_dict = get_soc_info()
     e_core_count = max(0, int(soc_info_dict["e_core_count"]))
-    e_core_gauges = [VGauge(val=0, color=args.color, border_color=args.color) for _ in range(e_core_count)]
+    e_core_gauges = [VGaugeClass(val=0, color=base_color, border_color=base_color) for _ in range(e_core_count)]
     p_core_count = max(0, int(soc_info_dict["p_core_count"]))
     p_core_gauges = []
     p_core_gauges_ext = []
     p_core_split = []
     if p_core_count > 0:
-        p_core_gauges = [VGauge(val=0, color=args.color, border_color=args.color) for _ in range(min(p_core_count, 8))]
+        p_core_gauges = [VGaugeClass(val=0, color=base_color, border_color=base_color) for _ in range(min(p_core_count, 8))]
         p_core_split = [HSplit(
             *p_core_gauges,
         )]
     if p_core_count > 8:
-        p_core_gauges_ext = [VGauge(val=0, color=args.color, border_color=args.color) for _ in range(p_core_count - 8)]
+        p_core_gauges_ext = [VGaugeClass(val=0, color=base_color, border_color=base_color) for _ in range(p_core_count - 8)]
         p_core_split.append(HSplit(
             *p_core_gauges_ext,
         ))
@@ -73,10 +114,10 @@ def main():
     processor_split = VSplit(
         *processor_gauges,
         title="Processor Utilization",
-        border_color=args.color,
+        border_color=base_color,
     )
 
-    ram_gauge = HGauge(title="RAM Usage", val=0, color=args.color)
+    ram_gauge = GaugeClass(title="RAM Usage", val=0, color=base_color)
     """
     ecpu_bw_gauge = HGauge(title="E-CPU B/W", val=50, color=args.color)
     pcpu_bw_gauge = HGauge(title="P-CPU B/W", val=50, color=args.color)
@@ -100,22 +141,22 @@ def main():
     memory_gauges = VSplit(
         ram_gauge,
         #*bw_gauges,
-        border_color=args.color,
+        border_color=base_color,
         title="Memory"
     )
 
-    cpu_power_chart = HChart(title="CPU Power", color=args.color)
-    gpu_power_chart = HChart(title="GPU Power", color=args.color)
+    cpu_power_chart = HChartClass(title="CPU Power", color=base_color)
+    gpu_power_chart = HChartClass(title="GPU Power", color=base_color)
     power_charts = VSplit(
         cpu_power_chart,
         gpu_power_chart,
         title="Power Chart",
-        border_color=args.color,
+        border_color=base_color,
     ) if args.show_cores else HSplit(
         cpu_power_chart,
         gpu_power_chart,
         title="Power Chart",
-        border_color=args.color,
+        border_color=base_color,
     )
 
     ui = HSplit(
@@ -183,6 +224,34 @@ def main():
     avg_package_power_list = deque([], maxlen=avg_window)
     avg_cpu_power_list = deque([], maxlen=avg_window)
     avg_gpu_power_list = deque([], maxlen=avg_window)
+
+    core_gauges = e_core_gauges + p_core_gauges + p_core_gauges_ext
+
+    def reset_static_colors(color_index):
+        cpu1_gauge.color = color_index
+        cpu2_gauge.color = color_index
+        gpu_gauge.color = color_index
+        ane_gauge.color = color_index
+        ram_gauge.color = color_index
+        cpu_power_chart.color = color_index
+        gpu_power_chart.color = color_index
+        processor_split.border_color = color_index
+        memory_gauges.border_color = color_index
+        power_charts.border_color = color_index
+        for gauge in core_gauges:
+            gauge.color = color_index
+            gauge.border_color = color_index
+
+    def color_for(percent):
+        return value_to_color_index(
+            percent=percent,
+            mode=color_mode,
+            terminal=terminal,
+            seed_color=args.color,
+        )
+
+    if color_mode == COLOR_MODE_MONO:
+        reset_static_colors(0)
 
     clear_console()
 
@@ -439,6 +508,22 @@ def main():
                         "W)"
                     ])
                     gpu_power_chart.append(gpu_power_percent)
+
+                    if dynamic_color_enabled:
+                        try:
+                            cpu1_gauge.color = color_for(cpu_metrics_dict["E-Cluster_active"])
+                            cpu2_gauge.color = color_for(cpu_metrics_dict["P-Cluster_active"])
+                            gpu_gauge.color = color_for(gpu_metrics_dict["active"])
+                            ane_gauge.color = color_for(ane_util_percent)
+                            ram_gauge.color = color_for(100 - ram_metrics_dict["free_percent"])
+                            cpu_power_chart.color = color_for(cpu_power_percent)
+                            gpu_power_chart.color = color_for(gpu_power_percent)
+                            for gauge in core_gauges:
+                                gauge.color = color_for(gauge.value)
+                                gauge.border_color = gauge.color
+                        except Exception:
+                            dynamic_color_enabled = False
+                            reset_static_colors(args.color)
 
                     ui.display()
 

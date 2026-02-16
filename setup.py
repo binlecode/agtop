@@ -3,8 +3,8 @@ from setuptools import setup, find_packages
 long_description = 'Performance monitoring CLI tool for Apple Silicon'
 
 setup(
-    name='asitop',
-    version='0.0.25',
+    name='agtop',
+    version='0.1.0',
     author='Timothy Liu, binlecode',
     author_email='tlkh.xms@gmail.com, bin.le.code@gmail.com',
     url='https://github.com/binlecode/agtop',
@@ -15,8 +15,7 @@ setup(
     packages=find_packages(),
     entry_points={
             'console_scripts': [
-                'agtop = asitop.asitop:main',
-                'asitop = asitop.asitop:main'
+                'agtop = agtop.agtop:main',
             ]
     },
     classifiers=(
@@ -24,7 +23,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: MacOS",
     ),
-    keywords='agtop asitop',
+    keywords='agtop apple-silicon powermetrics',
     install_requires=[
         "dashing",
         "psutil",

@@ -1,4 +1,4 @@
-from asitop.parsers import parse_cpu_metrics, parse_gpu_metrics, parse_thermal_pressure
+from agtop.parsers import parse_cpu_metrics, parse_gpu_metrics, parse_thermal_pressure
 
 
 def test_parse_cpu_metrics_missing_sections_returns_defaults():
