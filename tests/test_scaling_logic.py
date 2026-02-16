@@ -1,4 +1,4 @@
-from asitop.power_scaling import power_to_percent, resolve_power_denominator
+from agtop.power_scaling import power_to_percent, resolve_power_denominator
 
 
 def test_profile_mode_uses_profile_reference_with_floor():

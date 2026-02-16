@@ -2,13 +2,13 @@
 
 Apple GPU Top for Apple Silicon.
 
-![](images/asitop.png)
+![](images/agtop.png)
 
 ## Project Status
 
 `agtop` is an independent hard fork with its own release cycle and maintenance policy.
 
-Origin attribution: this project started from `tlkh/asitop`, previously evolved as `silitop`, and is now maintained as `binlecode/agtop`.
+Origin attribution: this project started from `tlkh/asitop` and is now maintained as `binlecode/agtop`.
 
 ## Features
 
@@ -61,7 +61,4 @@ sudo agtop --interval 1 --avg 30 --power-scale profile
 - Unknown future Apple Silicon names fall back to tier defaults (`base`, `Pro`, `Max`, `Ultra`).
 - Available `powermetrics` fields vary by macOS and chip generation.
 
-## Upstream Naming Note
-
-- `brew install asitop` and `pip install asitop` refer to upstream naming, not this fork release.
-- This project's Homebrew command is `agtop`.
+Use `agtop` for install and runtime commands in this repository.

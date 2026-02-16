@@ -31,7 +31,6 @@ class Agtop < Formula
 
   def install
     virtualenv_install_with_resources(using: "python@3.13")
-    mv bin/"asitop", bin/"agtop"
   end
 
   test do

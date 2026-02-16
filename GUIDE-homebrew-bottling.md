@@ -2,7 +2,7 @@
 
 This is the minimal workflow to publish a new `agtop` version and make `brew upgrade agtop` work.
 
-Project stance: `agtop` is maintained as an independent hard fork inspired by `asitop`.
+Project stance: `agtop` is maintained as an independent hard fork.
 
 ## Key Rule
 
@@ -113,4 +113,4 @@ sudo agtop --interval 1 --avg 30 --power-scale profile
   - If still broken, untap/retap the failing tap.
 
 - Wrong tap name:
-  - Use `binlecode/agtop` (not `binlecode/asitop`).
+  - Use `binlecode/agtop`.

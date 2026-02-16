@@ -1,10 +1,10 @@
 import subprocess
 
-from asitop import utils
+from agtop import utils
 
 
 def test_run_powermetrics_process_ignores_cleanup_permission_errors(monkeypatch):
-    monkeypatch.setattr(utils.glob, "glob", lambda pattern: ["/tmp/asitop_powermetrics_stale"])
+    monkeypatch.setattr(utils.glob, "glob", lambda pattern: ["/tmp/agtop_powermetrics_stale"])
 
     def fake_remove(path):
         raise PermissionError("permission denied")
@@ -35,7 +35,7 @@ def test_run_powermetrics_process_ignores_cleanup_permission_errors(monkeypatch)
         "--samplers",
         "cpu_power,gpu_power,thermal",
         "-o",
-        "/tmp/asitop_powermetrics123",
+        "/tmp/agtop_powermetrics123",
         "-f",
         "plist",
         "-i",

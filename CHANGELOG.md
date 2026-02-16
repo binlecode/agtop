@@ -10,11 +10,25 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 - No changes yet.
 
 ### Changed
-- Renamed project/repo branding from `silitop` to `agtop` (Apple GPU Top) in active documentation.
-- Clarified project positioning as an independent hard fork with explicit origin attribution in docs.
+- No changes yet.
 
 ### Fixed
 - No changes yet.
+
+## [0.1.0] - 2026-02-16
+
+### Added
+- Renamed Python package and CLI module to `agtop` (`agtop/agtop.py`).
+- Updated tests and module imports to `agtop.*`.
+
+### Changed
+- Updated CLI startup/help strings and repository links to `binlecode/agtop`.
+- Updated runtime temp file prefix to `/tmp/agtop_powermetrics*`.
+- Removed legacy console alias from package entry points.
+- Updated docs and operational guides to use `agtop` naming.
+
+### Fixed
+- Restored functional module invocation for `.venv/bin/python -m agtop.agtop --help`.
 
 ## [0.0.25] - 2026-02-15
 
@@ -25,7 +39,7 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 - No changes yet.
 
 ### Fixed
-- Avoided startup crashes when stale `/tmp/asitop_powermetrics*` files cannot be removed due to permissions.
+- Avoided startup crashes when stale temp powermetrics files cannot be removed due to permissions.
 
 ## [0.0.24] - 2026-02-15
 
@@ -33,9 +47,8 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 - Added maintainer metadata for `binlecode` in package author fields.
 
 ### Changed
-- Renamed repository from `binlecode/asitop` to `binlecode/silitop`.
-- Renamed Homebrew tap formula from `asitop` to `silitop` to avoid collision with `homebrew/core/asitop`.
-- Updated Homebrew install and bottling docs to use `binlecode/silitop/silitop`.
+- Updated repository and tap branding during fork transition.
+- Updated installation and bottling docs for tap-based distribution.
 
 ## [0.0.23] - 2026-02-15
 
@@ -55,10 +68,10 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [0.0.22] - 2026-02-15
 
-Fork baseline release tracking started in `binlecode/silitop`.
+Fork baseline release tracking started in the initial fork repository.
 
 ### Added
-- Homebrew formula at `Formula/silitop.rb` for tap-based installation.
+- Homebrew formula for tap-based installation.
 - Formula test to verify CLI help output.
 
 ### Changed

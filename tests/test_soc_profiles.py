@@ -1,4 +1,4 @@
-from asitop.soc_profiles import get_soc_profile, normalize_soc_name
+from agtop.soc_profiles import get_soc_profile, normalize_soc_name
 
 
 def test_normalize_soc_name_collapses_whitespace():
