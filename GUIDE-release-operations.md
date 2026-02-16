@@ -5,7 +5,7 @@ This guide is the canonical runbook for releasing `agtop` and publishing formula
 ## Purpose
 
 - Keep release operations deterministic.
-- Avoid duplicate/manual formula-sync commits.
+- Avoid duplicate/manual formula-sync commits (including Python resource updates).
 - Define clear ownership between local scripts and CI workflows.
 
 ## Scope
@@ -15,8 +15,20 @@ This guide covers:
 - Version bump and tagging
 - CI/CD responsibilities
 - Formula synchronization
+- Homebrew Python packaging model (self-contained install behavior)
 - Post-release verification
 - Common failure playbooks
+
+## Homebrew Packaging Model (Important)
+
+`agtop` uses Homebrew's Python virtualenv formula pattern by design.
+
+- Formula uses `include Language::Python::Virtualenv`.
+- Formula depends on Homebrew Python (`depends_on "python@3.13"`).
+- Install path uses `virtualenv_install_with_resources`, which creates `libexec` venv and pip-installs declared `resource` blocks.
+- Result: brew upgrade logs that show `python3.13 -m venv ...` and `python3.13 -m pip ... blessed/dashing/psutil/wcwidth` are expected and correct.
+
+This behavior is intentional for a self-contained CLI install and does not indicate a stale formula by itself.
 
 ## Components and Ownership
 
@@ -42,14 +54,17 @@ It does **not** modify `Formula/agtop.rb`.
 - Runs on `main` pushes.
 - Resolves Python version from `Formula/agtop.rb`.
 - Installs formula-style dependencies into isolated `.ci-venv`.
+- Verifies formula resources match runtime dependency resolution in a separate clean venv.
 - Runs lint/format check/help/tests.
 
 ### CI Workflow (`.github/workflows/release-formula.yml`)
 
 - Runs on `v*` tag pushes.
+- Supports manual `workflow_dispatch` with `tag_name` and `refresh_resources` toggle.
 - Validates tag version against `pyproject.toml` from the tag commit.
 - Computes tarball SHA256 for the tag.
 - Updates `Formula/agtop.rb` `url` + `sha256`.
+- Regenerates Python `resource` blocks from the release tarball dependency resolution by default.
 - Pushes a formula-sync commit to `main`.
 - Uses serialized concurrency + retry loop to reduce push-race failures.
 
@@ -62,7 +77,7 @@ local commit (version + changelog)
     -> push tag vX.Y.Z
       -> main-ci (main push)
       -> release-formula (tag push)
-         -> Formula/agtop.rb sync commit on main
+         -> Formula/agtop.rb sync commit on main (url/sha/resources)
             -> main-ci (formula-sync push)
 ```
 
@@ -124,12 +139,15 @@ brew info binlecode/agtop/agtop
 - Use `scripts/tag_release.sh` for release tags.
 - Let `release-formula.yml` own formula sync commits.
 - Verify `main-ci` and `release-formula` after each release.
+- Treat venv/resource install lines in `brew upgrade` output as expected for this formula style.
+- Keep `refresh_resources=true` for normal releases so resources stay aligned.
 
 ### Do Not
 
 - Do not manually sync `Formula/agtop.rb` during normal releases.
 - Do not push a release tag before version/changelog are committed.
 - Do not force-push `main` during release windows.
+- Do not disable resource refresh except for short-lived emergency reruns.
 
 ## Failure Playbooks
 
@@ -166,7 +184,7 @@ Action:
 - Re-run failed job from GitHub Actions UI if needed.
 - If still failing, manually inspect `main` head and workflow logs before retry.
 
-### 4) Formula already at target URL/SHA
+### 4) Formula already up to date
 
 Workflow may exit successfully with "already up to date".
 
@@ -187,6 +205,42 @@ gh run view -R binlecode/agtop <RUN_ID> --log-failed
 ```
 
 - Fix issue on `main` in a follow-up commit.
+
+Common cause:
+
+- Formula resource drift check failed (missing/extra/version mismatch vs clean runtime dependency resolution).
+
+Action:
+
+- Re-run `release-formula` with resource refresh enabled or update formula resources.
+
+### 6) Brew output still shows pip installing Python resources after release
+
+Meaning:
+
+- Formula is using `virtualenv_install_with_resources`, so resource installation is expected.
+
+Action:
+
+- Confirm formula install method and resources:
+
+```bash
+sed -n '1,80p' Formula/agtop.rb
+brew deps --formula --include-requirements binlecode/agtop/agtop
+```
+
+- Do not treat these lines as a release failure by themselves.
+
+### 7) Emergency manual rerun without resource refresh
+
+Meaning:
+
+- A release rerun is needed and dependency/resource refresh must be temporarily bypassed.
+
+Action:
+
+- Use `workflow_dispatch` and set `refresh_resources=false` only as a temporary workaround.
+- Follow up with a normal run (`refresh_resources=true`) to restore full formula synchronization.
 
 ## Operational Quick Commands
 
