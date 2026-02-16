@@ -3,7 +3,7 @@ import glob
 import subprocess
 from subprocess import PIPE
 import psutil
-from .parsers import *
+from .parsers import parse_cpu_metrics, parse_gpu_metrics, parse_thermal_pressure
 from .soc_profiles import get_soc_profile
 import plistlib
 
@@ -125,11 +125,13 @@ def get_cpu_info():
 
     if "machdep.cpu.brand_string" not in cpu_info_dict:
         cpu_info = os.popen("sysctl -a | grep machdep.cpu").read()
-        for l in cpu_info.split("\n"):
-            if "machdep.cpu.brand_string" in l:
-                cpu_info_dict["machdep.cpu.brand_string"] = l.split(":", 1)[1].strip()
-            if "machdep.cpu.core_count" in l:
-                cpu_info_dict["machdep.cpu.core_count"] = l.split(":", 1)[1].strip()
+        for line in cpu_info.split("\n"):
+            if "machdep.cpu.brand_string" in line:
+                cpu_info_dict["machdep.cpu.brand_string"] = line.split(":", 1)[
+                    1
+                ].strip()
+            if "machdep.cpu.core_count" in line:
+                cpu_info_dict["machdep.cpu.core_count"] = line.split(":", 1)[1].strip()
     return cpu_info_dict
 
 
@@ -145,18 +147,18 @@ def get_core_counts():
 
     if not cores_info_dict:
         cores_info = os.popen("sysctl -a | grep hw.perflevel").read()
-        for l in cores_info.split("\n"):
-            if "hw.perflevel0.logicalcpu" in l:
+        for line in cores_info.split("\n"):
+            if "hw.perflevel0.logicalcpu" in line:
                 try:
                     cores_info_dict["hw.perflevel0.logicalcpu"] = int(
-                        l.split(":", 1)[1].strip()
+                        line.split(":", 1)[1].strip()
                     )
                 except Exception:
                     pass
-            if "hw.perflevel1.logicalcpu" in l:
+            if "hw.perflevel1.logicalcpu" in line:
                 try:
                     cores_info_dict["hw.perflevel1.logicalcpu"] = int(
-                        l.split(":", 1)[1].strip()
+                        line.split(":", 1)[1].strip()
                     )
                 except Exception:
                     pass
@@ -169,7 +171,7 @@ def get_gpu_cores():
             "system_profiler -detailLevel basic SPDisplaysDataType | grep 'Total Number of Cores'"
         ).read()
         cores = int(cores.split(": ")[-1])
-    except:
+    except Exception:
         cores = "?"
     return cores
 

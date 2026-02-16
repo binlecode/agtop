@@ -4,7 +4,13 @@ import argparse
 from collections import deque
 from blessed import Terminal
 from dashing import VSplit, HSplit, HGauge, HChart, VGauge
-from .utils import *
+from .utils import (
+    clear_console,
+    get_ram_metrics_dict,
+    get_soc_info,
+    parse_powermetrics,
+    run_powermetrics_process,
+)
 from .color_modes import (
     COLOR_MODE_BASIC,
     COLOR_MODE_MONO,

@@ -81,9 +81,11 @@ def parse_bandwidth_metrics(powermetrics_parse):
     ]
     for h in data_fields:
         bandwidth_metrics_dict[h] = 0.0
-    for l in bandwidth_metrics:
-        if l.get("name") in data_fields:
-            bandwidth_metrics_dict[l["name"]] = _to_float(l.get("value")) / 1e9
+    for metric_entry in bandwidth_metrics:
+        if metric_entry.get("name") in data_fields:
+            bandwidth_metrics_dict[metric_entry["name"]] = (
+                _to_float(metric_entry.get("value")) / 1e9
+            )
     bandwidth_metrics_dict["PCPU DCS RD"] = (
         bandwidth_metrics_dict["PCPU DCS RD"]
         + bandwidth_metrics_dict["PCPU0 DCS RD"]
