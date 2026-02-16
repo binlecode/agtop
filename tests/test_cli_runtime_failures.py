@@ -7,10 +7,9 @@ import sys
 def _run_cli_with_fake_sudo(tmp_path, stderr_line):
     fake_sudo = tmp_path / "sudo"
     fake_sudo.write_text(
-        "#!/bin/sh\n"
-        "echo \"$1\" >/dev/null\n"
-        "echo '{}' >&2\n"
-        "exit 1\n".format(stderr_line.replace("'", "'\"'\"'")),
+        "#!/bin/sh\necho \"$1\" >/dev/null\necho '{}' >&2\nexit 1\n".format(
+            stderr_line.replace("'", "'\"'\"'")
+        ),
         encoding="utf-8",
     )
     fake_sudo.chmod(fake_sudo.stat().st_mode | stat.S_IEXEC)

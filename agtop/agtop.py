@@ -129,14 +129,18 @@ def _start_powermetrics_process(timecode, sample_interval):
                 "Failed to start powermetrics: the `powermetrics` binary was not found. "
                 "agtop requires macOS with powermetrics available."
             ) from e
-        raise RuntimeError("Failed to start powermetrics subprocess: {}".format(e)) from e
+        raise RuntimeError(
+            "Failed to start powermetrics subprocess: {}".format(e)
+        ) from e
     except PermissionError as e:
         raise RuntimeError(
             "Failed to start powermetrics due to missing sudo privileges. "
             "Run `sudo agtop` and try again."
         ) from e
     except OSError as e:
-        raise RuntimeError("Failed to start powermetrics subprocess: {}".format(e)) from e
+        raise RuntimeError(
+            "Failed to start powermetrics subprocess: {}".format(e)
+        ) from e
 
     time.sleep(0.15)
     if process.poll() is not None:
@@ -529,19 +533,14 @@ def _run_dashboard(args, runtime_state):
                 gpu_gauge.value = gpu_metrics_dict["active"]
 
                 ane_util_percent = clamp_percent(
-                    cpu_metrics_dict["ane_W"]
-                    / sample_interval
-                    / ane_max_power
-                    * 100
+                    cpu_metrics_dict["ane_W"] / sample_interval / ane_max_power * 100
                 )
                 ane_gauge.title = "".join(
                     [
                         "ANE Usage: ",
                         str(ane_util_percent),
                         "% @ ",
-                        "{0:.1f}".format(
-                            cpu_metrics_dict["ane_W"] / sample_interval
-                        ),
+                        "{0:.1f}".format(cpu_metrics_dict["ane_W"] / sample_interval),
                         " W",
                     ]
                 )
