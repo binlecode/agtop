@@ -117,92 +117,93 @@ jobs:
               .formula-sync-venv/bin/python -m pip install --upgrade pip
               .formula-sync-venv/bin/python -m pip install "${URL}"
 
-              .formula-sync-venv/bin/python - <<'PY'
-              import json
-              import re
-              import subprocess
-              import sys
-              import urllib.request
-              from pathlib import Path
+              cat >/tmp/refresh_formula_resources.py <<'PY'
+import json
+import re
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
 
-              FORMULA_PATH = Path("Formula/agtop.rb")
-              PACKAGE_NAME = "agtop"
-              EXCLUDED = {"pip", "setuptools", "wheel", PACKAGE_NAME}
-
-
-              def normalize_name(name):
-                  return re.sub(r"[-_.]+", "-", name).lower()
+FORMULA_PATH = Path("Formula/agtop.rb")
+PACKAGE_NAME = "agtop"
+EXCLUDED = {"pip", "setuptools", "wheel", PACKAGE_NAME}
 
 
-              def fetch_sdist(package_name, package_version):
-                  meta_url = f"https://pypi.org/pypi/{package_name}/{package_version}/json"
-                  with urllib.request.urlopen(meta_url, timeout=30) as response:
-                      payload = json.load(response)
-
-                  sdists = [item for item in payload.get("urls", []) if item.get("packagetype") == "sdist"]
-                  if not sdists:
-                      raise SystemExit(f"No sdist found on PyPI for {package_name}=={package_version}")
-
-                  preferred = next(
-                      (item for item in sdists if item.get("filename", "").endswith(".tar.gz")),
-                      sdists[0],
-                  )
-                  sha256 = preferred.get("digests", {}).get("sha256")
-                  if not sha256:
-                      raise SystemExit(f"Missing sha256 digest for {package_name}=={package_version}")
-                  return preferred["url"], sha256
+def normalize_name(name):
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
-              def render_resources(resource_entries):
-                  lines = []
-                  for resource_name, resource_url, resource_sha in resource_entries:
-                      lines.extend(
-                          [
-                              f'  resource "{resource_name}" do',
-                              f'    url "{resource_url}"',
-                              f'    sha256 "{resource_sha}"',
-                              "  end",
-                              "",
-                          ]
-                      )
-                  return lines[:-1] if lines else lines
+def fetch_sdist(package_name, package_version):
+    meta_url = f"https://pypi.org/pypi/{package_name}/{package_version}/json"
+    with urllib.request.urlopen(meta_url, timeout=30) as response:
+        payload = json.load(response)
+
+    sdists = [item for item in payload.get("urls", []) if item.get("packagetype") == "sdist"]
+    if not sdists:
+        raise SystemExit(f"No sdist found on PyPI for {package_name}=={package_version}")
+
+    preferred = next(
+        (item for item in sdists if item.get("filename", "").endswith(".tar.gz")),
+        sdists[0],
+    )
+    sha256 = preferred.get("digests", {}).get("sha256")
+    if not sha256:
+        raise SystemExit(f"Missing sha256 digest for {package_name}=={package_version}")
+    return preferred["url"], sha256
 
 
-              packages_raw = subprocess.check_output(
-                  [sys.executable, "-m", "pip", "list", "--format=json"],
-                  text=True,
-              )
-              installed = {
-                  normalize_name(item["name"]): item["version"]
-                  for item in json.loads(packages_raw)
-              }
-              runtime = {name: version for name, version in installed.items() if name not in EXCLUDED}
-              if not runtime:
-                  raise SystemExit("No runtime dependencies resolved for release tarball")
+def render_resources(resource_entries):
+    lines = []
+    for resource_name, resource_url, resource_sha in resource_entries:
+        lines.extend(
+            [
+                f'  resource "{resource_name}" do',
+                f'    url "{resource_url}"',
+                f'    sha256 "{resource_sha}"',
+                "  end",
+                "",
+            ]
+        )
+    return lines[:-1] if lines else lines
 
-              resources = []
-              for dep_name in sorted(runtime):
-                  dep_version = runtime[dep_name]
-                  dep_url, dep_sha = fetch_sdist(dep_name, dep_version)
-                  resources.append((dep_name, dep_url, dep_sha))
 
-              formula_lines = FORMULA_PATH.read_text(encoding="utf-8").splitlines()
-              depends_on_idx = next(
-                  idx for idx, line in enumerate(formula_lines) if line.strip().startswith('depends_on "python@')
-              )
-              install_idx = next(
-                  idx for idx, line in enumerate(formula_lines) if line.strip() == "def install"
-              )
+packages_raw = subprocess.check_output(
+    [sys.executable, "-m", "pip", "list", "--format=json"],
+    text=True,
+)
+installed = {
+    normalize_name(item["name"]): item["version"]
+    for item in json.loads(packages_raw)
+}
+runtime = {name: version for name, version in installed.items() if name not in EXCLUDED}
+if not runtime:
+    raise SystemExit("No runtime dependencies resolved for release tarball")
 
-              new_lines = (
-                  formula_lines[: depends_on_idx + 1]
-                  + [""]
-                  + render_resources(resources)
-                  + [""]
-                  + formula_lines[install_idx:]
-              )
-              FORMULA_PATH.write_text("\n".join(new_lines).rstrip() + "\n", encoding="utf-8")
-              PY
+resources = []
+for dep_name in sorted(runtime):
+    dep_version = runtime[dep_name]
+    dep_url, dep_sha = fetch_sdist(dep_name, dep_version)
+    resources.append((dep_name, dep_url, dep_sha))
+
+formula_lines = FORMULA_PATH.read_text(encoding="utf-8").splitlines()
+depends_on_idx = next(
+    idx for idx, line in enumerate(formula_lines) if line.strip().startswith('depends_on "python@')
+)
+install_idx = next(
+    idx for idx, line in enumerate(formula_lines) if line.strip() == "def install"
+)
+
+new_lines = (
+    formula_lines[: depends_on_idx + 1]
+    + [""]
+    + render_resources(resources)
+    + [""]
+    + formula_lines[install_idx:]
+)
+FORMULA_PATH.write_text("\n".join(new_lines).rstrip() + "\n", encoding="utf-8")
+PY
+              .formula-sync-venv/bin/python /tmp/refresh_formula_resources.py
             else
               echo "Skipping Python resource refresh (workflow_dispatch refresh_resources=false)."
             fi

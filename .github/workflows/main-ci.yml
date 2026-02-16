@@ -77,79 +77,80 @@ jobs:
           .drift-venv/bin/python -m pip install --upgrade pip
           .drift-venv/bin/python -m pip install -e .
 
-          .drift-venv/bin/python - <<'PY'
-          import json
-          import re
-          import subprocess
-          import sys
-          from pathlib import Path
+          cat >/tmp/check_formula_resource_drift.py <<'PY'
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
 
-          FORMULA_PATH = Path("Formula/agtop.rb")
-          EXCLUDED = {"agtop", "pip", "setuptools", "wheel"}
-
-
-          def normalize_name(name):
-              return re.sub(r"[-_.]+", "-", name).lower()
+FORMULA_PATH = Path("Formula/agtop.rb")
+EXCLUDED = {"agtop", "pip", "setuptools", "wheel"}
 
 
-          def parse_formula_resources():
-              text = FORMULA_PATH.read_text(encoding="utf-8")
-              resources = re.findall(r'resource "([^"]+)" do\n\s+url "([^"]+)"', text)
-              if not resources:
-                  raise SystemExit("No resources found in Formula/agtop.rb")
-
-              resolved = {}
-              for raw_name, url in resources:
-                  resource_name = normalize_name(raw_name)
-                  filename = url.rsplit("/", 1)[-1]
-                  for suffix in (".tar.gz", ".zip", ".whl"):
-                      if filename.endswith(suffix):
-                          filename = filename[: -len(suffix)]
-                          break
-
-                  match = re.match(rf"^{re.escape(raw_name)}-(.+)$", filename, re.IGNORECASE)
-                  version = match.group(1) if match else filename.rsplit("-", 1)[-1]
-                  resolved[resource_name] = version
-              return resolved
+def normalize_name(name):
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
-          def parse_runtime_dependencies():
-              payload = subprocess.check_output(
-                  [sys.executable, "-m", "pip", "list", "--format=json"],
-                  text=True,
-              )
-              installed = {
-                  normalize_name(item["name"]): item["version"]
-                  for item in json.loads(payload)
-              }
-              return {name: version for name, version in installed.items() if name not in EXCLUDED}
+def parse_formula_resources():
+    text = FORMULA_PATH.read_text(encoding="utf-8")
+    resources = re.findall(r'resource "([^"]+)" do\n\s+url "([^"]+)"', text)
+    if not resources:
+        raise SystemExit("No resources found in Formula/agtop.rb")
+
+    resolved = {}
+    for raw_name, url in resources:
+        resource_name = normalize_name(raw_name)
+        filename = url.rsplit("/", 1)[-1]
+        for suffix in (".tar.gz", ".zip", ".whl"):
+            if filename.endswith(suffix):
+                filename = filename[: -len(suffix)]
+                break
+
+        match = re.match(rf"^{re.escape(raw_name)}-(.+)$", filename, re.IGNORECASE)
+        version = match.group(1) if match else filename.rsplit("-", 1)[-1]
+        resolved[resource_name] = version
+    return resolved
 
 
-          formula = parse_formula_resources()
-          runtime = parse_runtime_dependencies()
+def parse_runtime_dependencies():
+    payload = subprocess.check_output(
+        [sys.executable, "-m", "pip", "list", "--format=json"],
+        text=True,
+    )
+    installed = {
+        normalize_name(item["name"]): item["version"]
+        for item in json.loads(payload)
+    }
+    return {name: version for name, version in installed.items() if name not in EXCLUDED}
 
-          missing_in_formula = sorted(name for name in runtime if name not in formula)
-          extra_in_formula = sorted(name for name in formula if name not in runtime)
-          version_mismatch = sorted(
-              (name, formula[name], runtime[name])
-              for name in formula
-              if name in runtime and formula[name] != runtime[name]
-          )
 
-          if missing_in_formula or extra_in_formula or version_mismatch:
-              print("Formula resource drift detected:")
-              if missing_in_formula:
-                  print("  Missing resources:", ", ".join(missing_in_formula))
-              if extra_in_formula:
-                  print("  Extra resources:", ", ".join(extra_in_formula))
-              if version_mismatch:
-                  print("  Version mismatches:")
-                  for name, formula_version, runtime_version in version_mismatch:
-                      print(f"    {name}: formula={formula_version}, runtime={runtime_version}")
-              raise SystemExit(1)
+formula = parse_formula_resources()
+runtime = parse_runtime_dependencies()
 
-          print("Formula resources are in sync with runtime dependencies.")
-          PY
+missing_in_formula = sorted(name for name in runtime if name not in formula)
+extra_in_formula = sorted(name for name in formula if name not in runtime)
+version_mismatch = sorted(
+    (name, formula[name], runtime[name])
+    for name in formula
+    if name in runtime and formula[name] != runtime[name]
+)
+
+if missing_in_formula or extra_in_formula or version_mismatch:
+    print("Formula resource drift detected:")
+    if missing_in_formula:
+        print("  Missing resources:", ", ".join(missing_in_formula))
+    if extra_in_formula:
+        print("  Extra resources:", ", ".join(extra_in_formula))
+    if version_mismatch:
+        print("  Version mismatches:")
+        for name, formula_version, runtime_version in version_mismatch:
+            print(f"    {name}: formula={formula_version}, runtime={runtime_version}")
+    raise SystemExit(1)
+
+print("Formula resources are in sync with runtime dependencies.")
+PY
+          .drift-venv/bin/python /tmp/check_formula_resource_drift.py
 
           rm -rf .drift-venv
 
