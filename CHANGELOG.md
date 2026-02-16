@@ -7,6 +7,17 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ## [Unreleased]
 
 ### Added
+- No changes yet.
+
+### Changed
+- No changes yet.
+
+### Fixed
+- No changes yet.
+
+## [0.1.6] - 2026-02-16
+
+### Added
 - Added configurable bottleneck alert thresholds:
   - `--alert-bw-sat-percent`
   - `--alert-package-power-percent`
@@ -16,7 +27,7 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ### Changed
 - Updated the power/status title line to include active bottleneck alerts (thermal, bandwidth saturation, swap growth, package power).
-- Refined README feature summary to highlight diagnosis-oriented capabilities and alerting.
+- Reorganized `README.md` into a more systematic structure with quick-reference sections.
 - Marked Priority 5 (`Bottleneck signals and alerts`) as complete in `TODO-btop-inspired-enhancements.md`.
 
 ### Fixed

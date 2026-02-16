@@ -10,52 +10,31 @@ Apple GPU Top for Apple Silicon.
 
 Origin attribution: this project is inspired by `tlkh/asitop` and is now refactored to a new utility as `binlecode/agtop`.
 
+## At a Glance
+
+- Platform: Apple Silicon macOS with `powermetrics` available.
+- Permission model: runtime requires `sudo` because `powermetrics` is privileged.
+- Core value: combines CPU/GPU/ANE/power/memory/bandwidth/process signals in one terminal dashboard.
+- Compatibility model: explicit M1-M4 support plus tiered fallback for future Apple Silicon names.
+
 ## Key Features
 
-- Unified Apple Silicon telemetry: combines `powermetrics`, `psutil`, `sysctl`, and `system_profiler`.
-- Real-time utilization dashboard: E/P CPU clusters, optional per-core gauges/history, GPU, ANE, RAM/swap, and memory bandwidth.
-- Power and bottleneck diagnosis: CPU/GPU/package power tracking plus status-line alerts for thermal pressure, bandwidth saturation, swap growth, and package power.
-- Process-level visibility: top CPU/RSS processes in-panel with optional regex filtering (`--proc-filter`).
-- Profile-aware scaling and compatibility: tuned defaults for M-series tiers, including unknown future Apple Silicon variants.
+- Unified telemetry stack: `powermetrics` + `psutil` + `sysctl` + `system_profiler`.
+- Real-time dashboard: E/P CPU clusters, optional per-core gauges/history, GPU, ANE, RAM/swap, and memory bandwidth.
+- Diagnosis-oriented status line: thermal state, bandwidth saturation, swap growth, and package power alerts.
+- Process visibility: top CPU/RSS processes with optional regex filter (`--proc-filter`).
+- Profile-aware scaling: `--power-scale auto|profile` for consistent chart interpretation across SoC classes.
 
-## Telemetry Model (What / How / Why)
-
-`agtop` intentionally combines multiple macOS telemetry sources:
-
-- CPU utilization:
-  - Uses OS-level per-core CPU percentages (`psutil`, scheduler tick style).
-  - Why: this aligns better with Activity Monitor / btop-style CPU load semantics.
-- CPU frequencies, GPU utilization/frequency, ANE power, CPU/GPU/package power, thermal pressure, memory bandwidth:
-  - Uses `powermetrics` plist output.
-  - Why: Apple-specific accelerator and bandwidth counters are not fully exposed through generic cross-platform CPU APIs.
-- Hardware profile metadata (chip family, reference scaling):
-  - Uses `sysctl` / `system_profiler` plus built-in SoC profiles.
-
-Practical result:
-- `agtop` is best for Apple Silicon diagnosis where you want CPU load behavior comparable to common system monitors while still seeing Apple-only metrics (GPU/ANE/power/bandwidth) in one dashboard.
-
-## Requirements
-
-- Apple Silicon Mac.
-- macOS with `powermetrics` available.
-- `sudo` access (required by `powermetrics`).
-
-## Install
+## Installation
 
 This project uses the source repo itself as the tap remote (not a separate `homebrew-*` tap repo).
-Run this one-time tap setup first:
 
 ```shell
 brew tap --custom-remote binlecode/agtop https://github.com/binlecode/agtop.git
-```
-
-Then install:
-
-```shell
 brew install binlecode/agtop/agtop
 ```
 
-## Upgrade / Uninstall
+### Upgrade / Uninstall
 
 ```shell
 brew update
@@ -63,7 +42,7 @@ brew upgrade binlecode/agtop/agtop
 brew uninstall binlecode/agtop/agtop
 ```
 
-## Usage
+## Quick Start
 
 ```shell
 agtop --help
@@ -74,15 +53,49 @@ sudo agtop --proc-filter "python|ollama|vllm|docker|mlx"
 sudo agtop --alert-bw-sat-percent 90 --alert-package-power-percent 85 --alert-swap-rise-gb 0.5 --alert-sustain-samples 4
 ```
 
+## CLI Quick Reference
+
+| Option | Purpose | Default |
+| --- | --- | --- |
+| `--interval` | Dashboard and sampling interval (seconds) | `1` |
+| `--avg` | Rolling average window (seconds) | `30` |
+| `--show_cores` | Enable per-core panels | `off` |
+| `--core-view gauge\|history\|both` | Per-core visualization mode when cores are shown | `gauge` |
+| `--power-scale auto\|profile` | Power chart scaling mode | `auto` |
+| `--proc-filter REGEX` | Filter process panel command names | empty |
+| `--alert-bw-sat-percent` | Sustained bandwidth saturation threshold | `85` |
+| `--alert-package-power-percent` | Sustained package-power threshold (profile-relative) | `85` |
+| `--alert-swap-rise-gb` | Swap-growth threshold over sustained samples | `0.3` |
+| `--alert-sustain-samples` | Consecutive samples required for sustained alerts | `3` |
+
+## Telemetry Model (What / How / Why)
+
+| Signal Domain | Primary Source | Why |
+| --- | --- | --- |
+| CPU utilization (per-core/cluster) | `psutil` | Aligns better with Activity Monitor / btop-style load semantics |
+| CPU/GPU freq, ANE power, CPU/GPU/package power, thermal, bandwidth | `powermetrics` plist | Apple-specific counters are not fully available from generic CPU APIs |
+| SoC identity and profile hints | `sysctl`, `system_profiler`, built-in SoC profiles | Stable scaling defaults and compatibility across chip families |
+
+Practical result: `agtop` is built for Apple Silicon diagnosis where CPU load behavior should feel familiar while still exposing Apple-only accelerator and bandwidth counters.
+
+## Troubleshooting
+
+- `Failed to start powermetrics due to missing sudo privileges`:
+  run with `sudo agtop`.
+- `powermetrics` not found:
+  verify you are on macOS with `powermetrics` available in PATH.
+- Metric differences versus other tools:
+  small differences are expected due to sampling windows and source timing.
+
 ## Development
 
-Install dev dependencies (local laptop, `.venv`):
+Install local dev dependencies (repo `.venv`):
 
 ```bash
 .venv/bin/python -m pip install -e ".[dev]"
 ```
 
-Run the CLI module directly in development:
+Validate CLI and run the app in development:
 
 ```bash
 .venv/bin/python -m agtop.agtop --help
@@ -105,16 +118,16 @@ Run lint + format:
 
 ## Maintainer Release (Homebrew Tap)
 
-Maintainer release topology:
+### Topology
 
 - Source repo: `binlecode/agtop`
 - Tap repo: `binlecode/homebrew-agtop`
-- Tap name users run: `binlecode/agtop`
+- Tap users run: `binlecode/agtop`
 - Formula name: `agtop`
 
 Homebrew upgrades come from the tap formula, not from `pyproject.toml` alone.
 
-One-time setup (if the tap repo does not exist yet):
+### One-Time Tap Repo Setup
 
 ```bash
 export GH_USER="binlecode"
@@ -124,36 +137,27 @@ brew tap-new "$TAP_REPO"
 gh repo create "$TAP_REPO" --public --source "$(brew --repository "$TAP_REPO")" --push
 ```
 
-Release flow (split CI/CD):
+### Release Flow (split CI/CD)
 
-1. On your local laptop, update `pyproject.toml` (`[project].version`) and `CHANGELOG.md` using your local `.venv` workflow, then commit.
+1. Update `pyproject.toml` (`[project].version`) and `CHANGELOG.md`, then commit.
    CI does not bump versions.
-
-2. Create a matching source tag and push commit + tag together.
+2. Create and push matching tag and commit.
    CI does not create tags.
 
 ```bash
-export VERSION="0.1.5"
+export VERSION="0.1.6"
 git add pyproject.toml CHANGELOG.md
 git commit -m "Release v$VERSION"
 git tag "v$VERSION"
 git push origin main "v$VERSION"
 ```
 
-3. GitHub Actions workflow `.github/workflows/main-ci.yml` runs on push to `main`:
+3. `.github/workflows/main-ci.yml` runs on `main` push:
+   resolves Python version from `Formula/agtop.rb`, prepares `.ci-venv`, installs formula resource versions, then runs checks.
+4. `.github/workflows/release-formula.yml` runs on `v*` tags:
+   verifies tag/version match, updates `Formula/agtop.rb` tarball `url` + `sha256`, and commits formula sync to `main`.
 
-- Resolves Python version from `Formula/agtop.rb` (`depends_on "python@X.Y"`).
-- Creates an isolated CI virtualenv (`.ci-venv`) to mirror formula-style isolation.
-- Installs formula resource versions into `.ci-venv` before running project checks.
-- Runs CLI/help and test checks.
-
-4. GitHub Actions workflow `.github/workflows/release-formula.yml` runs on tag push (`v*`):
-
-- Verifies tag version matches `pyproject.toml` version.
-- Updates `Formula/agtop.rb` `url` and `sha256` from the tag tarball.
-- Commits and pushes formula sync back to `main` automatically.
-
-5. Validate package availability:
+5. Validate availability:
 
 ```bash
 brew update
@@ -166,6 +170,5 @@ brew info binlecode/agtop/agtop
 - Chip families `M1` through `M4` are recognized directly.
 - Unknown future Apple Silicon names fall back to tier defaults (`base`, `Pro`, `Max`, `Ultra`).
 - Available `powermetrics` fields vary by macOS and chip generation.
-- Small differences versus other tools can still occur due to sampling window and source timing differences.
 
 Use `agtop` for install and runtime commands in this repository.
