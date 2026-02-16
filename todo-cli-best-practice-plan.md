@@ -1,37 +1,35 @@
-# CLI Best-Practice Refactor TODO
+# CLI Best-Practice Refactor TODO (Pending Only)
 
 ## Goal
-Improve `agtop` into a cleaner, testable, CLI-friendly all-in-one utility structure while preserving current behavior and output.
+Complete CLI hygiene and packaging modernization while preserving current dashboard behavior and metric semantics.
 
-## Phase 1: CLI Entrypoint Hygiene
-- [ ] Move argument parser creation into a function (for example `build_parser()`).
-- [ ] Stop parsing args at import time; parse only inside `main()` or `cli()`.
-- [ ] Replace `type=bool` flag handling for `--show_cores` with `action="store_true"`.
-- [ ] Add a small `cli()` wrapper that returns process exit code and is safe for imports/tests.
+## Execution Order
+Work top-to-bottom. `P0` is highest priority and blocking; `P4` is lowest.
 
-## Phase 2: Import and Module Boundaries
-- [ ] Replace wildcard import in `agtop/agtop.py` (`from .utils import *`) with explicit imports.
-- [ ] Keep UI/render loop logic in `agtop/agtop.py` and isolate system/process helpers in `agtop/utils.py`.
-- [ ] Ensure pure functions (parsing/scaling/profile resolution) stay side-effect free.
+## P0 (Blocking): CLI Entrypoint Safety
+- [x] Add `build_parser()` in `agtop/agtop.py` and move all argument definitions into it.
+- [x] Remove module-level `parse_args()`; parse only inside runtime entrypoints.
+- [x] Change `--show_cores` from `type=bool` to `action="store_true"`.
+- [x] Add `cli(argv=None) -> int` wrapper for import-safe execution and testability.
+- [x] Update `console_scripts` entrypoint to call `agtop.agtop:cli`.
 
-## Phase 3: Error Handling and UX
-- [ ] Add clear runtime error messaging for missing `dashing` dependency.
-- [ ] Add explicit guidance when `powermetrics` or `sudo` permissions are unavailable.
-- [ ] Ensure graceful shutdown path consistently restores terminal cursor state.
+## P1: Runtime Failure and Cleanup Paths
+- [ ] Add explicit guidance when `powermetrics` cannot start (missing binary, missing sudo permission, or subprocess failure).
+- [ ] Ensure cursor restore and subprocess termination happen in a `finally` cleanup path, not only on `KeyboardInterrupt`.
 
-## Phase 4: Packaging Modernization
-- [ ] Add `pyproject.toml` with build-system metadata and project dependencies.
-- [ ] Keep `console_scripts` entrypoint for `agtop`.
-- [ ] Keep backward compatibility with current install workflows during migration.
+## P2: Imports and Dependency UX
+- [ ] Replace `from .utils import *` with explicit imports in `agtop/agtop.py`.
+- [ ] Handle missing `dashing` dependency with a clear error message and non-zero exit code.
 
-## Phase 5: Tests and Validation
-- [ ] Add tests for parser-building and CLI argument defaults/flags.
-- [ ] Add tests for import safety (module import should not parse args or start side effects).
-- [ ] Re-run full test suite and smoke checks:
-  - [ ] `.venv/bin/python -m agtop.agtop --help`
-  - [ ] `.venv/bin/python -m pytest -q`
-  - [ ] `sudo agtop --interval 1 --avg 30 --power-scale profile` (manual runtime check on Apple Silicon)
+## P3: Packaging Migration
+- [ ] Add `pyproject.toml` with setuptools build-system metadata and runtime dependencies.
+- [ ] Keep compatibility with current installs during migration (`setup.py` can remain as shim while transitioning).
 
-## Non-Goals
-- [ ] Do not change dashboard visual design or metric semantics in this refactor.
-- [ ] Do not remove current compatibility fallbacks for unknown Apple Silicon names.
+## P4: Tests and Validation
+- [x] Add parser tests for defaults and flags (`--show_cores` behavior).
+- [x] Add import-safety test (importing `agtop.agtop` must not parse CLI args or trigger side effects).
+- [ ] Re-run:
+  - [x] `.venv/bin/python -m agtop.agtop --help`
+  - [x] `.venv/bin/pytest -q`
+- [ ] Manual Apple Silicon runtime check:
+  - [ ] `sudo agtop --interval 1 --avg 30 --power-scale profile`

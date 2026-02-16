@@ -91,40 +91,42 @@ brew tap-new "$TAP_REPO"
 gh repo create "$TAP_REPO" --public --source "$(brew --repository "$TAP_REPO")" --push
 ```
 
-Release flow (main push trigger):
+Release flow (split CI/CD):
 
 1. On your local laptop, update `setup.py` and `CHANGELOG.md` using your local `.venv` workflow, then commit.
+   CI does not bump versions.
 
 2. Create a matching source tag and push commit + tag together.
+   CI does not create tags.
 
 ```bash
-export VERSION="0.1.2"
+export VERSION="0.1.3"
 git add setup.py CHANGELOG.md
 git commit -m "Release v$VERSION"
 git tag "v$VERSION"
 git push origin main "v$VERSION"
 ```
 
-3. GitHub Actions workflow `.github/workflows/main-push.yml` runs on push to `main`:
+3. GitHub Actions workflow `.github/workflows/main-ci.yml` runs on push to `main`:
 
 - Resolves Python version from `Formula/agtop.rb` (`depends_on "python@X.Y"`).
 - Creates an isolated CI virtualenv (`.ci-venv`) to mirror formula-style isolation.
 - Installs formula resource versions into `.ci-venv` before running project checks.
 - Runs CLI/help and test checks.
-- If tag `v<setup.py version>` exists, updates `Formula/agtop.rb` `url` and `sha256`.
+
+4. GitHub Actions workflow `.github/workflows/release-formula.yml` runs on tag push (`v*`):
+
+- Verifies tag version matches `setup.py` version.
+- Updates `Formula/agtop.rb` `url` and `sha256` from the tag tarball.
 - Commits and pushes formula sync back to `main` automatically.
 
-4. Validate package availability:
+5. Validate package availability:
 
 ```bash
 brew update
 brew upgrade binlecode/agtop/agtop
 brew info binlecode/agtop/agtop
 ```
-
-Future work:
-
-- Add a dedicated tag-triggered workflow (for example `on: push: tags: v*`) to separate release publishing from regular `main` push validation.
 
 ## Compatibility Notes
 

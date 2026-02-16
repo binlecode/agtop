@@ -27,35 +27,38 @@ from .power_scaling import (
     power_to_percent,
 )
 
-parser = argparse.ArgumentParser(
-    description="agtop: Performance monitoring CLI tool for Apple Silicon"
-)
-parser.add_argument(
-    "--interval",
-    type=int,
-    default=1,
-    help="Display interval and sampling interval for powermetrics (seconds)",
-)
-parser.add_argument("--color", type=int, default=2, help="Choose display color (0~8)")
-parser.add_argument(
-    "--avg", type=int, default=30, help="Interval for averaged values (seconds)"
-)
-parser.add_argument(
-    "--show_cores", type=bool, default=False, help="Choose show cores mode"
-)
-parser.add_argument(
-    "--max_count", type=int, default=0, help="Max show count to restart powermetrics"
-)
-parser.add_argument(
-    "--power-scale",
-    choices=["auto", "profile"],
-    default="auto",
-    help="Power chart scaling mode: auto uses rolling peak, profile uses SoC reference",
-)
-args = parser.parse_args()
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="agtop: Performance monitoring CLI tool for Apple Silicon"
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=1,
+        help="Display interval and sampling interval for powermetrics (seconds)",
+    )
+    parser.add_argument("--color", type=int, default=2, help="Choose display color (0~8)")
+    parser.add_argument(
+        "--avg", type=int, default=30, help="Interval for averaged values (seconds)"
+    )
+    parser.add_argument(
+        "--show_cores", action="store_true", help="Choose show cores mode"
+    )
+    parser.add_argument(
+        "--max_count", type=int, default=0, help="Max show count to restart powermetrics"
+    )
+    parser.add_argument(
+        "--power-scale",
+        choices=["auto", "profile"],
+        default="auto",
+        help="Power chart scaling mode: auto uses rolling peak, profile uses SoC reference",
+    )
+    return parser
 
 
-def main():
+def main(args=None):
+    if args is None:
+        args = build_parser().parse_args()
     terminal = Terminal()
     raw_mode_override = os.getenv("AGTOP_COLOR_MODE")
     mode_override = parse_color_mode_override(raw_mode_override)
@@ -638,12 +641,32 @@ def main():
     return powermetrics_process
 
 
-if __name__ == "__main__":
-    powermetrics_process = main()
+def cli(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    powermetrics_process = None
     try:
-        powermetrics_process.terminate()
-        print("Successfully terminated powermetrics process")
+        powermetrics_process = main(args)
+        return 0
+    except KeyboardInterrupt:
+        print("Stopping...")
+        return 130
     except Exception as e:
         print(e)
-        powermetrics_process.terminate()
-        print("Successfully terminated powermetrics process")
+        return 1
+    finally:
+        if powermetrics_process is not None:
+            try:
+                powermetrics_process.terminate()
+                print("Successfully terminated powermetrics process")
+            except Exception as e:
+                print(e)
+                try:
+                    powermetrics_process.terminate()
+                    print("Successfully terminated powermetrics process")
+                except Exception:
+                    pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli())

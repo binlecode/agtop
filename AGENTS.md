@@ -32,6 +32,9 @@
 
 ## Testing Guidelines
 - Run `.venv/bin/pytest -q` for all code changes.
+- Functional tests only: validate behavior through public/runtime entrypoints (for example CLI invocation, real file I/O paths, and end-to-end parse flows).
+- Do not add unit tests that assert internal implementation details, helper math constants, or private function behavior in isolation.
+- Do not add tests only to increase coverage numbers; each test must validate a production-relevant failure mode, regression risk, or external contract.
 - Minimum checks before opening a PR:
   - `.venv/bin/python -m agtop.agtop --help`
   - `.venv/bin/pytest -q`

@@ -1,0 +1,92 @@
+name: release-formula
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-formula:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag and setup.py version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG_NAME#v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$TAG_NAME" ]; then
+            echo "Invalid release tag: $TAG_NAME" >&2
+            exit 1
+          fi
+
+          SETUP_VERSION="$(python - <<'PY'
+          import pathlib
+          import re
+
+          content = pathlib.Path("setup.py").read_text(encoding="utf-8")
+          match = re.search(r"^\s*version\s*=\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
+          if not match:
+              raise SystemExit("Could not find version in setup.py")
+          print(match.group(1))
+          PY
+          )"
+
+          if [ "$SETUP_VERSION" != "$VERSION" ]; then
+            echo "Tag version ($VERSION) does not match setup.py version ($SETUP_VERSION)" >&2
+            exit 1
+          fi
+
+      - name: Sync formula for tag
+        env:
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG_NAME#v}"
+          URL="https://github.com/${GH_REPO}/archive/refs/tags/${TAG_NAME}.tar.gz"
+          SHA256="$(curl -fL "${URL}" | sha256sum | awk '{print $1}')"
+
+          FORMULA_URL="${URL}" FORMULA_SHA256="${SHA256}" python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          formula_path = pathlib.Path("Formula/agtop.rb")
+          content = formula_path.read_text(encoding="utf-8")
+
+          def replace_line(text: str, pattern: str, new_value: str, label: str) -> str:
+              regex = re.compile(pattern, re.MULTILINE)
+              match = regex.search(text)
+              if not match:
+                  raise SystemExit(f"Could not find {label} in {formula_path}")
+
+              line = f"{match.group(1)}{new_value}{match.group(3)}"
+              return text[: match.start()] + line + text[match.end() :]
+
+          content = replace_line(content, r'^(  url ")(.*?)(")$', os.environ["FORMULA_URL"], "url")
+          content = replace_line(content, r'^(  sha256 ")([0-9a-f]{64})(")$', os.environ["FORMULA_SHA256"], "sha256")
+
+          formula_path.write_text(content, encoding="utf-8")
+          PY
+
+          if git diff --quiet -- Formula/agtop.rb; then
+            echo "Formula already up to date for ${TAG_NAME}."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/agtop.rb
+          git commit -m "Formula/agtop: sync ${TAG_NAME} [skip ci]"
+          git push origin HEAD:main

@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/tag_release.sh [version]
+
+Examples:
+  scripts/tag_release.sh
+  scripts/tag_release.sh 0.1.3
+  scripts/tag_release.sh v0.1.3
+
+Behavior:
+  - Reads version from setup.py by default
+  - If version is provided, it must match setup.py
+  - Verifies working tree is clean
+  - Verifies tag does not already exist locally/remotely
+  - Pushes main branch
+  - Creates and pushes tag vX.Y.Z
+
+This tag push triggers .github/workflows/release-formula.yml.
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ $# -gt 1 ]]; then
+  usage >&2
+  exit 1
+fi
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "Error: git is required" >&2
+  exit 1
+fi
+
+if [[ ! -f setup.py ]]; then
+  echo "Error: setup.py not found. Run from repository root." >&2
+  exit 1
+fi
+
+SETUP_VERSION="$(sed -n "s/^[[:space:]]*version=['\"]\([^'\"]*\)['\"],[[:space:]]*$/\1/p" setup.py | head -n1)"
+if [[ -z "$SETUP_VERSION" ]]; then
+  echo "Error: could not parse version from setup.py" >&2
+  exit 1
+fi
+
+if [[ $# -eq 1 ]]; then
+  RAW_VERSION="$1"
+  VERSION="${RAW_VERSION#v}"
+  if [[ -z "$VERSION" ]]; then
+    echo "Error: version is empty" >&2
+    exit 1
+  fi
+  if [[ "$SETUP_VERSION" != "$VERSION" ]]; then
+    echo "Error: setup.py version ($SETUP_VERSION) does not match requested version ($VERSION)" >&2
+    exit 1
+  fi
+else
+  VERSION="$SETUP_VERSION"
+fi
+TAG="v${VERSION}"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Error: working tree is not clean. Commit or stash changes first." >&2
+  git status --short
+  exit 1
+fi
+
+if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+  echo "Error: local tag ${TAG} already exists" >&2
+  exit 1
+fi
+
+if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+  echo "Error: remote tag ${TAG} already exists on origin" >&2
+  exit 1
+fi
+
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$CURRENT_BRANCH" != "main" ]]; then
+  echo "Error: current branch is ${CURRENT_BRANCH}. Switch to main first." >&2
+  exit 1
+fi
+
+echo "Pushing main..."
+git push origin main
+
+echo "Creating tag ${TAG}..."
+git tag "${TAG}"
+
+echo "Pushing tag ${TAG}..."
+git push origin "${TAG}"
+
+echo "Done. Tag ${TAG} pushed."
+echo "Release formula workflow should start from this tag push."

@@ -15,6 +15,22 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ### Fixed
 - No changes yet.
 
+## [0.1.3] - 2026-02-16
+
+### Added
+- Added split GitHub Actions workflows: `.github/workflows/main-ci.yml` for `main` validation and `.github/workflows/release-formula.yml` for tag-driven formula synchronization.
+- Added `scripts/tag_release.sh` to enforce version/tag checks and push release tags consistently.
+- Added functional regression tests for CLI invocation/import safety and `powermetrics` partial-frame recovery.
+
+### Changed
+- Refactored CLI argument handling to use `build_parser()`, runtime-only parsing, `--show_cores` as a boolean flag, and a `cli(argv=None)` entrypoint.
+- Updated `console_scripts` entrypoint in `setup.py` to `agtop.agtop:cli`.
+- Updated testing policy to emphasize functional tests over internal unit-detail coverage, and removed legacy unit-detail test files.
+- Updated release documentation to reflect split CI/CD workflow and the current release version example.
+
+### Fixed
+- Prevented import-time CLI argument parsing failures when `agtop.agtop` is imported by other tools/processes.
+
 ## [0.1.2] - 2026-02-16
 
 ### Added
