@@ -27,6 +27,7 @@ from .power_scaling import (
     power_to_percent,
 )
 
+
 def build_parser():
     parser = argparse.ArgumentParser(
         description="agtop: Performance monitoring CLI tool for Apple Silicon"
@@ -37,7 +38,9 @@ def build_parser():
         default=1,
         help="Display interval and sampling interval for powermetrics (seconds)",
     )
-    parser.add_argument("--color", type=int, default=2, help="Choose display color (0~8)")
+    parser.add_argument(
+        "--color", type=int, default=2, help="Choose display color (0~8)"
+    )
     parser.add_argument(
         "--avg", type=int, default=30, help="Interval for averaged values (seconds)"
     )
@@ -45,7 +48,10 @@ def build_parser():
         "--show_cores", action="store_true", help="Choose show cores mode"
     )
     parser.add_argument(
-        "--max_count", type=int, default=0, help="Max show count to restart powermetrics"
+        "--max_count",
+        type=int,
+        default=0,
+        help="Max show count to restart powermetrics",
     )
     parser.add_argument(
         "--power-scale",

@@ -32,4 +32,3 @@ def test_parse_powermetrics_falls_back_to_previous_frame_when_last_frame_is_part
     assert thermal_pressure == "Nominal"
     assert bandwidth_metrics is None
     assert timestamp == 1700000000
-

@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+
 def test_cli_help_runs_and_exposes_show_cores_as_flag():
     result = subprocess.run(
         [sys.executable, "-m", "agtop.agtop", "--help"],
