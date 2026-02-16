@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agtop"
+version = "0.1.5"
+description = "Performance monitoring CLI tool for Apple Silicon"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "binlecode", email = "bin.le.code@gmail.com" },
+]
+keywords = ["agtop", "apple-silicon", "powermetrics"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+]
+dependencies = [
+  "dashing",
+  "psutil",
+]
+
+[project.optional-dependencies]
+dev = ["ruff"]
+
+[project.urls]
+Homepage = "https://github.com/binlecode/agtop"
+Repository = "https://github.com/binlecode/agtop"
+
+[project.scripts]
+agtop = "agtop.agtop:cli"
+
+[tool.setuptools.packages.find]
+include = ["agtop*"]

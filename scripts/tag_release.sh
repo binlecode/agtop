@@ -12,8 +12,8 @@ Examples:
   scripts/tag_release.sh v0.1.3
 
 Behavior:
-  - Reads version from setup.py by default
-  - If version is provided, it must match setup.py
+  - Reads version from pyproject.toml by default
+  - If version is provided, it must match pyproject.toml
   - Verifies working tree is clean
   - Verifies tag does not already exist locally/remotely
   - Pushes main branch
@@ -38,14 +38,24 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f setup.py ]]; then
-  echo "Error: setup.py not found. Run from repository root." >&2
+if [[ ! -f pyproject.toml ]]; then
+  echo "Error: pyproject.toml not found. Run from repository root." >&2
   exit 1
 fi
 
-SETUP_VERSION="$(sed -n "s/^[[:space:]]*version=['\"]\([^'\"]*\)['\"],[[:space:]]*$/\1/p" setup.py | head -n1)"
-if [[ -z "$SETUP_VERSION" ]]; then
-  echo "Error: could not parse version from setup.py" >&2
+PROJECT_VERSION="$(
+  awk '
+    /^\[project\]/ { in_project=1; next }
+    /^\[/ && in_project { in_project=0 }
+    in_project && $1 == "version" {
+      gsub(/"/, "", $3)
+      print $3
+      exit
+    }
+  ' pyproject.toml
+)"
+if [[ -z "$PROJECT_VERSION" ]]; then
+  echo "Error: could not parse [project].version from pyproject.toml" >&2
   exit 1
 fi
 
@@ -56,12 +66,12 @@ if [[ $# -eq 1 ]]; then
     echo "Error: version is empty" >&2
     exit 1
   fi
-  if [[ "$SETUP_VERSION" != "$VERSION" ]]; then
-    echo "Error: setup.py version ($SETUP_VERSION) does not match requested version ($VERSION)" >&2
+  if [[ "$PROJECT_VERSION" != "$VERSION" ]]; then
+    echo "Error: pyproject.toml version ($PROJECT_VERSION) does not match requested version ($VERSION)" >&2
     exit 1
   fi
 else
-  VERSION="$SETUP_VERSION"
+  VERSION="$PROJECT_VERSION"
 fi
 TAG="v${VERSION}"
 

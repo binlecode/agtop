@@ -17,12 +17,11 @@ Work top-to-bottom. `P2` is now the highest pending priority and `P4` is lowest.
   - [x] Ensure cleanup runs for normal exit, argument/runtime exceptions, and `KeyboardInterrupt`.
 
 ## P2: Imports and Dependency UX
-- [ ] Replace `from .utils import *` with explicit imports in `agtop/agtop.py`.
-- [ ] Handle missing `dashing` dependency with a clear error message and non-zero exit code.
+- [x] Replace `from .utils import *` with explicit imports in `agtop/agtop.py`.
 
 ## P3: Packaging Migration
-- [ ] Add `pyproject.toml` with setuptools build-system metadata and runtime dependencies.
-- [ ] Keep compatibility with current installs during migration (`setup.py` can remain as shim while transitioning).
+- [x] Add `pyproject.toml` with setuptools build-system metadata and runtime dependencies.
+- [x] Complete migration without `setup.py` backward-compatibility shim.
 
 ## P4: Tests and Validation
 - [x] Add parser tests for defaults and flags (`--show_cores` behavior).

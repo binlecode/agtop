@@ -10,8 +10,21 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 - No changes yet.
 
 ### Changed
+- No changes yet.
+
+### Fixed
+- No changes yet.
+
+## [0.1.5] - 2026-02-16
+
+### Added
+- Added `pyproject.toml` packaging metadata (`PEP 517/518`) and removed legacy `setup.py`.
+
+### Changed
 - Improved `powermetrics` startup error guidance for missing binary, sudo/permission issues, and subprocess startup failures.
-- Updated `Formula/agtop.rb` to use the `v0.1.4` source tarball and checksum.
+- Migrated packaging metadata from `setup.py` to `pyproject.toml` and updated release automation/scripts to validate `[project].version`.
+- Updated release docs/guides to reference `pyproject.toml` and modern build commands.
+- Updated package author metadata to `binlecode` only.
 
 ### Fixed
 - Ensured cursor restore and `powermetrics` subprocess termination run from a shared `finally` cleanup path.

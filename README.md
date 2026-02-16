@@ -79,7 +79,7 @@ Maintainer release topology:
 - Tap name users run: `binlecode/agtop`
 - Formula name: `agtop`
 
-Homebrew upgrades come from the tap formula, not from `setup.py` alone.
+Homebrew upgrades come from the tap formula, not from `pyproject.toml` alone.
 
 One-time setup (if the tap repo does not exist yet):
 
@@ -93,15 +93,15 @@ gh repo create "$TAP_REPO" --public --source "$(brew --repository "$TAP_REPO")" 
 
 Release flow (split CI/CD):
 
-1. On your local laptop, update `setup.py` and `CHANGELOG.md` using your local `.venv` workflow, then commit.
+1. On your local laptop, update `pyproject.toml` (`[project].version`) and `CHANGELOG.md` using your local `.venv` workflow, then commit.
    CI does not bump versions.
 
 2. Create a matching source tag and push commit + tag together.
    CI does not create tags.
 
 ```bash
-export VERSION="0.1.4"
-git add setup.py CHANGELOG.md
+export VERSION="0.1.5"
+git add pyproject.toml CHANGELOG.md
 git commit -m "Release v$VERSION"
 git tag "v$VERSION"
 git push origin main "v$VERSION"
@@ -116,7 +116,7 @@ git push origin main "v$VERSION"
 
 4. GitHub Actions workflow `.github/workflows/release-formula.yml` runs on tag push (`v*`):
 
-- Verifies tag version matches `setup.py` version.
+- Verifies tag version matches `pyproject.toml` version.
 - Updates `Formula/agtop.rb` `url` and `sha256` from the tag tarball.
 - Commits and pushes formula sync back to `main` automatically.
 

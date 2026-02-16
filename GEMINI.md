@@ -46,7 +46,7 @@ sudo .venv/bin/python -m agtop.agtop --interval 1 --color 2
 
 To build the package:
 ```bash
-.venv/bin/python setup.py sdist bdist_wheel
+.venv/bin/python -m build
 ```
 
 ### Testing
@@ -59,7 +59,7 @@ The project uses `pytest` for testing logic that doesn't require live hardware (
 -   `agtop/agtop.py`: Main application logic and UI layout.
 -   `agtop/soc_profiles.py`: Database of chip specifications.
 -   `agtop/parsers.py`: Logic for interpreting `powermetrics` output.
--   `setup.py`: Package configuration and dependencies.
+-   `pyproject.toml`: Package configuration and dependencies.
 -   `AGENTS.md`: Specific guidelines for AI agents and contributors.
 
 ## Conventions

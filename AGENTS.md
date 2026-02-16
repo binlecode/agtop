@@ -15,13 +15,13 @@
 - `agtop/parsers.py`: parsing logic for `powermetrics` plist payloads.
 - `tests/`: unit tests for SoC profiles, parser resilience, and scaling logic.
 - `images/`: README/demo assets.
-- `setup.py`: package metadata, dependencies, and `console_scripts` entry point (`agtop`).
+- `pyproject.toml`: package metadata, dependencies, and `console_scripts` entry point (`agtop`).
 
 ## Build, Test, and Development Commands
 - `.venv/bin/python -m pip install -e .`: install in editable mode for local development.
 - `.venv/bin/python -m agtop.agtop --help`: validate CLI parsing and flags.
 - `sudo agtop --interval 1 --avg 30`: run the tool locally (requires `sudo` for `powermetrics`).
-- `.venv/bin/python setup.py sdist bdist_wheel`: build source/wheel artifacts.
+- `.venv/bin/python -m build`: build source/wheel artifacts.
 - `.venv/bin/pytest -q`: run automated tests.
 
 ## Coding Style & Naming Conventions
@@ -44,6 +44,9 @@
 ## Commit & Pull Request Guidelines
 - Use concise, imperative commit subjects (as seen in history), e.g. `Add support for M1 Ultra` or `agtop/utils.py: add bandwidth of M2`.
 - Keep commits scoped to one logical change.
+- Before every commit and before every push, always run:
+  - `.venv/bin/ruff check --fix .`
+  - `.venv/bin/ruff format .`
 - PRs should include:
   - clear summary of behavior change,
   - tested macOS/chip details (for example, Ventura + M2),
