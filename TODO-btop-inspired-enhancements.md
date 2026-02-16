@@ -45,12 +45,12 @@ Acceptance:
 - Output is machine-readable and stable.
 
 ## Priority 5: Bottleneck signals and alerts
-- [ ] Add lightweight alerts in title/status line:
+- [x] Add lightweight alerts in title/status line:
   - thermal throttling,
   - sustained high bandwidth saturation,
   - rising swap usage,
   - sustained high package power.
-- [ ] Add threshold flags so power users can tune noise level.
+- [x] Add threshold flags so power users can tune noise level.
 
 Acceptance:
 - `agtop` proactively points to likely bottlenecks instead of only raw metrics.

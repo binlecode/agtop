@@ -7,13 +7,20 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ## [Unreleased]
 
 ### Added
-- No changes yet.
+- Added configurable bottleneck alert thresholds:
+  - `--alert-bw-sat-percent`
+  - `--alert-package-power-percent`
+  - `--alert-swap-rise-gb`
+  - `--alert-sustain-samples`
+- Added CLI contract coverage for the new alert threshold flags and validation failures.
 
 ### Changed
-- No changes yet.
+- Updated the power/status title line to include active bottleneck alerts (thermal, bandwidth saturation, swap growth, package power).
+- Refined README feature summary to highlight diagnosis-oriented capabilities and alerting.
+- Marked Priority 5 (`Bottleneck signals and alerts`) as complete in `TODO-btop-inspired-enhancements.md`.
 
 ### Fixed
-- No changes yet.
+- Fixed terminal redraw behavior for environments lacking cursor-addressing support by forcing full-screen clear before each frame (prevents repeated border/header line printing).
 
 ## [0.1.5] - 2026-02-16
 

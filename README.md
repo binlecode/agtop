@@ -10,16 +10,13 @@ Apple GPU Top for Apple Silicon.
 
 Origin attribution: this project is inspired by `tlkh/asitop` and is now refactored to a new utility as `binlecode/agtop`.
 
-## Features
+## Key Features
 
-- CPU utilization gauges + history trackers (E/P clusters and per-core views).
-- GPU utilization/frequency display + history trackers.
-- ANE utilization estimation from power usage.
-- RAM and swap usage display.
-- Memory bandwidth panel (E-CPU, P-CPU, GPU, Media, total read/write).
-- CPU/GPU power charts with profile-aware scaling.
-- Process visibility panel (top CPU and memory consumers with PID/command/RSS).
-- Apple Silicon profile defaults for current and future M-series tiers.
+- Unified Apple Silicon telemetry: combines `powermetrics`, `psutil`, `sysctl`, and `system_profiler`.
+- Real-time utilization dashboard: E/P CPU clusters, optional per-core gauges/history, GPU, ANE, RAM/swap, and memory bandwidth.
+- Power and bottleneck diagnosis: CPU/GPU/package power tracking plus status-line alerts for thermal pressure, bandwidth saturation, swap growth, and package power.
+- Process-level visibility: top CPU/RSS processes in-panel with optional regex filtering (`--proc-filter`).
+- Profile-aware scaling and compatibility: tuned defaults for M-series tiers, including unknown future Apple Silicon variants.
 
 ## Telemetry Model (What / How / Why)
 
@@ -74,6 +71,7 @@ sudo agtop
 sudo agtop --interval 1 --avg 30 --power-scale profile
 sudo agtop --show_cores --core-view both --interval 1 --avg 30 --power-scale profile
 sudo agtop --proc-filter "python|ollama|vllm|docker|mlx"
+sudo agtop --alert-bw-sat-percent 90 --alert-package-power-percent 85 --alert-swap-rise-gb 0.5 --alert-sustain-samples 4
 ```
 
 ## Development

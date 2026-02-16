@@ -74,6 +74,30 @@ def build_parser():
         default="",
         help='Regex filter for process panel command names (example: "python|ollama|vllm|docker|mlx")',
     )
+    parser.add_argument(
+        "--alert-bw-sat-percent",
+        type=_validate_percent_threshold,
+        default=85,
+        help="Bandwidth saturation alert threshold percent (1-100)",
+    )
+    parser.add_argument(
+        "--alert-package-power-percent",
+        type=_validate_percent_threshold,
+        default=85,
+        help="Package power alert threshold percent (1-100, profile-relative)",
+    )
+    parser.add_argument(
+        "--alert-swap-rise-gb",
+        type=_validate_swap_rise_gb,
+        default=0.3,
+        help="Alert when swap rises by at least this many GB over sustained samples",
+    )
+    parser.add_argument(
+        "--alert-sustain-samples",
+        type=_validate_sustain_samples,
+        default=3,
+        help="Consecutive samples required for sustained alerts",
+    )
     return parser
 
 
@@ -87,6 +111,46 @@ def _validate_proc_filter(value):
             "invalid --proc-filter regex: {}".format(error)
         ) from error
     return value
+
+
+def _validate_percent_threshold(value):
+    try:
+        threshold = int(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError("threshold must be an integer") from error
+    if threshold < 1 or threshold > 100:
+        raise argparse.ArgumentTypeError("threshold must be in the range 1-100")
+    return threshold
+
+
+def _validate_swap_rise_gb(value):
+    try:
+        swap_rise = float(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError(
+            "swap rise threshold must be a number"
+        ) from error
+    if swap_rise < 0:
+        raise argparse.ArgumentTypeError("swap rise threshold must be >= 0")
+    return swap_rise
+
+
+def _validate_sustain_samples(value):
+    try:
+        samples = int(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError(
+            "sustain samples must be an integer"
+        ) from error
+    if samples < 1:
+        raise argparse.ArgumentTypeError("sustain samples must be >= 1")
+    return samples
+
+
+def _update_sustained_counter(counter, is_active):
+    if is_active:
+        return counter + 1
+    return 0
 
 
 def _shorten_process_command(command, max_len=30):
@@ -131,6 +195,13 @@ def _read_powermetrics_stderr(process):
         return stderr_data.decode("utf-8", errors="replace").strip()
     except Exception:
         return str(stderr_data).strip()
+
+
+def _supports_cursor_addressing(terminal):
+    try:
+        return bool(terminal.move(0, 0))
+    except Exception:
+        return False
 
 
 def _build_powermetrics_start_error(stderr_text="", returncode=None):
@@ -221,6 +292,7 @@ def _start_powermetrics_process(timecode, sample_interval):
 
 def _run_dashboard(args, runtime_state):
     terminal = Terminal()
+    use_full_clear_redraw = not _supports_cursor_addressing(terminal)
     raw_mode_override = os.getenv("AGTOP_COLOR_MODE")
     mode_override = parse_color_mode_override(raw_mode_override)
     normalized_raw_mode = (
@@ -472,9 +544,11 @@ def _run_dashboard(args, runtime_state):
     cpu_chart_ref_w = soc_info_dict["cpu_chart_ref_w"]
     gpu_chart_ref_w = soc_info_dict["gpu_chart_ref_w"]
     ane_max_power = 8.0
+    package_ref_w = max(cpu_chart_ref_w + gpu_chart_ref_w + ane_max_power, 1.0)
     max_cpu_bw = max(float(soc_info_dict.get("cpu_max_bw", 0.0)), 1.0)
     max_gpu_bw = max(float(soc_info_dict.get("gpu_max_bw", 0.0)), 1.0)
     max_media_bw = max(max_cpu_bw, max_gpu_bw)
+    alert_sustain_samples = max(1, int(args.alert_sustain_samples))
     process_filter_pattern = (
         re.compile(args.proc_filter, re.IGNORECASE) if args.proc_filter else None
     )
@@ -550,6 +624,10 @@ def _run_dashboard(args, runtime_state):
     avg_gpu_usage_list = deque([], maxlen=usage_track_window)
     avg_ane_usage_list = deque([], maxlen=usage_track_window)
     avg_ram_usage_list = deque([], maxlen=usage_track_window)
+    high_bw_counter = 0
+    high_package_power_counter = 0
+    swap_history_points = alert_sustain_samples + 1
+    swap_used_history = deque([], maxlen=swap_history_points)
 
     core_gauges = e_core_gauges + p_core_gauges + p_core_gauges_ext
     core_history_charts = e_core_history_charts + p_core_history_charts_all
@@ -640,10 +718,7 @@ def _run_dashboard(args, runtime_state):
             if timestamp > last_timestamp:
                 last_timestamp = timestamp
 
-                if thermal_pressure == "Nominal":
-                    thermal_throttle = "no"
-                else:
-                    thermal_throttle = "yes"
+                thermal_alert = thermal_pressure != "Nominal"
 
                 system_core_usage = get_system_core_usage()
 
@@ -879,6 +954,12 @@ def _run_dashboard(args, runtime_state):
                 ram_used_percent = clamp_percent(ram_metrics_dict["free_percent"])
                 ram_usage_peak = max(ram_usage_peak, ram_used_percent)
                 avg_ram_usage_list.append(ram_used_percent)
+                swap_used_history.append(
+                    max(
+                        0.0,
+                        float(ram_metrics_dict.get("swap_used_GB", 0.0) or 0.0),
+                    )
+                )
                 ram_usage_chart.title = "".join(
                     [
                         "RAM Track: ",
@@ -1022,12 +1103,53 @@ def _run_dashboard(args, runtime_state):
                     memory_bandwidth_panel.title = (
                         "Memory Bandwidth: N/A (counters unavailable)"
                     )
+                peak_bw_percent = max(
+                    ecpu_bw_percent, pcpu_bw_percent, gpu_bw_percent, media_bw_percent
+                )
+                high_bw_counter = _update_sustained_counter(
+                    high_bw_counter,
+                    bandwidth_available
+                    and peak_bw_percent >= args.alert_bw_sat_percent,
+                )
+                bandwidth_alert = high_bw_counter >= alert_sustain_samples
 
                 package_power_W = cpu_metrics_dict["package_W"] / sample_interval
                 if package_power_W > package_peak_power:
                     package_peak_power = package_power_W
+                package_power_percent = clamp_percent(
+                    package_power_W / package_ref_w * 100
+                )
+                high_package_power_counter = _update_sustained_counter(
+                    high_package_power_counter,
+                    package_power_percent >= args.alert_package_power_percent,
+                )
+                package_power_alert = (
+                    high_package_power_counter >= alert_sustain_samples
+                )
                 avg_package_power_list.append(package_power_W)
                 avg_package_power = get_avg(avg_package_power_list)
+                swap_rise_gb = (
+                    max(0.0, swap_used_history[-1] - swap_used_history[0])
+                    if len(swap_used_history) > 1
+                    else 0.0
+                )
+                swap_alert = (
+                    ram_metrics_dict.get("swap_total_GB", 0.0) >= 0.1
+                    and len(swap_used_history) >= swap_history_points
+                    and swap_rise_gb >= args.alert_swap_rise_gb
+                )
+                active_alerts = []
+                if thermal_alert:
+                    active_alerts.append("THERMAL")
+                if bandwidth_alert:
+                    active_alerts.append("BW>{}%".format(args.alert_bw_sat_percent))
+                if swap_alert:
+                    active_alerts.append("SWAP+{0:.1f}G".format(swap_rise_gb))
+                if package_power_alert:
+                    active_alerts.append(
+                        "PKG>{}%".format(args.alert_package_power_percent)
+                    )
+                alerts_label = ", ".join(active_alerts) if active_alerts else "none"
                 power_charts.title = "".join(
                     [
                         "CPU+GPU+ANE Power: ",
@@ -1036,8 +1158,10 @@ def _run_dashboard(args, runtime_state):
                         "{0:.2f}".format(avg_package_power),
                         "W peak: ",
                         "{0:.2f}".format(package_peak_power),
-                        "W) throttle: ",
-                        thermal_throttle,
+                        "W) thermal: ",
+                        thermal_pressure,
+                        " alerts: ",
+                        alerts_label,
                     ]
                 )
 
@@ -1140,6 +1264,8 @@ def _run_dashboard(args, runtime_state):
                         dynamic_color_enabled = False
                         reset_static_colors(args.color)
 
+            if use_full_clear_redraw:
+                print("\033[2J\033[H", end="")
             ui.display()
 
         time.sleep(sample_interval)
