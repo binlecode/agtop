@@ -149,7 +149,7 @@ gh repo create "$TAP_REPO" --public --source "$(brew --repository "$TAP_REPO")" 
    CI does not create tags.
 
 ```bash
-export VERSION="0.1.7"
+export VERSION="0.1.8"
 git add pyproject.toml CHANGELOG.md
 git commit -m "Release v$VERSION"
 scripts/tag_release.sh "$VERSION"

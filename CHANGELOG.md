@@ -10,9 +10,19 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 - No changes yet.
 
 ### Changed
+- No changes yet.
+
+### Fixed
+- No changes yet.
+
+## [0.1.8] - 2026-02-16
+
+### Added
+- Added `GUIDE-release-operations.md` as the canonical end-to-end release runbook with failure playbooks.
+
+### Changed
 - Refactored release automation to use a race-safe, serialized formula sync workflow on tag pushes.
 - Updated release documentation/checklist to standardize on `scripts/tag_release.sh` and CI-driven formula synchronization.
-- Added `GUIDE-release-operations.md` as the canonical end-to-end release runbook with failure playbooks.
 - Hardened `scripts/tag_release.sh` to fast-forward local `main` from `origin/main` before tagging/pushing.
 
 ### Fixed
