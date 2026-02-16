@@ -165,6 +165,29 @@ brew upgrade binlecode/agtop/agtop
 brew info binlecode/agtop/agtop
 ```
 
+### Release Checklist
+
+1. Confirm working tree is clean:
+   `git status --short`
+2. Bump version and update changelog:
+   edit `pyproject.toml` and `CHANGELOG.md`
+3. Run required checks:
+   `.venv/bin/python -m ruff check --fix .`
+   `.venv/bin/python -m ruff format .`
+   `.venv/bin/python -m agtop.agtop --help`
+   `.venv/bin/pytest -q`
+4. Create release commit and tag, then push both:
+   `git add pyproject.toml CHANGELOG.md`
+   `git commit -m "Release v$VERSION"`
+   `git tag "v$VERSION"`
+   `git push origin main "v$VERSION"`
+5. Verify workflows:
+   check `main-ci` and `release-formula` runs in GitHub Actions
+6. Confirm formula points to the new tag and checksum:
+   `Formula/agtop.rb` `url` and `sha256`
+7. Confirm install path:
+   `brew update && brew upgrade binlecode/agtop/agtop && brew info binlecode/agtop/agtop`
+
 ## Compatibility Notes
 
 - Chip families `M1` through `M4` are recognized directly.
