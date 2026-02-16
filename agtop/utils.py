@@ -76,7 +76,7 @@ def run_powermetrics_process(
             pass
     output_file_flag = "-o"
     command_parts = [
-        "sudo nice -n",
+        "sudo -n nice -n",
         str(nice),
         "powermetrics",
         "--samplers cpu_power,gpu_power,thermal",

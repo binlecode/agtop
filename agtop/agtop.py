@@ -341,13 +341,17 @@ def _run_dashboard(args, runtime_state):
             )
     base_color = 0 if color_mode == COLOR_MODE_MONO else args.color
 
-    print("\nAGTOP - Performance monitoring CLI tool for Apple Silicon")
-    print("Update with your package manager (for Homebrew: `brew upgrade agtop`)")
-    print("Get help at `https://github.com/binlecode/agtop`")
-    print("P.S. You are recommended to run AGTOP with `sudo agtop`\n")
-    print("\n[1/3] Loading AGTOP\n")
-    print("\033[?25l")
+    print("AGTOP - Performance monitoring CLI tool for Apple Silicon", flush=True)
+    print(
+        "Update with your package manager (for Homebrew: `brew upgrade agtop`)",
+        flush=True,
+    )
+    print("Get help at `https://github.com/binlecode/agtop`", flush=True)
+    print("P.S. You are recommended to run AGTOP with `sudo agtop`", flush=True)
+    print("", flush=True)
+    print("\033[?25l", end="", flush=True)
     runtime_state["cursor_hidden"] = True
+    print("[1/3] Loading AGTOP ...", flush=True)
 
     cpu1_gauge = GaugeClass(title="E-CPU Usage", val=0, color=base_color)
     cpu2_gauge = GaugeClass(title="P-CPU Usage", val=0, color=base_color)
@@ -562,16 +566,20 @@ def _run_dashboard(args, runtime_state):
     ane_usage_peak = 0
     ram_usage_peak = 0
 
-    print("\n[2/3] Starting powermetrics process\n")
+    print("[2/3] Starting powermetrics process ...", flush=True)
 
     timecode = str(int(time.time()))
 
     powermetrics_process = _start_powermetrics_process(timecode, sample_interval)
     runtime_state["powermetrics_process"] = powermetrics_process
 
-    print("\n[3/3] Waiting for first reading...\n")
+    print("[3/3] Waiting for first reading ...", flush=True)
+    print("", flush=True)
+
+    first_reading_timeout_s = max(8.0, float(sample_interval) * 4.0)
 
     def get_reading(wait=0.1):
+        start_wait = time.time()
         ready = parse_powermetrics(timecode=timecode)
         while not ready:
             if powermetrics_process.poll() is not None:
@@ -580,6 +588,11 @@ def _run_dashboard(args, runtime_state):
                     _build_powermetrics_start_error(
                         stderr_text, powermetrics_process.returncode
                     )
+                )
+            if time.time() - start_wait >= first_reading_timeout_s:
+                raise RuntimeError(
+                    "Timed out waiting for first powermetrics reading. "
+                    "Run `sudo agtop` to grant powermetrics access."
                 )
             time.sleep(wait)
             ready = parse_powermetrics(timecode=timecode)
@@ -685,6 +698,7 @@ def _run_dashboard(args, runtime_state):
         pass
 
     count = 0
+    first_frame_rendered = False
     while True:
         if args.max_count > 0:
             if count >= args.max_count:
@@ -1264,9 +1278,10 @@ def _run_dashboard(args, runtime_state):
                         dynamic_color_enabled = False
                         reset_static_colors(args.color)
 
-            if use_full_clear_redraw:
-                print("\033[2J\033[H", end="")
+            if use_full_clear_redraw or not first_frame_rendered:
+                print("\033[2J\033[H", end="", flush=True)
             ui.display()
+            first_frame_rendered = True
 
         time.sleep(sample_interval)
 

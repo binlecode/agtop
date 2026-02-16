@@ -15,6 +15,18 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ### Fixed
 - No changes yet.
 
+## [0.1.7] - 2026-02-16
+
+### Added
+- No changes yet.
+
+### Changed
+- Refined startup status output formatting (`[1/3]`, `[2/3]`, `[3/3]`) for cleaner, predictable spacing.
+- Ensured startup banner/status lines are cleared once the first dashboard frame renders.
+
+### Fixed
+- Prevented non-sudo startup hangs by making internal `powermetrics` invocation non-interactive (`sudo -n`) and timing out clearly if the first sample cannot be read.
+
 ## [0.1.6] - 2026-02-16
 
 ### Added
