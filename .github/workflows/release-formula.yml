@@ -96,7 +96,12 @@ jobs:
             sed -E -i '' "s|^  sha256 \"[0-9a-f]{64}\"$|  sha256 \"${SHA256}\"|" Formula/agtop.rb
 
             if [ "${REFRESH_RESOURCES}" = "true" ]; then
-              brew update-python-resources Formula/agtop.rb
+              TEMP_TAP="local/agtop-ci"
+              brew tap-new "${TEMP_TAP}" >/dev/null 2>&1 || true
+              TAP_REPO="$(brew --repository "${TEMP_TAP}")"
+              cp Formula/agtop.rb "${TAP_REPO}/Formula/agtop.rb"
+              brew update-python-resources "${TEMP_TAP}/agtop"
+              cp "${TAP_REPO}/Formula/agtop.rb" Formula/agtop.rb
             else
               echo "Skipping Python resource refresh (workflow_dispatch refresh_resources=false)."
             fi
