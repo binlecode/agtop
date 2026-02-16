@@ -10,7 +10,18 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 - No changes yet.
 
 ### Changed
+- No changes yet.
+
+### Fixed
+- No changes yet.
+
+## [0.1.9] - 2026-02-16
+
+### Added
 - Added manual `workflow_dispatch` support to `release-formula.yml` for targeted formula re-sync by tag.
+
+### Changed
+- No changes yet.
 
 ### Fixed
 - Fixed `release-formula.yml` formula sync step to avoid shell heredoc parsing failures in CI.
