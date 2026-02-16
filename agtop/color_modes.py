@@ -33,6 +33,10 @@ def clamp_percent_0_100(value: float) -> int:
     return max(0, min(100, int(value)))
 
 
+def clamp_percent_0_100_float(value: float) -> float:
+    return max(0.0, min(100.0, float(value)))
+
+
 def parse_color_mode_override(raw: str | None) -> str | None:
     if raw is None:
         return None
@@ -82,7 +86,7 @@ def _linear_channel(start: int, end: int, ratio: float) -> int:
 
 
 def value_to_rgb(percent: float) -> tuple[int, int, int]:
-    p = float(clamp_percent_0_100(percent))
+    p = clamp_percent_0_100_float(percent)
 
     if p <= COLOR_STOPS[0][0]:
         return COLOR_STOPS[0][1]

@@ -5,7 +5,7 @@ from .color_modes import value_to_rgb
 
 class _GradientRendererMixin:
     def _color_seq(self, term, percent):
-        pct = max(0, min(100, int(percent)))
+        pct = max(0.0, min(100.0, float(percent)))
         cache = getattr(self, "_gradient_cache", None)
         if cache is None:
             cache = {}

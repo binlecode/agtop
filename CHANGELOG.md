@@ -15,6 +15,18 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ### Fixed
 - No changes yet.
 
+## [0.1.1] - 2026-02-16
+
+### Added
+- No changes yet.
+
+### Changed
+- Enabled gradient-based bar rendering for dynamic color modes by default (CPU/GPU usage and power bars), while keeping `AGTOP_EXPERIMENTAL_GRADIENT` as an explicit override.
+
+### Fixed
+- Removed integer quantization in gradient color mapping so bar steps can use slightly different shades across the full green-to-red range.
+- Added regression coverage to ensure fractional percent inputs produce distinct interpolated colors.
+
 ## [0.1.0] - 2026-02-16
 
 ### Added

@@ -4,7 +4,7 @@ long_description = 'Performance monitoring CLI tool for Apple Silicon'
 
 setup(
     name='agtop',
-    version='0.1.0',
+    version='0.1.1',
     author='Timothy Liu, binlecode',
     author_email='tlkh.xms@gmail.com, bin.le.code@gmail.com',
     url='https://github.com/binlecode/agtop',

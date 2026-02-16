@@ -47,11 +47,15 @@ def main():
         print("Warning: invalid AGTOP_COLOR_MODE={!r}; using auto detection.".format(raw_mode_override))
     color_mode = mode_override or detect_color_mode(os.environ, terminal)
     dynamic_color_enabled = color_mode in {COLOR_MODE_BASIC, COLOR_MODE_256, COLOR_MODE_TRUECOLOR}
-    experimental_gradient = os.getenv("AGTOP_EXPERIMENTAL_GRADIENT") == "1"
+    gradient_override = os.getenv("AGTOP_EXPERIMENTAL_GRADIENT")
+    if gradient_override is None:
+        gradient_bars_enabled = dynamic_color_enabled
+    else:
+        gradient_bars_enabled = gradient_override.strip() == "1"
     GaugeClass = HGauge
     VGaugeClass = VGauge
     HChartClass = HChart
-    if experimental_gradient and color_mode == COLOR_MODE_TRUECOLOR:
+    if gradient_bars_enabled and dynamic_color_enabled:
         try:
             from .experimental_gradient import (
                 GradientHGauge,
@@ -62,11 +66,7 @@ def main():
             VGaugeClass = GradientVGauge
             HChartClass = GradientHChart
         except Exception as e:
-            print("Warning: experimental gradient init failed: {}. Using default renderer.".format(e))
-            experimental_gradient = False
-    elif experimental_gradient:
-        print("Warning: AGTOP_EXPERIMENTAL_GRADIENT=1 requires truecolor mode; using default renderer.")
-        experimental_gradient = False
+            print("Warning: gradient renderer init failed: {}. Using default renderer.".format(e))
     base_color = 0 if color_mode == COLOR_MODE_MONO else args.color
 
     print("\nAGTOP - Performance monitoring CLI tool for Apple Silicon")

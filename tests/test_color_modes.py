@@ -86,6 +86,10 @@ def test_value_to_rgb_interpolation_midpoints():
     assert value_to_rgb(90) == (234, 56, 0)
 
 
+def test_value_to_rgb_uses_fractional_percent():
+    assert value_to_rgb(25.1) != value_to_rgb(25.9)
+
+
 def test_value_to_color_index_basic_thresholds():
     terminal = FakeTerminal(number_of_colors=16, does_styling=True)
     assert value_to_color_index(10, COLOR_MODE_BASIC, terminal, seed_color=2) == 2
