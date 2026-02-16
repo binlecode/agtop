@@ -18,6 +18,7 @@ Origin attribution: this project is inspired by `tlkh/asitop` and is now refacto
 - RAM and swap usage display.
 - Memory bandwidth panel (E-CPU, P-CPU, GPU, Media, total read/write).
 - CPU/GPU power charts with profile-aware scaling.
+- Process visibility panel (top CPU and memory consumers with PID/command/RSS).
 - Apple Silicon profile defaults for current and future M-series tiers.
 
 ## Telemetry Model (What / How / Why)
@@ -72,6 +73,7 @@ agtop --help
 sudo agtop
 sudo agtop --interval 1 --avg 30 --power-scale profile
 sudo agtop --show_cores --core-view both --interval 1 --avg 30 --power-scale profile
+sudo agtop --proc-filter "python|ollama|vllm|docker|mlx"
 ```
 
 ## Development

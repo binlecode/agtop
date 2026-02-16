@@ -1,12 +1,14 @@
 import time
 import os
 import argparse
+import re
 from collections import deque
 import psutil
 from blessed import Terminal
-from dashing import VSplit, HSplit, HGauge, HChart, VGauge
+from dashing import VSplit, HSplit, HGauge, HChart, VGauge, Text
 from .utils import (
     clear_console,
+    get_top_processes,
     get_ram_metrics_dict,
     get_soc_info,
     parse_powermetrics,
@@ -66,7 +68,45 @@ def build_parser():
         default="auto",
         help="Power chart scaling mode: auto uses rolling peak, profile uses SoC reference",
     )
+    parser.add_argument(
+        "--proc-filter",
+        type=_validate_proc_filter,
+        default="",
+        help='Regex filter for process panel command names (example: "python|ollama|vllm|docker|mlx")',
+    )
     return parser
+
+
+def _validate_proc_filter(value):
+    if value in (None, ""):
+        return ""
+    try:
+        re.compile(value, re.IGNORECASE)
+    except re.error as error:
+        raise argparse.ArgumentTypeError(
+            "invalid --proc-filter regex: {}".format(error)
+        ) from error
+    return value
+
+
+def _shorten_process_command(command, max_len=30):
+    if command is None:
+        return "?"
+    command = str(command).strip()
+    if not command:
+        return "?"
+    if len(command) <= max_len:
+        return command
+    return command[: max_len - 3] + "..."
+
+
+def _process_display_name(command, max_len=18):
+    command = str(command or "").strip()
+    if not command:
+        return "?"
+    executable = command.split(" ", 1)[0]
+    executable_name = os.path.basename(executable) or executable
+    return _shorten_process_command(executable_name, max_len=max_len)
 
 
 def _terminate_powermetrics_process(process):
@@ -384,12 +424,25 @@ def _run_dashboard(args, runtime_state):
         )
     )
 
+    process_display_count = 8
+    process_list = Text(
+        "NAME                 CPU%   RSS\n(no data yet)",
+        color=base_color,
+        border_color=base_color,
+    )
+    process_panel = VSplit(
+        process_list,
+        border_color=base_color,
+        title="Processes (top CPU)",
+    )
+
     ui = (
         HSplit(
             processor_split,
             VSplit(
                 memory_gauges,
                 power_charts,
+                process_panel,
             ),
         )
         if args.show_cores
@@ -397,6 +450,7 @@ def _run_dashboard(args, runtime_state):
             processor_split,
             memory_gauges,
             power_charts,
+            process_panel,
         )
     )
 
@@ -421,6 +475,9 @@ def _run_dashboard(args, runtime_state):
     max_cpu_bw = max(float(soc_info_dict.get("cpu_max_bw", 0.0)), 1.0)
     max_gpu_bw = max(float(soc_info_dict.get("gpu_max_bw", 0.0)), 1.0)
     max_media_bw = max(max_cpu_bw, max_gpu_bw)
+    process_filter_pattern = (
+        re.compile(args.proc_filter, re.IGNORECASE) if args.proc_filter else None
+    )
 
     cpu_peak_power = 0
     gpu_peak_power = 0
@@ -520,11 +577,14 @@ def _run_dashboard(args, runtime_state):
         memory_gauges.border_color = color_index
         memory_bandwidth_panel.border_color = color_index
         power_charts.border_color = color_index
+        process_panel.border_color = color_index
         for gauge in core_gauges:
             gauge.color = color_index
             gauge.border_color = color_index
         for chart in core_history_charts:
             chart.color = color_index
+        process_list.color = color_index
+        process_list.border_color = color_index
 
     def color_for(percent):
         return value_to_color_index(
@@ -539,6 +599,12 @@ def _run_dashboard(args, runtime_state):
 
     clear_console()
     get_system_core_usage()
+    try:
+        get_top_processes(
+            limit=process_display_count, proc_filter=process_filter_pattern
+        )
+    except Exception:
+        pass
 
     count = 0
     while True:
@@ -826,6 +892,43 @@ def _run_dashboard(args, runtime_state):
                 )
                 ram_usage_chart.append(ram_used_percent)
 
+                process_metrics = {"cpu": [], "memory": []}
+                try:
+                    process_metrics = get_top_processes(
+                        limit=process_display_count,
+                        proc_filter=process_filter_pattern,
+                    )
+                except Exception:
+                    pass
+                cpu_processes = process_metrics.get("cpu", [])
+                process_rows = ["NAME                 CPU%   RSS"]
+                for proc in cpu_processes[:process_display_count]:
+                    process_rows.append(
+                        "{:<20} {:>5.1f}% {:>5.1f}M".format(
+                            _process_display_name(proc.get("command")),
+                            max(0.0, float(proc.get("cpu_percent", 0.0) or 0.0)),
+                            max(0.0, float(proc.get("rss_mb", 0.0) or 0.0)),
+                        )
+                    )
+                if len(process_rows) == 1:
+                    process_rows.append("(no matching processes)")
+                process_list.text = "\n".join(process_rows)
+
+                if args.proc_filter:
+                    filter_label = _shorten_process_command(
+                        args.proc_filter, max_len=28
+                    )
+                    if not cpu_processes:
+                        process_panel.title = "Processes: no match ({})".format(
+                            filter_label
+                        )
+                    else:
+                        process_panel.title = "Processes (filter: {})".format(
+                            filter_label
+                        )
+                else:
+                    process_panel.title = "Processes (PID command CPU% RSS)"
+
                 bandwidth_available = bool(
                     isinstance(bandwidth_metrics, dict)
                     and bandwidth_metrics.get("_available", False)
@@ -1006,6 +1109,16 @@ def _run_dashboard(args, runtime_state):
                         media_bw_gauge.color = color_for(media_bw_percent)
                         cpu_power_chart.color = color_for(cpu_power_percent)
                         gpu_power_chart.color = color_for(gpu_power_percent)
+                        top_process_cpu = (
+                            max(
+                                0.0,
+                                float(cpu_processes[0].get("cpu_percent", 0.0) or 0.0),
+                            )
+                            if cpu_processes
+                            else 0.0
+                        )
+                        process_list.color = color_for(top_process_cpu)
+                        process_list.border_color = process_list.color
                         for gauge in core_gauges:
                             gauge.color = color_for(gauge.value)
                             gauge.border_color = gauge.color

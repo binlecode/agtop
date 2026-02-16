@@ -76,3 +76,23 @@ def test_soc_info_contract():
     assert soc_info["gpu_core_count"] == "?" or (
         isinstance(soc_info["gpu_core_count"], int) and soc_info["gpu_core_count"] >= 0
     )
+
+
+def test_top_processes_contract():
+    process_metrics = utils.get_top_processes(limit=3)
+
+    assert "cpu" in process_metrics
+    assert "memory" in process_metrics
+
+    for key in ["cpu", "memory"]:
+        rows = process_metrics[key]
+        assert isinstance(rows, list)
+        assert len(rows) <= 3
+        for row in rows:
+            assert isinstance(row.get("pid"), int)
+            assert row["pid"] >= 0
+            assert isinstance(row.get("command"), str)
+            assert row["command"] != ""
+            _assert_non_negative_number(row.get("cpu_percent"))
+            _assert_non_negative_number(row.get("rss_mb"))
+            _assert_non_negative_number(row.get("memory_percent"))

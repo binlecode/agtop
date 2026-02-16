@@ -2,6 +2,7 @@ import os
 import glob
 import subprocess
 from subprocess import PIPE
+import re
 import psutil
 from .parsers import (
     parse_bandwidth_metrics,
@@ -211,3 +212,69 @@ def get_soc_info():
         "gpu_core_count": get_gpu_cores(),
     }
     return soc_info
+
+
+def _normalize_process_command(cmdline, fallback_name):
+    if isinstance(cmdline, (list, tuple)):
+        command = " ".join(str(part) for part in cmdline if part)
+    else:
+        command = ""
+    command = command.strip()
+    if command:
+        return command
+    fallback = str(fallback_name or "").strip()
+    return fallback if fallback else "?"
+
+
+def get_top_processes(limit=3, proc_filter=None):
+    pattern = None
+    if proc_filter:
+        if hasattr(proc_filter, "search"):
+            pattern = proc_filter
+        else:
+            pattern = re.compile(str(proc_filter), re.IGNORECASE)
+
+    entries = []
+    for proc in psutil.process_iter(
+        attrs=["pid", "name", "cmdline", "memory_info", "memory_percent"]
+    ):
+        try:
+            info = proc.info
+            command = _normalize_process_command(info.get("cmdline"), info.get("name"))
+            if pattern and not pattern.search(command):
+                continue
+            cpu_percent = proc.cpu_percent(interval=None) or 0.0
+            cpu_percent = max(0.0, float(cpu_percent))
+            memory_info = info.get("memory_info")
+            rss_bytes = getattr(memory_info, "rss", 0) if memory_info else 0
+            rss_mb = max(0.0, float(rss_bytes) / 1024 / 1024)
+            memory_percent = max(0.0, float(info.get("memory_percent") or 0.0))
+            entries.append(
+                {
+                    "pid": int(info.get("pid") or 0),
+                    "command": command,
+                    "cpu_percent": round(cpu_percent, 1),
+                    "rss_mb": round(rss_mb, 1),
+                    "memory_percent": round(memory_percent, 1),
+                }
+            )
+        except (
+            psutil.NoSuchProcess,
+            psutil.AccessDenied,
+            psutil.ZombieProcess,
+            ValueError,
+            TypeError,
+        ):
+            continue
+
+    top_cpu = sorted(
+        entries,
+        key=lambda item: (item["cpu_percent"], item["rss_mb"]),
+        reverse=True,
+    )[:limit]
+    top_memory = sorted(
+        entries,
+        key=lambda item: (item["rss_mb"], item["memory_percent"]),
+        reverse=True,
+    )[:limit]
+    return {"cpu": top_cpu, "memory": top_memory}

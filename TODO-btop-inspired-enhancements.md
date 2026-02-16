@@ -27,9 +27,9 @@ Acceptance:
 - No major terminal redraw regressions at 1s interval.
 
 ## Priority 3: Process visibility for root-cause analysis
-- [ ] Add process panel (top CPU + memory consumers).
+- [x] Add process panel (top CPU + memory consumers).
   - Fields: PID, command, CPU%, RSS.
-- [ ] Add process filter flag for AI workflows.
+- [x] Add process filter flag for AI workflows.
   - Example: `--proc-filter "python|ollama|vllm|docker|mlx"`.
 
 Acceptance:
@@ -71,6 +71,6 @@ Acceptance:
 ## Suggested Delivery Plan
 - [ ] Milestone 1: Bandwidth re-enable + UI restore.
 - [ ] Milestone 2: Per-core history panel.
-- [ ] Milestone 3: Process panel + filter.
+- [x] Milestone 3: Process panel + filter.
 - [ ] Milestone 4: Recording + summary.
 - [ ] Milestone 5: Alerts + profile command mode.
