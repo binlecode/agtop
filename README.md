@@ -100,7 +100,7 @@ Release flow (split CI/CD):
    CI does not create tags.
 
 ```bash
-export VERSION="0.1.3"
+export VERSION="0.1.4"
 git add setup.py CHANGELOG.md
 git commit -m "Release v$VERSION"
 git tag "v$VERSION"

@@ -15,6 +15,19 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ### Fixed
 - No changes yet.
 
+## [0.1.4] - 2026-02-16
+
+### Added
+- No changes yet.
+
+### Changed
+- Added explicit GitHub Actions `run-name` values to disambiguate workflow run titles between `main-ci` and `release-formula`.
+- Updated release documentation example version to `0.1.4`.
+- Bumped package version in `setup.py` to `0.1.4`.
+
+### Fixed
+- Reduced CI/CD run-list ambiguity caused by identical workflow display titles for different pipelines.
+
 ## [0.1.3] - 2026-02-16
 
 ### Added
