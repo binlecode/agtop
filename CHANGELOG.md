@@ -10,10 +10,11 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 - No changes yet.
 
 ### Changed
-- No changes yet.
+- Improved `powermetrics` startup error guidance for missing binary, sudo/permission issues, and subprocess startup failures.
+- Updated `Formula/agtop.rb` to use the `v0.1.4` source tarball and checksum.
 
 ### Fixed
-- No changes yet.
+- Ensured cursor restore and `powermetrics` subprocess termination run from a shared `finally` cleanup path.
 
 ## [0.1.4] - 2026-02-16
 

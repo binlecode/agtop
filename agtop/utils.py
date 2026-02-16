@@ -82,7 +82,9 @@ def run_powermetrics_process(timecode, nice=10, interval=1000):
             str(interval),
         ]
     )
-    process = subprocess.Popen(command.split(" "), stdin=PIPE, stdout=PIPE)
+    process = subprocess.Popen(
+        command.split(" "), stdin=PIPE, stdout=PIPE, stderr=PIPE
+    )
     return process
 
 

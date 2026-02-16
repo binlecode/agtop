@@ -4,18 +4,17 @@
 Complete CLI hygiene and packaging modernization while preserving current dashboard behavior and metric semantics.
 
 ## Execution Order
-Work top-to-bottom. `P0` is highest priority and blocking; `P4` is lowest.
-
-## P0 (Blocking): CLI Entrypoint Safety
-- [x] Add `build_parser()` in `agtop/agtop.py` and move all argument definitions into it.
-- [x] Remove module-level `parse_args()`; parse only inside runtime entrypoints.
-- [x] Change `--show_cores` from `type=bool` to `action="store_true"`.
-- [x] Add `cli(argv=None) -> int` wrapper for import-safe execution and testability.
-- [x] Update `console_scripts` entrypoint to call `agtop.agtop:cli`.
+Work top-to-bottom. `P2` is now the highest pending priority and `P4` is lowest.
 
 ## P1: Runtime Failure and Cleanup Paths
-- [ ] Add explicit guidance when `powermetrics` cannot start (missing binary, missing sudo permission, or subprocess failure).
-- [ ] Ensure cursor restore and subprocess termination happen in a `finally` cleanup path, not only on `KeyboardInterrupt`.
+- [x] Add explicit startup failure guidance for `powermetrics`:
+  - [x] If binary is missing: explain that `powermetrics` is required on macOS and not available on this system.
+  - [x] If permission is denied: explain that elevated privileges are required and suggest `sudo agtop`.
+  - [x] If subprocess startup fails for other reasons: print actionable error details and exit non-zero.
+- [x] Guarantee terminal/process cleanup in a single `finally` path:
+  - [x] Always restore cursor visibility (emit `\033[?25h`) on every exit path, not only `KeyboardInterrupt`.
+  - [x] Always terminate an active `powermetrics` subprocess during shutdown, with safe exception handling.
+  - [x] Ensure cleanup runs for normal exit, argument/runtime exceptions, and `KeyboardInterrupt`.
 
 ## P2: Imports and Dependency UX
 - [ ] Replace `from .utils import *` with explicit imports in `agtop/agtop.py`.
