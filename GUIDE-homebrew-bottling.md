@@ -1,15 +1,17 @@
-# GUIDE: Homebrew Release Flow for `silitop`
+# GUIDE: Homebrew Release Flow for `agtop`
 
-This is the minimal workflow to publish a new `silitop` version and make `brew upgrade silitop` work.
+This is the minimal workflow to publish a new `agtop` version and make `brew upgrade agtop` work.
+
+Project stance: `agtop` is maintained as an independent hard fork inspired by `asitop`.
 
 ## Key Rule
 
-Homebrew upgrades from the tap formula version in `Formula/silitop.rb`, not from `setup.py` alone.
+Homebrew upgrades from the tap formula version in `Formula/agtop.rb`, not from `setup.py` alone.
 
 If users see:
 
 ```bash
-Warning: binlecode/silitop/silitop <version> already installed
+Warning: binlecode/agtop/agtop <version> already installed
 ```
 
 your tap formula was not bumped (or users have not run `brew update` yet).
@@ -18,7 +20,7 @@ your tap formula was not bumped (or users have not run `brew update` yet).
 
 - macOS + Homebrew
 - `gh` logged in
-- Repo: `binlecode/silitop`
+- Repo: `binlecode/agtop`
 
 Quick checks:
 
@@ -33,7 +35,7 @@ Set variables:
 
 ```bash
 export VERSION="0.0.25"
-export SRC_REPO="binlecode/silitop"
+export SRC_REPO="binlecode/agtop"
 export TARBALL_URL="https://github.com/$SRC_REPO/archive/refs/tags/v$VERSION.tar.gz"
 ```
 
@@ -56,7 +58,7 @@ git push origin "v$VERSION"
 curl -fL "$TARBALL_URL" | shasum -a 256
 ```
 
-4. Update `Formula/silitop.rb`.
+4. Update `Formula/agtop.rb`.
 
 - `url` -> `.../v$VERSION.tar.gz`
 - `sha256` -> value from step 3
@@ -64,8 +66,8 @@ curl -fL "$TARBALL_URL" | shasum -a 256
 5. Commit and push formula update.
 
 ```bash
-git add Formula/silitop.rb
-git commit -m "Formula: bump silitop to $VERSION"
+git add Formula/agtop.rb
+git commit -m "Formula: bump agtop to $VERSION"
 git push origin main
 ```
 
@@ -73,36 +75,42 @@ git push origin main
 
 ```bash
 brew update
-brew upgrade silitop
-brew info silitop
+brew upgrade agtop
+brew info agtop
 ```
 
-Verify `brew info silitop` shows the new stable version.
+Verify `brew info agtop` shows the new stable version.
 
 ## First-Time Install
 
 ```bash
-brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git
-brew install silitop
+brew tap --custom-remote binlecode/agtop https://github.com/binlecode/agtop.git
+brew install agtop
 ```
+
+## Naming Rules
+
+- In this project docs, use `agtop` for the tap formula and CLI command.
+- Avoid mixing install guidance with upstream package names in user-facing instructions.
+- Keep one origin attribution in `README.md` for license and provenance clarity.
 
 ## Quick Validation
 
 ```bash
-silitop --help
-sudo silitop --interval 1 --avg 30 --power-scale profile
+agtop --help
+sudo agtop --interval 1 --avg 30 --power-scale profile
 ```
 
 ## Troubleshooting
 
-- `brew upgrade silitop` says `already installed`:
-  - Confirm `Formula/silitop.rb` was pushed with the new `url` and `sha256`.
-  - Run `brew update`, then retry `brew upgrade silitop`.
-  - Check `brew info silitop`.
+- `brew upgrade agtop` says `already installed`:
+  - Confirm `Formula/agtop.rb` was pushed with the new `url` and `sha256`.
+  - Run `brew update`, then retry `brew upgrade agtop`.
+  - Check `brew info agtop`.
 
 - `brew update` has ref errors like `refs/remotes/origin/main`:
   - Run `brew tap --repair` then `brew update-reset` and retry `brew update`.
   - If still broken, untap/retap the failing tap.
 
 - Wrong tap name:
-  - Use `binlecode/silitop` (not `binlecode/asitop`).
+  - Use `binlecode/agtop` (not `binlecode/asitop`).

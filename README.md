@@ -1,129 +1,67 @@
-# silitop
+# agtop
 
-![PyPI - Downloads](https://img.shields.io/pypi/dm/asitop)
-
-Performance monitoring CLI tool for Apple Silicon
+Apple GPU Top for Apple Silicon.
 
 ![](images/asitop.png)
 
-Homebrew tap formula/binary name: `silitop`  
-Upstream PyPI/Homebrew-core package name: `asitop`
+## Project Status
+
+`agtop` is an independent hard fork with its own release cycle and maintenance policy.
+
+Origin attribution: this project started from `tlkh/asitop`, previously evolved as `silitop`, and is now maintained as `binlecode/agtop`.
+
+## Features
+
+- CPU and GPU utilization/frequency display.
+- ANE utilization estimation from power usage.
+- RAM and swap usage display.
+- CPU/GPU power charts with profile-aware scaling.
+- Apple Silicon profile defaults for current and future M-series tiers.
+
+## Requirements
+
+- Apple Silicon Mac.
+- macOS with `powermetrics` available.
+- `sudo` access (required by `powermetrics`).
+
+## Install
+
+Install from this tap:
 
 ```shell
-pip install asitop
+brew tap --custom-remote binlecode/agtop https://github.com/binlecode/agtop.git
+brew install agtop
 ```
 
-## What is `silitop`
-
-A Python-based `nvtop`-inspired command line tool for Apple Silicon Macs.
-
-* Utilization info:
-  * CPU (E-cluster and P-cluster), GPU
-  * Frequency and utilization
-  * ANE utilization (measured by power)
-* Memory info:
-  * RAM and swap, size and usage
-  * (Apple removed memory bandwidth from `powermetrics`)
-* Power info:
-  * CPU power, GPU power (Apple removed package power from `powermetrics`)
-  * Chart for CPU/GPU power
-  * Peak power, rolling average display
-
-`silitop` uses the built-in [`powermetrics`](https://www.unix.com/man-page/osx/1/powermetrics/) utility on macOS, which allows access to a variety of hardware performance counters. Note that it requires `sudo` to run due to `powermetrics` needing root access to run. `silitop` is lightweight and has minimal performance impact.
-
-`silitop` is intended for Apple Silicon Macs on modern macOS versions. Runtime metrics are sourced from
-`powermetrics`, so available fields can vary by macOS version and chip generation.
-
-## Installation and Usage
-
-Install with Homebrew from the public `silitop` tap:
+If formula names are ambiguous:
 
 ```shell
-brew tap --custom-remote binlecode/silitop https://github.com/binlecode/silitop.git
-brew install binlecode/silitop/silitop
+brew install binlecode/agtop/agtop
 ```
 
-Install with Homebrew/core (official upstream formula):
+## Upgrade / Uninstall
 
 ```shell
-brew install asitop
+brew update
+brew upgrade agtop
+brew uninstall agtop
 ```
 
-Install with pip (upstream package name):
+## Usage
 
 ```shell
-pip install asitop
+agtop --help
+sudo agtop
+sudo agtop --interval 1 --avg 30 --power-scale profile
 ```
 
-Upgrade / uninstall with Homebrew:
+## Compatibility Notes
 
-```shell
-brew update && brew upgrade silitop
-brew uninstall silitop
+- Chip families `M1` through `M4` are recognized directly.
+- Unknown future Apple Silicon names fall back to tier defaults (`base`, `Pro`, `Max`, `Ultra`).
+- Available `powermetrics` fields vary by macOS and chip generation.
 
-# if installed from Homebrew/core instead:
-brew update && brew upgrade asitop
-brew uninstall asitop
-```
+## Upstream Naming Note
 
-After installation, run in Terminal:
-
-```shell
-# tap formula command name
-sudo silitop
-silitop
-
-# advanced options
-silitop [-h] [--interval INTERVAL] [--color COLOR] [--avg AVG] [--power-scale {auto,profile}]
-# upstream/Homebrew-core users run the same flags under `asitop`
-optional arguments:
-  -h, --help           show this help message and exit
-  --interval INTERVAL  Display interval and sampling interval for powermetrics (seconds)
-  --color COLOR        Choose display color (0~8)
-  --avg AVG            Interval for averaged values (seconds)
-  --power-scale {auto,profile}
-                       Power chart scaling. "auto" uses rolling peak; "profile" uses chip reference values.
-```
-
-## Compatibility
-
-- Chip families: `M1`, `M2`, `M3`, and `M4` are recognized directly.
-- Unknown future Apple Silicon names fall back to tier-based defaults (`base`/`Pro`/`Max`/`Ultra`) so charts remain usable.
-- `powermetrics` output may differ across macOS releases; some metrics can be unavailable depending on OS/chip.
-
-## How it works
-
-`powermetrics` is used to measure the following:
-
-* CPU/GPU utilization via active residency
-* CPU/GPU frequency
-* Package/CPU/GPU/ANE energy consumption
-* CPU/GPU/Media Total memory bandwidth via the DCS (DRAM Command Scheduler)
-
-[`psutil`](https://github.com/giampaolo/psutil) is used to measure the following:
-
-* memory and swap usage
-
-[`sysctl`](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/sysctl.3.html) is used to measure the following:
-
-* CPU name
-* CPU core counts
-
-[`system_profiler`](https://ss64.com/osx/system_profiler.html) is used to measure the following:
-
-* GPU core count
-
-Some information is guesstimate and hardcoded as there doesn't seem to be a official source for it on the system:
-
-* CPU/GPU TDP
-* CPU/GPU maximum memory bandwidth
-* ANE max power
-* Media engine max bandwidth
-
-## Why
-
-Because I didn't find something like this online. Also, just curious about stuff.
-
-## Disclaimers
-
-I did this randomly don't blame me if it fried your new MacBook or something.
+- `brew install asitop` and `pip install asitop` refer to upstream naming, not this fork release.
+- This project's Homebrew command is `agtop`.

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the `binlecode/silitop` fork should be documented in this file.
+All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
@@ -10,7 +10,8 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 - No changes yet.
 
 ### Changed
-- No changes yet.
+- Renamed project/repo branding from `silitop` to `agtop` (Apple GPU Top) in active documentation.
+- Clarified project positioning as an independent hard fork with explicit origin attribution in docs.
 
 ### Fixed
 - No changes yet.
