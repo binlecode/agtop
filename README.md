@@ -58,6 +58,7 @@ sudo agtop --alert-bw-sat-percent 90 --alert-package-power-percent 85 --alert-sw
 | Option | Purpose | Default |
 | --- | --- | --- |
 | `--interval` | Dashboard and sampling interval (seconds) | `1` |
+| `--color` | Display color theme (0-8) | `2` |
 | `--avg` | Rolling average window (seconds) | `30` |
 | `--show_cores` | Enable per-core panels | `off` |
 | `--core-view gauge\|history\|both` | Per-core visualization mode when cores are shown | `gauge` |
