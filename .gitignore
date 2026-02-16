@@ -130,3 +130,7 @@ dmypy.json
 
 # idea
 .idea/
+
+# Local tooling / OS artifacts
+.gemini/
+.DS_Store
