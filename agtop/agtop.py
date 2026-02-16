@@ -2,6 +2,7 @@ import time
 import os
 import argparse
 from collections import deque
+import psutil
 from blessed import Terminal
 from dashing import VSplit, HSplit, HGauge, HChart, VGauge
 from .utils import (
@@ -46,6 +47,12 @@ def build_parser():
     )
     parser.add_argument(
         "--show_cores", action="store_true", help="Choose show cores mode"
+    )
+    parser.add_argument(
+        "--core-view",
+        choices=["gauge", "history", "both"],
+        default="gauge",
+        help="Per-core rendering mode for --show_cores: gauge, history, or both",
     )
     parser.add_argument(
         "--max_count",
@@ -120,8 +127,15 @@ def _build_powermetrics_start_error(stderr_text="", returncode=None):
 
 
 def _start_powermetrics_process(timecode, sample_interval):
+    def _spawn(include_extra_power_info):
+        return run_powermetrics_process(
+            timecode,
+            interval=sample_interval * 1000,
+            include_extra_power_info=include_extra_power_info,
+        )
+
     try:
-        process = run_powermetrics_process(timecode, interval=sample_interval * 1000)
+        process = _spawn(include_extra_power_info=True)
     except FileNotFoundError as e:
         missing_bin = str(e).lower()
         if "powermetrics" in missing_bin:
@@ -145,6 +159,20 @@ def _start_powermetrics_process(timecode, sample_interval):
     time.sleep(0.15)
     if process.poll() is not None:
         stderr_text = _read_powermetrics_stderr(process)
+        if (
+            "show-extra-power-info" in stderr_text.lower()
+            and "unrecognized" in stderr_text.lower()
+        ):
+            try:
+                process = _spawn(include_extra_power_info=False)
+            except Exception:
+                process = None
+            if process is None:
+                raise RuntimeError(_build_powermetrics_start_error(stderr_text, None))
+            time.sleep(0.15)
+            if process.poll() is None:
+                return process
+            stderr_text = _read_powermetrics_stderr(process)
         raise RuntimeError(
             _build_powermetrics_start_error(stderr_text, process.returncode)
         )
@@ -213,47 +241,82 @@ def _run_dashboard(args, runtime_state):
     cpu2_gauge = GaugeClass(title="P-CPU Usage", val=0, color=base_color)
     gpu_gauge = GaugeClass(title="GPU Usage", val=0, color=base_color)
     ane_gauge = GaugeClass(title="ANE", val=0, color=base_color)
-    gpu_ane_gauges = [gpu_gauge, ane_gauge]
-
     soc_info_dict = get_soc_info()
+    sample_interval = max(1, args.interval)
+    core_history_window = max(20, int(args.avg / sample_interval))
+    usage_track_window = max(20, int(args.avg / sample_interval))
+
+    ecpu_usage_chart = HChartClass(title="E-CPU Track", color=base_color)
+    pcpu_usage_chart = HChartClass(title="P-CPU Track", color=base_color)
+    gpu_usage_chart = HChartClass(title="GPU Track", color=base_color)
+    ane_usage_chart = HChartClass(title="ANE Track", color=base_color)
+    ram_usage_chart = HChartClass(title="RAM Track", color=base_color)
+
     e_core_count = max(0, int(soc_info_dict["e_core_count"]))
     e_core_gauges = [
         VGaugeClass(val=0, color=base_color, border_color=base_color)
         for _ in range(e_core_count)
     ]
+    e_core_history_charts = [
+        HChartClass(title="E{}".format(i + 1), color=base_color)
+        for i in range(e_core_count)
+    ]
+    e_core_history_buffers = [
+        deque([], maxlen=core_history_window) for _ in range(e_core_count)
+    ]
+
     p_core_count = max(0, int(soc_info_dict["p_core_count"]))
-    p_core_gauges = []
-    p_core_gauges_ext = []
-    p_core_split = []
-    if p_core_count > 0:
-        p_core_gauges = [
-            VGaugeClass(val=0, color=base_color, border_color=base_color)
-            for _ in range(min(p_core_count, 8))
-        ]
-        p_core_split = [
-            HSplit(
-                *p_core_gauges,
-            )
-        ]
-    if p_core_count > 8:
-        p_core_gauges_ext = [
-            VGaugeClass(val=0, color=base_color, border_color=base_color)
-            for _ in range(p_core_count - 8)
-        ]
-        p_core_split.append(
-            HSplit(
-                *p_core_gauges_ext,
-            )
-        )
+    p_core_gauges_all = [
+        VGaugeClass(val=0, color=base_color, border_color=base_color)
+        for _ in range(p_core_count)
+    ]
+    p_core_gauges = p_core_gauges_all[:8]
+    p_core_gauges_ext = p_core_gauges_all[8:]
+    p_core_history_charts_all = [
+        HChartClass(title="P{}".format(i + 1), color=base_color)
+        for i in range(p_core_count)
+    ]
+    p_core_history_charts = p_core_history_charts_all[:8]
+    p_core_history_charts_ext = p_core_history_charts_all[8:]
+    p_core_history_buffers = [
+        deque([], maxlen=core_history_window) for _ in range(p_core_count)
+    ]
+
+    p_core_gauge_split = []
+    if p_core_gauges:
+        p_core_gauge_split.append(HSplit(*p_core_gauges))
+    if p_core_gauges_ext:
+        p_core_gauge_split.append(HSplit(*p_core_gauges_ext))
+
+    p_core_history_split = []
+    if p_core_history_charts:
+        p_core_history_split.append(HSplit(*p_core_history_charts))
+    if p_core_history_charts_ext:
+        p_core_history_split.append(HSplit(*p_core_history_charts_ext))
+
+    show_core_gauges = args.show_cores and args.core_view in {"gauge", "both"}
+    show_core_history = args.show_cores and args.core_view in {"history", "both"}
+
     if args.show_cores:
-        processor_gauges = [cpu1_gauge]
-        if e_core_gauges:
+        processor_gauges = [HSplit(cpu1_gauge, ecpu_usage_chart)]
+        if show_core_gauges and e_core_gauges:
             processor_gauges.append(HSplit(*e_core_gauges))
-        processor_gauges.append(cpu2_gauge)
-        processor_gauges.extend(p_core_split)
-        processor_gauges.extend(gpu_ane_gauges)
+        if show_core_history and e_core_history_charts:
+            processor_gauges.append(HSplit(*e_core_history_charts))
+        processor_gauges.append(HSplit(cpu2_gauge, pcpu_usage_chart))
+        if show_core_gauges:
+            processor_gauges.extend(p_core_gauge_split)
+        if show_core_history:
+            processor_gauges.extend(p_core_history_split)
+        processor_gauges.append(HSplit(gpu_gauge, gpu_usage_chart))
+        processor_gauges.append(HSplit(ane_gauge, ane_usage_chart))
     else:
-        processor_gauges = [HSplit(cpu1_gauge, cpu2_gauge), HSplit(*gpu_ane_gauges)]
+        processor_gauges = [
+            HSplit(cpu1_gauge, ecpu_usage_chart),
+            HSplit(cpu2_gauge, pcpu_usage_chart),
+            HSplit(gpu_gauge, gpu_usage_chart),
+            HSplit(ane_gauge, ane_usage_chart),
+        ]
     processor_split = VSplit(
         *processor_gauges,
         title="Processor Utilization",
@@ -261,29 +324,44 @@ def _run_dashboard(args, runtime_state):
     )
 
     ram_gauge = GaugeClass(title="RAM Usage", val=0, color=base_color)
-    """
-    ecpu_bw_gauge = HGauge(title="E-CPU B/W", val=50, color=args.color)
-    pcpu_bw_gauge = HGauge(title="P-CPU B/W", val=50, color=args.color)
-    gpu_bw_gauge = HGauge(title="GPU B/W", val=50, color=args.color)
-    media_bw_gauge = HGauge(title="Media B/W", val=50, color=args.color)
-    bw_gauges = [HSplit(
-        ecpu_bw_gauge,
-        pcpu_bw_gauge,
-    ),
-        HSplit(
-            gpu_bw_gauge,
-            media_bw_gauge,
-        )] if args.show_cores else [
-        HSplit(
-            ecpu_bw_gauge,
-            pcpu_bw_gauge,
-            gpu_bw_gauge,
-            media_bw_gauge,
-        )]
-    """
-    memory_gauges = VSplit(
+    ecpu_bw_gauge = GaugeClass(title="E-CPU B/W: N/A", val=0, color=base_color)
+    pcpu_bw_gauge = GaugeClass(title="P-CPU B/W: N/A", val=0, color=base_color)
+    gpu_bw_gauge = GaugeClass(title="GPU B/W: N/A", val=0, color=base_color)
+    media_bw_gauge = GaugeClass(title="Media B/W: N/A", val=0, color=base_color)
+    bandwidth_gauges = [ecpu_bw_gauge, pcpu_bw_gauge, gpu_bw_gauge, media_bw_gauge]
+    bandwidth_rows = (
+        [
+            HSplit(
+                ecpu_bw_gauge,
+                pcpu_bw_gauge,
+            ),
+            HSplit(
+                gpu_bw_gauge,
+                media_bw_gauge,
+            ),
+        ]
+        if args.show_cores
+        else [
+            HSplit(
+                ecpu_bw_gauge,
+                pcpu_bw_gauge,
+                gpu_bw_gauge,
+                media_bw_gauge,
+            )
+        ]
+    )
+    memory_bandwidth_panel = VSplit(
+        *bandwidth_rows,
+        border_color=base_color,
+        title="Memory Bandwidth: N/A (counters unavailable)",
+    )
+    ram_usage_panel = HSplit(
         ram_gauge,
-        # *bw_gauges,
+        ram_usage_chart,
+    )
+    memory_gauges = VSplit(
+        ram_usage_panel,
+        memory_bandwidth_panel,
         border_color=base_color,
         title="Memory",
     )
@@ -323,7 +401,6 @@ def _run_dashboard(args, runtime_state):
     )
 
     usage_gauges = ui.items[0]
-    # bw_gauges = memory_gauges.items[1]
 
     cpu_title = "".join(
         [
@@ -341,17 +418,21 @@ def _run_dashboard(args, runtime_state):
     cpu_chart_ref_w = soc_info_dict["cpu_chart_ref_w"]
     gpu_chart_ref_w = soc_info_dict["gpu_chart_ref_w"]
     ane_max_power = 8.0
-    """max_cpu_bw = soc_info_dict["cpu_max_bw"]
-    max_gpu_bw = soc_info_dict["gpu_max_bw"]
-    max_media_bw = 7.0"""
+    max_cpu_bw = max(float(soc_info_dict.get("cpu_max_bw", 0.0)), 1.0)
+    max_gpu_bw = max(float(soc_info_dict.get("gpu_max_bw", 0.0)), 1.0)
+    max_media_bw = max(max_cpu_bw, max_gpu_bw)
 
     cpu_peak_power = 0
     gpu_peak_power = 0
     package_peak_power = 0
+    ecpu_usage_peak = 0
+    pcpu_usage_peak = 0
+    gpu_usage_peak = 0
+    ane_usage_peak = 0
+    ram_usage_peak = 0
 
     print("\n[2/3] Starting powermetrics process\n")
 
-    sample_interval = max(1, args.interval)
     timecode = str(int(time.time()))
 
     powermetrics_process = _start_powermetrics_process(timecode, sample_interval)
@@ -380,12 +461,48 @@ def _run_dashboard(args, runtime_state):
         avg = sum(inlist) / len(inlist)
         return avg
 
+    def get_metric_gbps(metric_map, metric_key):
+        if not isinstance(metric_map, dict):
+            return 0.0
+        try:
+            metric_value = float(metric_map.get(metric_key, 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+        if metric_value < 0:
+            return 0.0
+        return metric_value / sample_interval
+
+    def bandwidth_percent(value_gbps, reference_gbps):
+        if reference_gbps <= 0:
+            return 0
+        return clamp_percent(value_gbps / reference_gbps * 100)
+
+    def get_system_core_usage():
+        try:
+            percpu = psutil.cpu_percent(interval=None, percpu=True)
+        except Exception:
+            return []
+        return [clamp_percent(value) for value in percpu]
+
     avg_window = max(1, int(args.avg / sample_interval))
     avg_package_power_list = deque([], maxlen=avg_window)
     avg_cpu_power_list = deque([], maxlen=avg_window)
     avg_gpu_power_list = deque([], maxlen=avg_window)
+    avg_ecpu_usage_list = deque([], maxlen=usage_track_window)
+    avg_pcpu_usage_list = deque([], maxlen=usage_track_window)
+    avg_gpu_usage_list = deque([], maxlen=usage_track_window)
+    avg_ane_usage_list = deque([], maxlen=usage_track_window)
+    avg_ram_usage_list = deque([], maxlen=usage_track_window)
 
     core_gauges = e_core_gauges + p_core_gauges + p_core_gauges_ext
+    core_history_charts = e_core_history_charts + p_core_history_charts_all
+    usage_track_charts = [
+        ecpu_usage_chart,
+        pcpu_usage_chart,
+        gpu_usage_chart,
+        ane_usage_chart,
+        ram_usage_chart,
+    ]
 
     def reset_static_colors(color_index):
         cpu1_gauge.color = color_index
@@ -393,14 +510,21 @@ def _run_dashboard(args, runtime_state):
         gpu_gauge.color = color_index
         ane_gauge.color = color_index
         ram_gauge.color = color_index
+        for chart in usage_track_charts:
+            chart.color = color_index
+        for gauge in bandwidth_gauges:
+            gauge.color = color_index
         cpu_power_chart.color = color_index
         gpu_power_chart.color = color_index
         processor_split.border_color = color_index
         memory_gauges.border_color = color_index
+        memory_bandwidth_panel.border_color = color_index
         power_charts.border_color = color_index
         for gauge in core_gauges:
             gauge.color = color_index
             gauge.border_color = color_index
+        for chart in core_history_charts:
+            chart.color = color_index
 
     def color_for(percent):
         return value_to_color_index(
@@ -414,6 +538,7 @@ def _run_dashboard(args, runtime_state):
         reset_static_colors(0)
 
     clear_console()
+    get_system_core_usage()
 
     count = 0
     while True:
@@ -454,72 +579,154 @@ def _run_dashboard(args, runtime_state):
                 else:
                     thermal_throttle = "yes"
 
+                system_core_usage = get_system_core_usage()
+
+                def core_usage(cpu_index, fallback_value):
+                    if (
+                        isinstance(cpu_index, int)
+                        and cpu_index >= 0
+                        and cpu_index < len(system_core_usage)
+                    ):
+                        return clamp_percent(system_core_usage[cpu_index])
+                    return clamp_percent(fallback_value)
+
+                e_core_activity = {
+                    core_index: core_usage(
+                        core_index,
+                        cpu_metrics_dict.get(
+                            "E-Cluster" + str(core_index) + "_active", 0
+                        ),
+                    )
+                    for core_index in cpu_metrics_dict["e_core"]
+                }
+                p_core_activity = {
+                    core_index: core_usage(
+                        core_index,
+                        cpu_metrics_dict.get(
+                            "P-Cluster" + str(core_index) + "_active", 0
+                        ),
+                    )
+                    for core_index in cpu_metrics_dict["p_core"]
+                }
+                ecpu_usage = (
+                    int(sum(e_core_activity.values()) / len(e_core_activity))
+                    if e_core_activity
+                    else clamp_percent(cpu_metrics_dict["E-Cluster_active"])
+                )
+                pcpu_usage = (
+                    int(sum(p_core_activity.values()) / len(p_core_activity))
+                    if p_core_activity
+                    else clamp_percent(cpu_metrics_dict["P-Cluster_active"])
+                )
+
                 cpu1_gauge.title = "".join(
                     [
                         "E-CPU Usage: ",
-                        str(cpu_metrics_dict["E-Cluster_active"]),
+                        str(ecpu_usage),
                         "% @ ",
                         str(cpu_metrics_dict["E-Cluster_freq_Mhz"]),
                         " MHz",
                     ]
                 )
-                cpu1_gauge.value = cpu_metrics_dict["E-Cluster_active"]
+                cpu1_gauge.value = ecpu_usage
+                ecpu_usage_peak = max(ecpu_usage_peak, ecpu_usage)
+                avg_ecpu_usage_list.append(ecpu_usage)
+                ecpu_usage_chart.title = "".join(
+                    [
+                        "E-CPU Track: ",
+                        str(ecpu_usage),
+                        "% (avg: ",
+                        "{0:.1f}".format(get_avg(avg_ecpu_usage_list)),
+                        "% peak: ",
+                        str(ecpu_usage_peak),
+                        "%)",
+                    ]
+                )
+                ecpu_usage_chart.append(ecpu_usage)
 
                 cpu2_gauge.title = "".join(
                     [
                         "P-CPU Usage: ",
-                        str(cpu_metrics_dict["P-Cluster_active"]),
+                        str(pcpu_usage),
                         "% @ ",
                         str(cpu_metrics_dict["P-Cluster_freq_Mhz"]),
                         " MHz",
                     ]
                 )
-                cpu2_gauge.value = cpu_metrics_dict["P-Cluster_active"]
+                cpu2_gauge.value = pcpu_usage
+                pcpu_usage_peak = max(pcpu_usage_peak, pcpu_usage)
+                avg_pcpu_usage_list.append(pcpu_usage)
+                pcpu_usage_chart.title = "".join(
+                    [
+                        "P-CPU Track: ",
+                        str(pcpu_usage),
+                        "% (avg: ",
+                        "{0:.1f}".format(get_avg(avg_pcpu_usage_list)),
+                        "% peak: ",
+                        str(pcpu_usage_peak),
+                        "%)",
+                    ]
+                )
+                pcpu_usage_chart.append(pcpu_usage)
 
                 if args.show_cores:
-                    core_count = 0
-                    for i in cpu_metrics_dict["e_core"]:
-                        if not e_core_gauges:
-                            break
-                        gauge = e_core_gauges[core_count % len(e_core_gauges)]
-                        core_active = cpu_metrics_dict.get(
-                            "E-Cluster" + str(i) + "_active", 0
+                    for core_count, i in enumerate(cpu_metrics_dict["e_core"]):
+                        core_active = e_core_activity.get(
+                            i, cpu_metrics_dict.get("E-Cluster" + str(i) + "_active", 0)
                         )
-                        gauge.title = "".join(
-                            [
-                                "Core-" + str(i + 1) + " ",
-                                str(core_active),
-                                "%",
-                            ]
+                        if core_count < len(e_core_gauges):
+                            gauge = e_core_gauges[core_count]
+                            gauge.title = "".join(
+                                [
+                                    "Core-" + str(i + 1) + " ",
+                                    str(core_active),
+                                    "%",
+                                ]
+                            )
+                            gauge.value = core_active
+                        if core_count < len(e_core_history_charts):
+                            chart = e_core_history_charts[core_count]
+                            chart.title = "".join(
+                                [
+                                    "E",
+                                    str(i + 1),
+                                    " ",
+                                    str(core_active),
+                                    "%",
+                                ]
+                            )
+                            e_core_history_buffers[core_count].append(core_active)
+                            chart.append(core_active)
+
+                    for core_count, i in enumerate(cpu_metrics_dict["p_core"]):
+                        core_active = p_core_activity.get(
+                            i, cpu_metrics_dict.get("P-Cluster" + str(i) + "_active", 0)
                         )
-                        gauge.value = core_active
-                        core_count += 1
-                    core_count = 0
-                    for i in cpu_metrics_dict["p_core"]:
-                        if core_count < len(p_core_gauges):
-                            core_gauges = p_core_gauges
-                            gauge_idx = core_count
-                        else:
-                            core_gauges = p_core_gauges_ext
-                            gauge_idx = core_count - len(p_core_gauges)
-                        if not core_gauges:
-                            core_count += 1
-                            continue
-                        gauge = core_gauges[gauge_idx % len(core_gauges)]
-                        core_active = cpu_metrics_dict.get(
-                            "P-Cluster" + str(i) + "_active", 0
-                        )
-                        gauge.title = "".join(
-                            [
-                                ("Core-" if p_core_count < 6 else "C-")
-                                + str(i + 1)
-                                + " ",
-                                str(core_active),
-                                "%",
-                            ]
-                        )
-                        gauge.value = core_active
-                        core_count += 1
+                        if core_count < len(p_core_gauges_all):
+                            gauge = p_core_gauges_all[core_count]
+                            gauge.title = "".join(
+                                [
+                                    ("Core-" if p_core_count < 6 else "C-")
+                                    + str(i + 1)
+                                    + " ",
+                                    str(core_active),
+                                    "%",
+                                ]
+                            )
+                            gauge.value = core_active
+                        if core_count < len(p_core_history_charts_all):
+                            chart = p_core_history_charts_all[core_count]
+                            chart.title = "".join(
+                                [
+                                    "P",
+                                    str(i + 1),
+                                    " ",
+                                    str(core_active),
+                                    "%",
+                                ]
+                            )
+                            p_core_history_buffers[core_count].append(core_active)
+                            chart.append(core_active)
 
                 gpu_gauge.title = "".join(
                     [
@@ -531,6 +738,21 @@ def _run_dashboard(args, runtime_state):
                     ]
                 )
                 gpu_gauge.value = gpu_metrics_dict["active"]
+                gpu_usage = gpu_metrics_dict["active"]
+                gpu_usage_peak = max(gpu_usage_peak, gpu_usage)
+                avg_gpu_usage_list.append(gpu_usage)
+                gpu_usage_chart.title = "".join(
+                    [
+                        "GPU Track: ",
+                        str(gpu_usage),
+                        "% (avg: ",
+                        "{0:.1f}".format(get_avg(avg_gpu_usage_list)),
+                        "% peak: ",
+                        str(gpu_usage_peak),
+                        "%)",
+                    ]
+                )
+                gpu_usage_chart.append(gpu_usage)
 
                 ane_util_percent = clamp_percent(
                     cpu_metrics_dict["ane_W"] / sample_interval / ane_max_power * 100
@@ -545,6 +767,20 @@ def _run_dashboard(args, runtime_state):
                     ]
                 )
                 ane_gauge.value = ane_util_percent
+                ane_usage_peak = max(ane_usage_peak, ane_util_percent)
+                avg_ane_usage_list.append(ane_util_percent)
+                ane_usage_chart.title = "".join(
+                    [
+                        "ANE Track: ",
+                        str(ane_util_percent),
+                        "% (avg: ",
+                        "{0:.1f}".format(get_avg(avg_ane_usage_list)),
+                        "% peak: ",
+                        str(ane_usage_peak),
+                        "%)",
+                    ]
+                )
+                ane_usage_chart.append(ane_util_percent)
 
                 ram_metrics_dict = get_ram_metrics_dict()
 
@@ -574,75 +810,115 @@ def _run_dashboard(args, runtime_state):
                         ]
                     )
                 ram_gauge.value = ram_metrics_dict["free_percent"]
+                ram_used_percent = clamp_percent(ram_metrics_dict["free_percent"])
+                ram_usage_peak = max(ram_usage_peak, ram_used_percent)
+                avg_ram_usage_list.append(ram_used_percent)
+                ram_usage_chart.title = "".join(
+                    [
+                        "RAM Track: ",
+                        str(ram_used_percent),
+                        "% (avg: ",
+                        "{0:.1f}".format(get_avg(avg_ram_usage_list)),
+                        "% peak: ",
+                        str(ram_usage_peak),
+                        "%)",
+                    ]
+                )
+                ram_usage_chart.append(ram_used_percent)
 
-                """
+                bandwidth_available = bool(
+                    isinstance(bandwidth_metrics, dict)
+                    and bandwidth_metrics.get("_available", False)
+                )
+                if bandwidth_available:
+                    ecpu_read_gbps = get_metric_gbps(bandwidth_metrics, "ECPU DCS RD")
+                    ecpu_write_gbps = get_metric_gbps(bandwidth_metrics, "ECPU DCS WR")
+                    ecpu_total_gbps = ecpu_read_gbps + ecpu_write_gbps
+                    ecpu_bw_percent = bandwidth_percent(ecpu_total_gbps, max_cpu_bw)
+                    ecpu_bw_gauge.title = "".join(
+                        [
+                            "E-CPU B/W: ",
+                            "{0:.1f}".format(ecpu_total_gbps),
+                            " GB/s (",
+                            str(ecpu_bw_percent),
+                            "%)",
+                        ]
+                    )
+                    ecpu_bw_gauge.value = ecpu_bw_percent
 
-                ecpu_bw_percent = int(
-                    (bandwidth_metrics["ECPU DCS RD"] + bandwidth_metrics[
-                        "ECPU DCS WR"]) / args.interval / max_cpu_bw * 100)
-                ecpu_read_GB = bandwidth_metrics["ECPU DCS RD"] / \
-                               args.interval
-                ecpu_write_GB = bandwidth_metrics["ECPU DCS WR"] / \
-                                args.interval
-                ecpu_bw_gauge.title = "".join([
-                    "E-CPU: ",
-                    '{0:.1f}'.format(ecpu_read_GB + ecpu_write_GB),
-                    "GB/s"
-                ])
-                ecpu_bw_gauge.value = ecpu_bw_percent
+                    pcpu_read_gbps = get_metric_gbps(bandwidth_metrics, "PCPU DCS RD")
+                    pcpu_write_gbps = get_metric_gbps(bandwidth_metrics, "PCPU DCS WR")
+                    pcpu_total_gbps = pcpu_read_gbps + pcpu_write_gbps
+                    pcpu_bw_percent = bandwidth_percent(pcpu_total_gbps, max_cpu_bw)
+                    pcpu_bw_gauge.title = "".join(
+                        [
+                            "P-CPU B/W: ",
+                            "{0:.1f}".format(pcpu_total_gbps),
+                            " GB/s (",
+                            str(pcpu_bw_percent),
+                            "%)",
+                        ]
+                    )
+                    pcpu_bw_gauge.value = pcpu_bw_percent
 
-                pcpu_bw_percent = int(
-                    (bandwidth_metrics["PCPU DCS RD"] + bandwidth_metrics[
-                        "PCPU DCS WR"]) / args.interval / max_cpu_bw * 100)
-                pcpu_read_GB = bandwidth_metrics["PCPU DCS RD"] / \
-                               args.interval
-                pcpu_write_GB = bandwidth_metrics["PCPU DCS WR"] / \
-                                args.interval
-                pcpu_bw_gauge.title = "".join([
-                    "P-CPU: ",
-                    '{0:.1f}'.format(pcpu_read_GB + pcpu_write_GB),
-                    "GB/s"
-                ])
-                pcpu_bw_gauge.value = pcpu_bw_percent
+                    gpu_read_gbps = get_metric_gbps(bandwidth_metrics, "GFX DCS RD")
+                    gpu_write_gbps = get_metric_gbps(bandwidth_metrics, "GFX DCS WR")
+                    gpu_total_gbps = gpu_read_gbps + gpu_write_gbps
+                    gpu_bw_percent = bandwidth_percent(gpu_total_gbps, max_gpu_bw)
+                    gpu_bw_gauge.title = "".join(
+                        [
+                            "GPU B/W: ",
+                            "{0:.1f}".format(gpu_total_gbps),
+                            " GB/s (",
+                            str(gpu_bw_percent),
+                            "%)",
+                        ]
+                    )
+                    gpu_bw_gauge.value = gpu_bw_percent
 
-                gpu_bw_percent = int(
-                    (bandwidth_metrics["GFX DCS RD"] + bandwidth_metrics["GFX DCS WR"]) / max_gpu_bw * 100)
-                gpu_read_GB = bandwidth_metrics["GFX DCS RD"]
-                gpu_write_GB = bandwidth_metrics["GFX DCS WR"]
-                gpu_bw_gauge.title = "".join([
-                    "GPU: ",
-                    '{0:.1f}'.format(gpu_read_GB + gpu_write_GB),
-                    "GB/s"
-                ])
-                gpu_bw_gauge.value = gpu_bw_percent
+                    media_total_gbps = get_metric_gbps(bandwidth_metrics, "MEDIA DCS")
+                    media_bw_percent = bandwidth_percent(media_total_gbps, max_media_bw)
+                    media_bw_gauge.title = "".join(
+                        [
+                            "Media B/W: ",
+                            "{0:.1f}".format(media_total_gbps),
+                            " GB/s (",
+                            str(media_bw_percent),
+                            "%)",
+                        ]
+                    )
+                    media_bw_gauge.value = media_bw_percent
 
-                media_bw_percent = int(
-                    bandwidth_metrics["MEDIA DCS"] / args.interval / max_media_bw * 100)
-                media_bw_gauge.title = "".join([
-                    "Media: ",
-                    '{0:.1f}'.format(
-                        bandwidth_metrics["MEDIA DCS"] / args.interval),
-                    "GB/s"
-                ])
-                media_bw_gauge.value = media_bw_percent
-
-                total_bw_GB = (
-                                      bandwidth_metrics["DCS RD"] + bandwidth_metrics["DCS WR"]) / args.interval
-                bw_gauges.title = "".join([
-                    "Memory Bandwidth: ",
-                    '{0:.2f}'.format(total_bw_GB),
-                    " GB/s (R:",
-                    '{0:.2f}'.format(
-                        bandwidth_metrics["DCS RD"] / args.interval),
-                    "/W:",
-                    '{0:.2f}'.format(
-                        bandwidth_metrics["DCS WR"] / args.interval),
-                    " GB/s)"
-                ])
-                if args.show_cores:
-                    bw_gauges_ext = memory_gauges.items[2]
-                    bw_gauges_ext.title = "Memory Bandwidth:"
-                """
+                    total_bw_read_gbps = get_metric_gbps(bandwidth_metrics, "DCS RD")
+                    total_bw_write_gbps = get_metric_gbps(bandwidth_metrics, "DCS WR")
+                    total_bw_gbps = total_bw_read_gbps + total_bw_write_gbps
+                    memory_bandwidth_panel.title = "".join(
+                        [
+                            "Memory Bandwidth: ",
+                            "{0:.2f}".format(total_bw_gbps),
+                            " GB/s (R:",
+                            "{0:.2f}".format(total_bw_read_gbps),
+                            "/W:",
+                            "{0:.2f}".format(total_bw_write_gbps),
+                            ")",
+                        ]
+                    )
+                else:
+                    ecpu_bw_percent = 0
+                    pcpu_bw_percent = 0
+                    gpu_bw_percent = 0
+                    media_bw_percent = 0
+                    ecpu_bw_gauge.title = "E-CPU B/W: N/A"
+                    pcpu_bw_gauge.title = "P-CPU B/W: N/A"
+                    gpu_bw_gauge.title = "GPU B/W: N/A"
+                    media_bw_gauge.title = "Media B/W: N/A"
+                    ecpu_bw_gauge.value = 0
+                    pcpu_bw_gauge.value = 0
+                    gpu_bw_gauge.value = 0
+                    media_bw_gauge.value = 0
+                    memory_bandwidth_panel.title = (
+                        "Memory Bandwidth: N/A (counters unavailable)"
+                    )
 
                 package_power_W = cpu_metrics_dict["package_W"] / sample_interval
                 if package_power_W > package_peak_power:
@@ -714,22 +990,39 @@ def _run_dashboard(args, runtime_state):
 
                 if dynamic_color_enabled:
                     try:
-                        cpu1_gauge.color = color_for(
-                            cpu_metrics_dict["E-Cluster_active"]
-                        )
-                        cpu2_gauge.color = color_for(
-                            cpu_metrics_dict["P-Cluster_active"]
-                        )
+                        cpu1_gauge.color = color_for(ecpu_usage)
+                        cpu2_gauge.color = color_for(pcpu_usage)
                         gpu_gauge.color = color_for(gpu_metrics_dict["active"])
                         ane_gauge.color = color_for(ane_util_percent)
-                        ram_gauge.color = color_for(
-                            100 - ram_metrics_dict["free_percent"]
-                        )
+                        ecpu_usage_chart.color = color_for(ecpu_usage)
+                        pcpu_usage_chart.color = color_for(pcpu_usage)
+                        gpu_usage_chart.color = color_for(gpu_usage)
+                        ane_usage_chart.color = color_for(ane_util_percent)
+                        ram_gauge.color = color_for(ram_metrics_dict["free_percent"])
+                        ram_usage_chart.color = color_for(ram_used_percent)
+                        ecpu_bw_gauge.color = color_for(ecpu_bw_percent)
+                        pcpu_bw_gauge.color = color_for(pcpu_bw_percent)
+                        gpu_bw_gauge.color = color_for(gpu_bw_percent)
+                        media_bw_gauge.color = color_for(media_bw_percent)
                         cpu_power_chart.color = color_for(cpu_power_percent)
                         gpu_power_chart.color = color_for(gpu_power_percent)
                         for gauge in core_gauges:
                             gauge.color = color_for(gauge.value)
                             gauge.border_color = gauge.color
+                        for idx, chart in enumerate(e_core_history_charts):
+                            history_val = (
+                                e_core_history_buffers[idx][-1]
+                                if e_core_history_buffers[idx]
+                                else 0
+                            )
+                            chart.color = color_for(history_val)
+                        for idx, chart in enumerate(p_core_history_charts_all):
+                            history_val = (
+                                p_core_history_buffers[idx][-1]
+                                if p_core_history_buffers[idx]
+                                else 0
+                            )
+                            chart.color = color_for(history_val)
                     except Exception:
                         dynamic_color_enabled = False
                         reset_static_colors(args.color)

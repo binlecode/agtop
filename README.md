@@ -12,11 +12,29 @@ Origin attribution: this project is inspired by `tlkh/asitop` and is now refacto
 
 ## Features
 
-- CPU and GPU utilization/frequency display.
+- CPU utilization gauges + history trackers (E/P clusters and per-core views).
+- GPU utilization/frequency display + history trackers.
 - ANE utilization estimation from power usage.
 - RAM and swap usage display.
+- Memory bandwidth panel (E-CPU, P-CPU, GPU, Media, total read/write).
 - CPU/GPU power charts with profile-aware scaling.
 - Apple Silicon profile defaults for current and future M-series tiers.
+
+## Telemetry Model (What / How / Why)
+
+`agtop` intentionally combines multiple macOS telemetry sources:
+
+- CPU utilization:
+  - Uses OS-level per-core CPU percentages (`psutil`, scheduler tick style).
+  - Why: this aligns better with Activity Monitor / btop-style CPU load semantics.
+- CPU frequencies, GPU utilization/frequency, ANE power, CPU/GPU/package power, thermal pressure, memory bandwidth:
+  - Uses `powermetrics` plist output.
+  - Why: Apple-specific accelerator and bandwidth counters are not fully exposed through generic cross-platform CPU APIs.
+- Hardware profile metadata (chip family, reference scaling):
+  - Uses `sysctl` / `system_profiler` plus built-in SoC profiles.
+
+Practical result:
+- `agtop` is best for Apple Silicon diagnosis where you want CPU load behavior comparable to common system monitors while still seeing Apple-only metrics (GPU/ANE/power/bandwidth) in one dashboard.
 
 ## Requirements
 
@@ -53,6 +71,7 @@ brew uninstall binlecode/agtop/agtop
 agtop --help
 sudo agtop
 sudo agtop --interval 1 --avg 30 --power-scale profile
+sudo agtop --show_cores --core-view both --interval 1 --avg 30 --power-scale profile
 ```
 
 ## Development
@@ -61,6 +80,20 @@ Install dev dependencies (local laptop, `.venv`):
 
 ```bash
 .venv/bin/python -m pip install -e ".[dev]"
+```
+
+Run the CLI module directly in development:
+
+```bash
+.venv/bin/python -m agtop.agtop --help
+sudo .venv/bin/python -m agtop.agtop --interval 1 --avg 30 --power-scale profile
+sudo .venv/bin/python -m agtop.agtop --show_cores --core-view both --interval 1 --avg 30 --power-scale profile
+```
+
+Run tests:
+
+```bash
+.venv/bin/python -m pytest -q
 ```
 
 Run lint + format:
@@ -133,5 +166,6 @@ brew info binlecode/agtop/agtop
 - Chip families `M1` through `M4` are recognized directly.
 - Unknown future Apple Silicon names fall back to tier defaults (`base`, `Pro`, `Max`, `Ultra`).
 - Available `powermetrics` fields vary by macOS and chip generation.
+- Small differences versus other tools can still occur due to sampling window and source timing differences.
 
 Use `agtop` for install and runtime commands in this repository.

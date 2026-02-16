@@ -13,7 +13,7 @@
 - `agtop/agtop.py`: CLI entry point, argument parsing, and terminal dashboard rendering.
 - `agtop/utils.py`: system calls (`powermetrics`, `sysctl`, `system_profiler`) and runtime helpers.
 - `agtop/parsers.py`: parsing logic for `powermetrics` plist payloads.
-- `tests/`: unit tests for SoC profiles, parser resilience, and scaling logic.
+- `tests/`: functional/runtime validation for CLI behavior, parser resilience, and scaling logic.
 - `images/`: README/demo assets.
 - `pyproject.toml`: package metadata, dependencies, and `console_scripts` entry point (`agtop`).
 
@@ -33,6 +33,7 @@
 ## Testing Guidelines
 - Run `.venv/bin/pytest -q` for all code changes.
 - Functional tests only: validate behavior through public/runtime entrypoints (for example CLI invocation, real file I/O paths, and end-to-end parse flows).
+- Do not use mocks, fakes, monkeypatching, or fixture-based synthetic harnesses for new tests.
 - Do not add unit tests that assert internal implementation details, helper math constants, or private function behavior in isolation.
 - Do not add tests only to increase coverage numbers; each test must validate a production-relevant failure mode, regression risk, or external contract.
 - Minimum checks before opening a PR:

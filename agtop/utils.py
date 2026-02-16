@@ -3,7 +3,12 @@ import glob
 import subprocess
 from subprocess import PIPE
 import psutil
-from .parsers import parse_cpu_metrics, parse_gpu_metrics, parse_thermal_pressure
+from .parsers import (
+    parse_bandwidth_metrics,
+    parse_cpu_metrics,
+    parse_gpu_metrics,
+    parse_thermal_pressure,
+)
 from .soc_profiles import get_soc_profile
 import plistlib
 
@@ -18,8 +23,7 @@ def parse_powermetrics(path="/tmp/agtop_powermetrics", timecode="0"):
         thermal_pressure = parse_thermal_pressure(powermetrics_parse)
         cpu_metrics_dict = parse_cpu_metrics(powermetrics_parse)
         gpu_metrics_dict = parse_gpu_metrics(powermetrics_parse)
-        # bandwidth_metrics = parse_bandwidth_metrics(powermetrics_parse)
-        bandwidth_metrics = None
+        bandwidth_metrics = parse_bandwidth_metrics(powermetrics_parse)
         timestamp = powermetrics_parse.get("timestamp", 0)
         return (
             cpu_metrics_dict,
@@ -36,8 +40,7 @@ def parse_powermetrics(path="/tmp/agtop_powermetrics", timecode="0"):
                     thermal_pressure = parse_thermal_pressure(powermetrics_parse)
                     cpu_metrics_dict = parse_cpu_metrics(powermetrics_parse)
                     gpu_metrics_dict = parse_gpu_metrics(powermetrics_parse)
-                    # bandwidth_metrics = parse_bandwidth_metrics(powermetrics_parse)
-                    bandwidth_metrics = None
+                    bandwidth_metrics = parse_bandwidth_metrics(powermetrics_parse)
                     timestamp = powermetrics_parse.get("timestamp", 0)
                     return (
                         cpu_metrics_dict,
@@ -60,7 +63,9 @@ def convert_to_GB(value):
     return round(value / 1024 / 1024 / 1024, 1)
 
 
-def run_powermetrics_process(timecode, nice=10, interval=1000):
+def run_powermetrics_process(
+    timecode, nice=10, interval=1000, include_extra_power_info=True
+):
     # ver, *_ = platform.mac_ver()
     # major_ver = int(ver.split(".")[0])
     for tmpf in glob.glob("/tmp/agtop_powermetrics*"):
@@ -69,12 +74,16 @@ def run_powermetrics_process(timecode, nice=10, interval=1000):
         except (FileNotFoundError, PermissionError, IsADirectoryError):
             pass
     output_file_flag = "-o"
-    command = " ".join(
+    command_parts = [
+        "sudo nice -n",
+        str(nice),
+        "powermetrics",
+        "--samplers cpu_power,gpu_power,thermal",
+    ]
+    if include_extra_power_info:
+        command_parts.append("--show-extra-power-info")
+    command_parts.extend(
         [
-            "sudo nice -n",
-            str(nice),
-            "powermetrics",
-            "--samplers cpu_power,gpu_power,thermal",
             output_file_flag,
             "/tmp/agtop_powermetrics" + timecode,
             "-f plist",
@@ -82,6 +91,7 @@ def run_powermetrics_process(timecode, nice=10, interval=1000):
             str(interval),
         ]
     )
+    command = " ".join(command_parts)
     process = subprocess.Popen(command.split(" "), stdin=PIPE, stdout=PIPE, stderr=PIPE)
     return process
 
