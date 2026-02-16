@@ -79,7 +79,7 @@ def run_powermetrics_process(
         "sudo -n nice -n",
         str(nice),
         "powermetrics",
-        "--samplers cpu_power,gpu_power,thermal",
+        "--samplers cpu_power,gpu_power,ane_power,thermal",
     ]
     if include_extra_power_info:
         command_parts.append("--show-extra-power-info")

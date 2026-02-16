@@ -25,6 +25,7 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ### Fixed
 - Fixed `release-formula.yml` formula sync step to avoid shell heredoc parsing failures in CI.
+- Fixed missing ANE power metrics on M3/M4 chips by explicitly requesting the `ane_power` sampler and adding fallback parsing logic for `ane_power` (mW) vs `ane_energy` (mJ).
 
 ## [0.1.8] - 2026-02-16
 

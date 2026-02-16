@@ -245,6 +245,16 @@ def parse_cpu_metrics(powermetrics_parse):
     cpu_metric_dict["p_core"] = sorted(set(cpu_metric_dict["p_core"]))
 
     ane_energy = _to_float(cpu_metrics.get("ane_energy", 0.0))
+    if ane_energy == 0.0:
+        # Fallback: some versions might report 'ane_power' (mW) instead of energy.
+        # We need to convert Power (mW) to Energy (mJ) to match agtop's downstream logic
+        # which divides by interval. Energy (mJ) = Power (mW) * Duration (s).
+        ane_power_mW = _to_float(cpu_metrics.get("ane_power", 0.0))
+        if ane_power_mW > 0.0:
+            elapsed_ns = _to_float(powermetrics_parse.get("elapsed_ns", 0.0))
+            if elapsed_ns > 0.0:
+                ane_energy = ane_power_mW * (elapsed_ns / 1e9)
+
     cpu_energy = _to_float(cpu_metrics.get("cpu_energy", 0.0))
     gpu_energy = _to_float(cpu_metrics.get("gpu_energy", 0.0))
     package_energy = cpu_metrics.get("combined_power")
