@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: formula-sync-main
+  cancel-in-progress: false
+
 jobs:
   sync-formula:
     runs-on: ubuntu-latest
@@ -18,8 +22,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main
 
-      - name: Validate tag and pyproject.toml version
+      - name: Validate tag and pyproject.toml version from tag commit
         env:
           TAG_NAME: ${{ github.ref_name }}
         run: |
@@ -30,8 +35,14 @@ jobs:
             exit 1
           fi
 
+          TAG_PYPROJECT="$(git show "${TAG_NAME}:pyproject.toml" 2>/dev/null || true)"
+          if [ -z "$TAG_PYPROJECT" ]; then
+            echo "Could not read pyproject.toml from tag ${TAG_NAME}" >&2
+            exit 1
+          fi
+
           PROJECT_VERSION="$(
-            awk '
+            printf '%s\n' "$TAG_PYPROJECT" | awk '
               /^\[project\]/ { in_project=1; next }
               /^\[/ && in_project { in_project=0 }
               in_project && $1 == "version" {
@@ -39,10 +50,10 @@ jobs:
                 print $3
                 exit
               }
-            ' pyproject.toml
+            '
           )"
           if [ -z "$PROJECT_VERSION" ]; then
-            echo "Could not find [project].version in pyproject.toml" >&2
+            echo "Could not find [project].version in pyproject.toml at ${TAG_NAME}" >&2
             exit 1
           fi
 
@@ -60,38 +71,58 @@ jobs:
 
           VERSION="${TAG_NAME#v}"
           URL="https://github.com/${GH_REPO}/archive/refs/tags/${TAG_NAME}.tar.gz"
-          SHA256="$(curl -fL "${URL}" | sha256sum | awk '{print $1}')"
+          SHA256="$(curl -fsSL "${URL}" | sha256sum | awk '{print $1}')"
 
-          FORMULA_URL="${URL}" FORMULA_SHA256="${SHA256}" python - <<'PY'
-          import os
-          import pathlib
-          import re
+          update_formula() {
+            FORMULA_URL="${URL}" FORMULA_SHA256="${SHA256}" python - <<'PY'
+            import os
+            import pathlib
+            import re
 
-          formula_path = pathlib.Path("Formula/agtop.rb")
-          content = formula_path.read_text(encoding="utf-8")
+            formula_path = pathlib.Path("Formula/agtop.rb")
+            content = formula_path.read_text(encoding="utf-8")
 
-          def replace_line(text: str, pattern: str, new_value: str, label: str) -> str:
-              regex = re.compile(pattern, re.MULTILINE)
-              match = regex.search(text)
-              if not match:
-                  raise SystemExit(f"Could not find {label} in {formula_path}")
+            def replace_line(text: str, pattern: str, new_value: str, label: str) -> str:
+                regex = re.compile(pattern, re.MULTILINE)
+                match = regex.search(text)
+                if not match:
+                    raise SystemExit(f"Could not find {label} in {formula_path}")
 
-              line = f"{match.group(1)}{new_value}{match.group(3)}"
-              return text[: match.start()] + line + text[match.end() :]
+                line = f"{match.group(1)}{new_value}{match.group(3)}"
+                return text[: match.start()] + line + text[match.end() :]
 
-          content = replace_line(content, r'^(  url ")(.*?)(")$', os.environ["FORMULA_URL"], "url")
-          content = replace_line(content, r'^(  sha256 ")([0-9a-f]{64})(")$', os.environ["FORMULA_SHA256"], "sha256")
+            content = replace_line(content, r'^(  url ")(.*?)(")$', os.environ["FORMULA_URL"], "url")
+            content = replace_line(content, r'^(  sha256 ")([0-9a-f]{64})(")$', os.environ["FORMULA_SHA256"], "sha256")
 
-          formula_path.write_text(content, encoding="utf-8")
-          PY
-
-          if git diff --quiet -- Formula/agtop.rb; then
-            echo "Formula already up to date for ${TAG_NAME}."
-            exit 0
-          fi
+            formula_path.write_text(content, encoding="utf-8")
+            PY
+          }
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/agtop.rb
-          git commit -m "Formula/agtop: sync ${TAG_NAME} [skip ci]"
-          git push origin HEAD:main
+
+          for attempt in 1 2 3; do
+            echo "Sync attempt ${attempt}..."
+            git fetch origin main
+            git checkout -B main origin/main
+
+            update_formula
+
+            if git diff --quiet -- Formula/agtop.rb; then
+              echo "Formula already up to date for ${TAG_NAME}."
+              exit 0
+            fi
+
+            git add Formula/agtop.rb
+            git commit -m "Formula/agtop: sync ${TAG_NAME} [skip ci]"
+
+            if git push origin HEAD:main; then
+              echo "Formula sync pushed successfully."
+              exit 0
+            fi
+
+            echo "Push failed due to concurrent main updates; retrying..."
+          done
+
+          echo "Failed to sync formula after retries." >&2
+          exit 1

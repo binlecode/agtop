@@ -15,11 +15,13 @@ Behavior:
   - Reads version from pyproject.toml by default
   - If version is provided, it must match pyproject.toml
   - Verifies working tree is clean
+  - Fast-forwards local main from origin/main before tagging
   - Verifies tag does not already exist locally/remotely
   - Pushes main branch
   - Creates and pushes tag vX.Y.Z
 
 This tag push triggers .github/workflows/release-formula.yml.
+Formula synchronization is CI-driven; do not manually commit Formula/agtop.rb for releases.
 EOF
 }
 
@@ -94,6 +96,14 @@ fi
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 if [[ "$CURRENT_BRANCH" != "main" ]]; then
   echo "Error: current branch is ${CURRENT_BRANCH}. Switch to main first." >&2
+  exit 1
+fi
+
+echo "Syncing local main with origin/main (fast-forward only)..."
+git pull --ff-only origin main
+
+if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+  echo "Error: remote tag ${TAG} already exists on origin" >&2
   exit 1
 fi
 

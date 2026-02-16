@@ -118,6 +118,8 @@ Run lint + format:
 
 ## Maintainer Release (Homebrew Tap)
 
+Systematic release runbook: `GUIDE-release-operations.md`
+
 ### Topology
 
 - Source repo: `binlecode/agtop`
@@ -141,21 +143,23 @@ gh repo create "$TAP_REPO" --public --source "$(brew --repository "$TAP_REPO")" 
 
 1. Update `pyproject.toml` (`[project].version`) and `CHANGELOG.md`, then commit.
    CI does not bump versions.
-2. Create and push matching tag and commit.
+2. Push release tag via the helper script (recommended):
+   `scripts/tag_release.sh`
+   This fast-forwards local `main`, pushes `main`, creates `vX.Y.Z`, and pushes the tag.
    CI does not create tags.
 
 ```bash
 export VERSION="0.1.7"
 git add pyproject.toml CHANGELOG.md
 git commit -m "Release v$VERSION"
-git tag "v$VERSION"
-git push origin main "v$VERSION"
+scripts/tag_release.sh "$VERSION"
 ```
 
 3. `.github/workflows/main-ci.yml` runs on `main` push:
    resolves Python version from `Formula/agtop.rb`, prepares `.ci-venv`, installs formula resource versions, then runs checks.
 4. `.github/workflows/release-formula.yml` runs on `v*` tags:
-   verifies tag/version match, updates `Formula/agtop.rb` tarball `url` + `sha256`, and commits formula sync to `main`.
+   verifies tag/version match from the tag commit, updates `Formula/agtop.rb` tarball `url` + `sha256`, and commits formula sync to `main`.
+   Formula sync is serialized and retried to avoid race-condition push failures.
 
 5. Validate availability:
 
@@ -179,12 +183,11 @@ brew info binlecode/agtop/agtop
 4. Create release commit and tag, then push both:
    `git add pyproject.toml CHANGELOG.md`
    `git commit -m "Release v$VERSION"`
-   `git tag "v$VERSION"`
-   `git push origin main "v$VERSION"`
+   `scripts/tag_release.sh "$VERSION"`
 5. Verify workflows:
    check `main-ci` and `release-formula` runs in GitHub Actions
 6. Confirm formula points to the new tag and checksum:
-   `Formula/agtop.rb` `url` and `sha256`
+   `Formula/agtop.rb` `url` and `sha256` (via CI sync commit)
 7. Confirm install path:
    `brew update && brew upgrade binlecode/agtop/agtop && brew info binlecode/agtop/agtop`
 
