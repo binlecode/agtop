@@ -1,0 +1,143 @@
+name: main-push
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-sync-formula:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve formula Python version
+        id: formula-python
+        run: |
+          set -euo pipefail
+          FORMULA_PY="$(sed -n 's/.*depends_on "python@\([0-9]\+\.[0-9]\+\)".*/\1/p' Formula/agtop.rb | head -n1)"
+          if [ -z "$FORMULA_PY" ]; then
+            echo "Could not resolve python@X.Y from Formula/agtop.rb" >&2
+            exit 1
+          fi
+          echo "version=$FORMULA_PY" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python (formula-aligned)
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ steps.formula-python.outputs.version }}
+
+      - name: Create isolated virtualenv
+        run: |
+          set -euo pipefail
+          python -m venv .ci-venv
+          .ci-venv/bin/python -m pip install --upgrade pip
+
+      - name: Install formula resources into venv
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/formula_requirements.txt
+          from pathlib import Path
+          import re
+
+          text = Path("Formula/agtop.rb").read_text(encoding="utf-8")
+          resources = re.findall(r'resource "([^"]+)" do\n\s+url "([^"]+)"', text)
+          if not resources:
+              raise SystemExit("No resources found in Formula/agtop.rb")
+
+          for name, url in resources:
+              filename = url.rsplit("/", 1)[-1]
+              for suffix in (".tar.gz", ".zip", ".whl"):
+                  if filename.endswith(suffix):
+                      filename = filename[: -len(suffix)]
+                      break
+
+              match = re.match(rf"^{re.escape(name)}-(.+)$", filename)
+              version = match.group(1) if match else filename.split("-")[-1]
+              print(f"{name}=={version}")
+          PY
+
+          .ci-venv/bin/python -m pip install -r /tmp/formula_requirements.txt
+
+      - name: Install project and dev tools
+        run: |
+          set -euo pipefail
+          .ci-venv/bin/python -m pip install -e .
+          .ci-venv/bin/python -m pip install ruff pytest
+
+      - name: Lint, format check, and tests
+        run: |
+          set -euo pipefail
+          .ci-venv/bin/python -m ruff check .
+          .ci-venv/bin/python -m ruff format --check .
+          .ci-venv/bin/python -m agtop.agtop --help
+          .ci-venv/bin/pytest -q
+
+      - name: Sync formula when release tag exists
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          VERSION="$(python - <<'PY'
+          import pathlib
+          import re
+
+          content = pathlib.Path("setup.py").read_text(encoding="utf-8")
+          match = re.search(r"^\s*version\s*=\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
+          if not match:
+              raise SystemExit("Could not find version in setup.py")
+          print(match.group(1))
+          PY
+          )"
+
+          TAG="v${VERSION}"
+          URL="https://github.com/${GH_REPO}/archive/refs/tags/${TAG}.tar.gz"
+
+          if ! git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} not found on origin; skipping formula sync."
+            exit 0
+          fi
+
+          SHA256="$(curl -fL "${URL}" | sha256sum | awk '{print $1}')"
+
+          FORMULA_URL="${URL}" FORMULA_SHA256="${SHA256}" python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          formula_path = pathlib.Path("Formula/agtop.rb")
+          content = formula_path.read_text(encoding="utf-8")
+
+          def replace_line(text: str, pattern: str, new_value: str, label: str) -> str:
+              regex = re.compile(pattern, re.MULTILINE)
+              match = regex.search(text)
+              if not match:
+                  raise SystemExit(f"Could not find {label} in {formula_path}")
+
+              line = f"{match.group(1)}{new_value}{match.group(3)}"
+              return text[: match.start()] + line + text[match.end() :]
+
+          content = replace_line(content, r'^(  url ")(.*?)(")$', os.environ["FORMULA_URL"], "url")
+          content = replace_line(content, r'^(  sha256 ")([0-9a-f]{64})(")$', os.environ["FORMULA_SHA256"], "sha256")
+
+          formula_path.write_text(content, encoding="utf-8")
+          PY
+
+          if git diff --quiet -- Formula/agtop.rb; then
+            echo "Formula already up to date for ${TAG}."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/agtop.rb
+          git commit -m "Formula/agtop: sync ${TAG} [skip ci]"
+          git push origin HEAD:main

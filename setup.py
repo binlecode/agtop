@@ -28,5 +28,10 @@ setup(
         "dashing",
         "psutil",
     ],
+    extras_require={
+        "dev": [
+            "ruff",
+        ],
+    },
     zip_safe=False
 )

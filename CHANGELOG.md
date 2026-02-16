@@ -18,8 +18,8 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ## [0.1.2] - 2026-02-16
 
 ### Added
-- Added `scripts/update_formula.py` to auto-update `Formula/agtop.rb` `url` and `sha256` from a target tag.
-- Added `scripts/release_prepare.py` to automate version bump, changelog sync, optional formula update, and release validation commands.
+- Added `.github/workflows/main-push.yml` to run lint/tests on `main` push and auto-sync `Formula/agtop.rb` when a matching release tag exists.
+- Added `ruff` as a development dependency for linting and formatting.
 
 ### Changed
 - Bumped package version in `setup.py` to `0.1.2`.
