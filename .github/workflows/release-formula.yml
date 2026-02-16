@@ -1,10 +1,16 @@
 name: release-formula
-run-name: "release-formula | ${{ github.ref_name }} | ${{ github.sha }}"
+run-name: "release-formula | ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }} | ${{ github.sha }}"
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to sync (for example: v0.1.8)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -26,7 +32,7 @@ jobs:
 
       - name: Validate tag and pyproject.toml version from tag commit
         env:
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
         run: |
           set -euo pipefail
           VERSION="${TAG_NAME#v}"
@@ -65,38 +71,12 @@ jobs:
       - name: Sync formula for tag
         env:
           GH_REPO: ${{ github.repository }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
         run: |
           set -euo pipefail
 
-          VERSION="${TAG_NAME#v}"
           URL="https://github.com/${GH_REPO}/archive/refs/tags/${TAG_NAME}.tar.gz"
           SHA256="$(curl -fsSL "${URL}" | sha256sum | awk '{print $1}')"
-
-          update_formula() {
-            FORMULA_URL="${URL}" FORMULA_SHA256="${SHA256}" python - <<'PY'
-            import os
-            import pathlib
-            import re
-
-            formula_path = pathlib.Path("Formula/agtop.rb")
-            content = formula_path.read_text(encoding="utf-8")
-
-            def replace_line(text: str, pattern: str, new_value: str, label: str) -> str:
-                regex = re.compile(pattern, re.MULTILINE)
-                match = regex.search(text)
-                if not match:
-                    raise SystemExit(f"Could not find {label} in {formula_path}")
-
-                line = f"{match.group(1)}{new_value}{match.group(3)}"
-                return text[: match.start()] + line + text[match.end() :]
-
-            content = replace_line(content, r'^(  url ")(.*?)(")$', os.environ["FORMULA_URL"], "url")
-            content = replace_line(content, r'^(  sha256 ")([0-9a-f]{64})(")$', os.environ["FORMULA_SHA256"], "sha256")
-
-            formula_path.write_text(content, encoding="utf-8")
-            PY
-          }
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -106,7 +86,8 @@ jobs:
             git fetch origin main
             git checkout -B main origin/main
 
-            update_formula
+            sed -E -i "s|^  url \".*\"$|  url \"${URL}\"|" Formula/agtop.rb
+            sed -E -i "s|^  sha256 \"[0-9a-f]{64}\"$|  sha256 \"${SHA256}\"|" Formula/agtop.rb
 
             if git diff --quiet -- Formula/agtop.rb; then
               echo "Formula already up to date for ${TAG_NAME}."
