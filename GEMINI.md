@@ -2,21 +2,26 @@
 
 ## Overview
 `agtop` is a Python-based CLI performance monitoring tool specifically designed for Apple Silicon (M1/M2/M3/M4 chips). It provides a terminal dashboard similar to `nvtop` or `htop`, displaying real-time metrics for:
--   **CPU/GPU Utilization:** Usage per cluster (E-core/P-core) and frequency.
--   **Memory:** RAM usage, swap usage, and memory bandwidth (where available).
+-   **CPU/GPU Utilization:** Usage per cluster (E-core/P-core), frequency, and per-core history.
+-   **Memory:** RAM usage, swap usage, and memory bandwidth (read/write splits for CPU/GPU/Media).
 -   **Power:** Package, CPU, GPU, and ANE (Apple Neural Engine) power consumption.
+-   **Processes:** Top consumers of CPU and memory, with filtering capabilities.
 -   **Hardware Info:** SoC model, core counts, and thermal pressure.
+-   **Alerts:** Visual indicators for thermal throttling, bandwidth saturation, high power usage, and swap growth.
 
-The tool relies on macOS native `powermetrics` utility (requiring `sudo`) to gather low-level hardware statistics.
+The tool relies on macOS native `powermetrics` utility (requiring `sudo`) and `psutil` to gather hardware statistics and process info.
 
 ## Architecture
 The project is structured as a standard Python package.
 
 ### Core Components
--   **Entry Point (`agtop/agtop.py`):** Handles argument parsing, the main event loop, and UI rendering using the `dashing` library. It coordinates data fetching and display updates.
+-   **Entry Point (`agtop/agtop.py`):** Handles argument parsing, the main event loop, and UI rendering using the `dashing` library. It coordinates data fetching, alert logic, and display updates.
 -   **Data Acquisition (`agtop/utils.py` & `agtop/parsers.py`):**
-    -   `utils.py`: Wraps system calls to `powermetrics`, `sysctl`, and `system_profiler`.
+    -   `utils.py`: Wraps system calls to `powermetrics`, `sysctl`, and `system_profiler`; uses `psutil` for process metrics.
     -   `parsers.py`: Parses the complex text/plist output from `powermetrics` into structured dictionaries.
+-   **UI & Rendering:**
+    -   `agtop/color_modes.py`: Manages color themes (monochrome, basic, 256-color, truecolor) and dynamic gradient logic.
+    -   `agtop/experimental_gradient.py`: Extensions to `dashing` widgets for gradient-based visualization.
 -   **Hardware Profiles (`agtop/soc_profiles.py`):** Defines `SocProfile` dataclasses containing reference values (TDP, max bandwidth) for various Apple Silicon chips (M1-M4 families). It includes fallback logic for unknown "Pro", "Max", or "Ultra" variants.
 -   **Scaling Logic (`agtop/power_scaling.py`):** Utilities for normalizing power readings against reference values for visualization.
 
@@ -59,8 +64,10 @@ The project uses `pytest` for testing logic that doesn't require live hardware (
 -   `agtop/agtop.py`: Main application logic and UI layout.
 -   `agtop/soc_profiles.py`: Database of chip specifications.
 -   `agtop/parsers.py`: Logic for interpreting `powermetrics` output.
+-   `agtop/color_modes.py`: Color palette and gradient logic.
 -   `pyproject.toml`: Package configuration and dependencies.
 -   `AGENTS.md`: Specific guidelines for AI agents and contributors.
+-   `TODO-btop-inspired-enhancements.md`: Roadmap and feature tracking.
 
 ## Conventions
 -   **Code Style:** Follow standard Python (PEP 8) with 4-space indentation.
