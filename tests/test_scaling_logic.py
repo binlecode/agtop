@@ -32,5 +32,15 @@ def test_auto_mode_uses_floor_when_peak_is_low():
 
 
 def test_power_to_percent_clamps_output():
-    assert power_to_percent(999.0, "profile", profile_ref_w=10.0, peak_w=10.0, floor_w=10.0) == 100
-    assert power_to_percent(-10.0, "profile", profile_ref_w=10.0, peak_w=10.0, floor_w=10.0) == 0
+    assert (
+        power_to_percent(
+            999.0, "profile", profile_ref_w=10.0, peak_w=10.0, floor_w=10.0
+        )
+        == 100
+    )
+    assert (
+        power_to_percent(
+            -10.0, "profile", profile_ref_w=10.0, peak_w=10.0, floor_w=10.0
+        )
+        == 0
+    )

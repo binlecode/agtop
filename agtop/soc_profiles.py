@@ -12,22 +12,118 @@ class SocProfile:
 
 
 KNOWN_SOC_PROFILES = {
-    "Apple M1": SocProfile("Apple M1", cpu_chart_ref_w=20.0, gpu_chart_ref_w=20.0, cpu_max_bw=70.0, gpu_max_bw=70.0),
-    "Apple M1 Pro": SocProfile("Apple M1 Pro", cpu_chart_ref_w=30.0, gpu_chart_ref_w=30.0, cpu_max_bw=200.0, gpu_max_bw=200.0),
-    "Apple M1 Max": SocProfile("Apple M1 Max", cpu_chart_ref_w=30.0, gpu_chart_ref_w=60.0, cpu_max_bw=250.0, gpu_max_bw=400.0),
-    "Apple M1 Ultra": SocProfile("Apple M1 Ultra", cpu_chart_ref_w=60.0, gpu_chart_ref_w=120.0, cpu_max_bw=500.0, gpu_max_bw=800.0),
-    "Apple M2": SocProfile("Apple M2", cpu_chart_ref_w=25.0, gpu_chart_ref_w=15.0, cpu_max_bw=100.0, gpu_max_bw=100.0),
-    "Apple M2 Pro": SocProfile("Apple M2 Pro", cpu_chart_ref_w=35.0, gpu_chart_ref_w=30.0, cpu_max_bw=200.0, gpu_max_bw=200.0),
-    "Apple M2 Max": SocProfile("Apple M2 Max", cpu_chart_ref_w=40.0, gpu_chart_ref_w=65.0, cpu_max_bw=300.0, gpu_max_bw=400.0),
-    "Apple M2 Ultra": SocProfile("Apple M2 Ultra", cpu_chart_ref_w=80.0, gpu_chart_ref_w=130.0, cpu_max_bw=600.0, gpu_max_bw=800.0),
-    "Apple M3": SocProfile("Apple M3", cpu_chart_ref_w=25.0, gpu_chart_ref_w=20.0, cpu_max_bw=100.0, gpu_max_bw=120.0),
-    "Apple M3 Pro": SocProfile("Apple M3 Pro", cpu_chart_ref_w=35.0, gpu_chart_ref_w=30.0, cpu_max_bw=200.0, gpu_max_bw=200.0),
-    "Apple M3 Max": SocProfile("Apple M3 Max", cpu_chart_ref_w=45.0, gpu_chart_ref_w=75.0, cpu_max_bw=300.0, gpu_max_bw=400.0),
-    "Apple M3 Ultra": SocProfile("Apple M3 Ultra", cpu_chart_ref_w=90.0, gpu_chart_ref_w=150.0, cpu_max_bw=600.0, gpu_max_bw=800.0),
-    "Apple M4": SocProfile("Apple M4", cpu_chart_ref_w=30.0, gpu_chart_ref_w=20.0, cpu_max_bw=120.0, gpu_max_bw=120.0),
-    "Apple M4 Pro": SocProfile("Apple M4 Pro", cpu_chart_ref_w=40.0, gpu_chart_ref_w=35.0, cpu_max_bw=240.0, gpu_max_bw=240.0),
-    "Apple M4 Max": SocProfile("Apple M4 Max", cpu_chart_ref_w=55.0, gpu_chart_ref_w=90.0, cpu_max_bw=320.0, gpu_max_bw=480.0),
-    "Apple M4 Ultra": SocProfile("Apple M4 Ultra", cpu_chart_ref_w=110.0, gpu_chart_ref_w=180.0, cpu_max_bw=640.0, gpu_max_bw=960.0),
+    "Apple M1": SocProfile(
+        "Apple M1",
+        cpu_chart_ref_w=20.0,
+        gpu_chart_ref_w=20.0,
+        cpu_max_bw=70.0,
+        gpu_max_bw=70.0,
+    ),
+    "Apple M1 Pro": SocProfile(
+        "Apple M1 Pro",
+        cpu_chart_ref_w=30.0,
+        gpu_chart_ref_w=30.0,
+        cpu_max_bw=200.0,
+        gpu_max_bw=200.0,
+    ),
+    "Apple M1 Max": SocProfile(
+        "Apple M1 Max",
+        cpu_chart_ref_w=30.0,
+        gpu_chart_ref_w=60.0,
+        cpu_max_bw=250.0,
+        gpu_max_bw=400.0,
+    ),
+    "Apple M1 Ultra": SocProfile(
+        "Apple M1 Ultra",
+        cpu_chart_ref_w=60.0,
+        gpu_chart_ref_w=120.0,
+        cpu_max_bw=500.0,
+        gpu_max_bw=800.0,
+    ),
+    "Apple M2": SocProfile(
+        "Apple M2",
+        cpu_chart_ref_w=25.0,
+        gpu_chart_ref_w=15.0,
+        cpu_max_bw=100.0,
+        gpu_max_bw=100.0,
+    ),
+    "Apple M2 Pro": SocProfile(
+        "Apple M2 Pro",
+        cpu_chart_ref_w=35.0,
+        gpu_chart_ref_w=30.0,
+        cpu_max_bw=200.0,
+        gpu_max_bw=200.0,
+    ),
+    "Apple M2 Max": SocProfile(
+        "Apple M2 Max",
+        cpu_chart_ref_w=40.0,
+        gpu_chart_ref_w=65.0,
+        cpu_max_bw=300.0,
+        gpu_max_bw=400.0,
+    ),
+    "Apple M2 Ultra": SocProfile(
+        "Apple M2 Ultra",
+        cpu_chart_ref_w=80.0,
+        gpu_chart_ref_w=130.0,
+        cpu_max_bw=600.0,
+        gpu_max_bw=800.0,
+    ),
+    "Apple M3": SocProfile(
+        "Apple M3",
+        cpu_chart_ref_w=25.0,
+        gpu_chart_ref_w=20.0,
+        cpu_max_bw=100.0,
+        gpu_max_bw=120.0,
+    ),
+    "Apple M3 Pro": SocProfile(
+        "Apple M3 Pro",
+        cpu_chart_ref_w=35.0,
+        gpu_chart_ref_w=30.0,
+        cpu_max_bw=200.0,
+        gpu_max_bw=200.0,
+    ),
+    "Apple M3 Max": SocProfile(
+        "Apple M3 Max",
+        cpu_chart_ref_w=45.0,
+        gpu_chart_ref_w=75.0,
+        cpu_max_bw=300.0,
+        gpu_max_bw=400.0,
+    ),
+    "Apple M3 Ultra": SocProfile(
+        "Apple M3 Ultra",
+        cpu_chart_ref_w=90.0,
+        gpu_chart_ref_w=150.0,
+        cpu_max_bw=600.0,
+        gpu_max_bw=800.0,
+    ),
+    "Apple M4": SocProfile(
+        "Apple M4",
+        cpu_chart_ref_w=30.0,
+        gpu_chart_ref_w=20.0,
+        cpu_max_bw=120.0,
+        gpu_max_bw=120.0,
+    ),
+    "Apple M4 Pro": SocProfile(
+        "Apple M4 Pro",
+        cpu_chart_ref_w=40.0,
+        gpu_chart_ref_w=35.0,
+        cpu_max_bw=240.0,
+        gpu_max_bw=240.0,
+    ),
+    "Apple M4 Max": SocProfile(
+        "Apple M4 Max",
+        cpu_chart_ref_w=55.0,
+        gpu_chart_ref_w=90.0,
+        cpu_max_bw=320.0,
+        gpu_max_bw=480.0,
+    ),
+    "Apple M4 Ultra": SocProfile(
+        "Apple M4 Ultra",
+        cpu_chart_ref_w=110.0,
+        gpu_chart_ref_w=180.0,
+        cpu_max_bw=640.0,
+        gpu_max_bw=960.0,
+    ),
 }
 
 GENERIC_APPLE_SILICON_PROFILE = SocProfile(
@@ -39,10 +135,34 @@ GENERIC_APPLE_SILICON_PROFILE = SocProfile(
 )
 
 TIER_FALLBACKS = {
-    "Ultra": SocProfile("Apple Silicon Ultra", cpu_chart_ref_w=110.0, gpu_chart_ref_w=180.0, cpu_max_bw=640.0, gpu_max_bw=960.0),
-    "Max": SocProfile("Apple Silicon Max", cpu_chart_ref_w=55.0, gpu_chart_ref_w=90.0, cpu_max_bw=320.0, gpu_max_bw=480.0),
-    "Pro": SocProfile("Apple Silicon Pro", cpu_chart_ref_w=40.0, gpu_chart_ref_w=35.0, cpu_max_bw=240.0, gpu_max_bw=240.0),
-    "base": SocProfile("Apple Silicon", cpu_chart_ref_w=30.0, gpu_chart_ref_w=20.0, cpu_max_bw=120.0, gpu_max_bw=120.0),
+    "Ultra": SocProfile(
+        "Apple Silicon Ultra",
+        cpu_chart_ref_w=110.0,
+        gpu_chart_ref_w=180.0,
+        cpu_max_bw=640.0,
+        gpu_max_bw=960.0,
+    ),
+    "Max": SocProfile(
+        "Apple Silicon Max",
+        cpu_chart_ref_w=55.0,
+        gpu_chart_ref_w=90.0,
+        cpu_max_bw=320.0,
+        gpu_max_bw=480.0,
+    ),
+    "Pro": SocProfile(
+        "Apple Silicon Pro",
+        cpu_chart_ref_w=40.0,
+        gpu_chart_ref_w=35.0,
+        cpu_max_bw=240.0,
+        gpu_max_bw=240.0,
+    ),
+    "base": SocProfile(
+        "Apple Silicon",
+        cpu_chart_ref_w=30.0,
+        gpu_chart_ref_w=20.0,
+        cpu_max_bw=120.0,
+        gpu_max_bw=120.0,
+    ),
 }
 
 APPLE_M_SERIES_PATTERN = re.compile(r"^Apple M\d+")

@@ -29,73 +29,119 @@ def parse_bandwidth_metrics(powermetrics_parse):
         return {}
     bandwidth_metrics = powermetrics_parse.get("bandwidth_counters", [])
     bandwidth_metrics_dict = {}
-    data_fields = ["PCPU0 DCS RD", "PCPU0 DCS WR",
-                   "PCPU1 DCS RD", "PCPU1 DCS WR",
-                   "PCPU2 DCS RD", "PCPU2 DCS WR",
-                   "PCPU3 DCS RD", "PCPU3 DCS WR",
-                   "PCPU DCS RD", "PCPU DCS WR",
-                   "ECPU0 DCS RD", "ECPU0 DCS WR",
-                   "ECPU1 DCS RD", "ECPU1 DCS WR",
-                   "ECPU DCS RD", "ECPU DCS WR",
-                   "GFX DCS RD", "GFX DCS WR",
-                   "ISP DCS RD", "ISP DCS WR",
-                   "STRM CODEC DCS RD", "STRM CODEC DCS WR",
-                   "PRORES DCS RD", "PRORES DCS WR",
-                   "VDEC DCS RD", "VDEC DCS WR",
-                   "VENC0 DCS RD", "VENC0 DCS WR",
-                   "VENC1 DCS RD", "VENC1 DCS WR",
-                   "VENC2 DCS RD", "VENC2 DCS WR",
-                   "VENC3 DCS RD", "VENC3 DCS WR",
-                   "VENC DCS RD", "VENC DCS WR",
-                   "JPG0 DCS RD", "JPG0 DCS WR",
-                   "JPG1 DCS RD", "JPG1 DCS WR",
-                   "JPG2 DCS RD", "JPG2 DCS WR",
-                   "JPG3 DCS RD", "JPG3 DCS WR",
-                   "JPG DCS RD", "JPG DCS WR",
-                   "DCS RD", "DCS WR"]
+    data_fields = [
+        "PCPU0 DCS RD",
+        "PCPU0 DCS WR",
+        "PCPU1 DCS RD",
+        "PCPU1 DCS WR",
+        "PCPU2 DCS RD",
+        "PCPU2 DCS WR",
+        "PCPU3 DCS RD",
+        "PCPU3 DCS WR",
+        "PCPU DCS RD",
+        "PCPU DCS WR",
+        "ECPU0 DCS RD",
+        "ECPU0 DCS WR",
+        "ECPU1 DCS RD",
+        "ECPU1 DCS WR",
+        "ECPU DCS RD",
+        "ECPU DCS WR",
+        "GFX DCS RD",
+        "GFX DCS WR",
+        "ISP DCS RD",
+        "ISP DCS WR",
+        "STRM CODEC DCS RD",
+        "STRM CODEC DCS WR",
+        "PRORES DCS RD",
+        "PRORES DCS WR",
+        "VDEC DCS RD",
+        "VDEC DCS WR",
+        "VENC0 DCS RD",
+        "VENC0 DCS WR",
+        "VENC1 DCS RD",
+        "VENC1 DCS WR",
+        "VENC2 DCS RD",
+        "VENC2 DCS WR",
+        "VENC3 DCS RD",
+        "VENC3 DCS WR",
+        "VENC DCS RD",
+        "VENC DCS WR",
+        "JPG0 DCS RD",
+        "JPG0 DCS WR",
+        "JPG1 DCS RD",
+        "JPG1 DCS WR",
+        "JPG2 DCS RD",
+        "JPG2 DCS WR",
+        "JPG3 DCS RD",
+        "JPG3 DCS WR",
+        "JPG DCS RD",
+        "JPG DCS WR",
+        "DCS RD",
+        "DCS WR",
+    ]
     for h in data_fields:
         bandwidth_metrics_dict[h] = 0.0
     for l in bandwidth_metrics:
         if l.get("name") in data_fields:
             bandwidth_metrics_dict[l["name"]] = _to_float(l.get("value")) / 1e9
-    bandwidth_metrics_dict["PCPU DCS RD"] = bandwidth_metrics_dict["PCPU DCS RD"] + \
-        bandwidth_metrics_dict["PCPU0 DCS RD"] + \
-        bandwidth_metrics_dict["PCPU1 DCS RD"] + \
-        bandwidth_metrics_dict["PCPU2 DCS RD"] + \
-        bandwidth_metrics_dict["PCPU3 DCS RD"]
-    bandwidth_metrics_dict["PCPU DCS WR"] = bandwidth_metrics_dict["PCPU DCS WR"] + \
-        bandwidth_metrics_dict["PCPU0 DCS WR"] + \
-        bandwidth_metrics_dict["PCPU1 DCS WR"] + \
-        bandwidth_metrics_dict["PCPU2 DCS WR"] + \
-        bandwidth_metrics_dict["PCPU3 DCS WR"]
-    bandwidth_metrics_dict["JPG DCS RD"] = bandwidth_metrics_dict["JPG DCS RD"] + \
-        bandwidth_metrics_dict["JPG0 DCS RD"] + \
-        bandwidth_metrics_dict["JPG1 DCS RD"] + \
-        bandwidth_metrics_dict["JPG2 DCS RD"] + \
-        bandwidth_metrics_dict["JPG3 DCS RD"]
-    bandwidth_metrics_dict["JPG DCS WR"] = bandwidth_metrics_dict["JPG DCS WR"] + \
-        bandwidth_metrics_dict["JPG0 DCS WR"] + \
-        bandwidth_metrics_dict["JPG1 DCS WR"] + \
-        bandwidth_metrics_dict["JPG2 DCS WR"] + \
-        bandwidth_metrics_dict["JPG3 DCS WR"]
-    bandwidth_metrics_dict["VENC DCS RD"] = bandwidth_metrics_dict["VENC DCS RD"] + \
-        bandwidth_metrics_dict["VENC0 DCS RD"] + \
-        bandwidth_metrics_dict["VENC1 DCS RD"] + \
-        bandwidth_metrics_dict["VENC2 DCS RD"] + \
-        bandwidth_metrics_dict["VENC3 DCS RD"]
-    bandwidth_metrics_dict["VENC DCS WR"] = bandwidth_metrics_dict["VENC DCS WR"] + \
-        bandwidth_metrics_dict["VENC0 DCS WR"] + \
-        bandwidth_metrics_dict["VENC1 DCS WR"] + \
-        bandwidth_metrics_dict["VENC2 DCS WR"] + \
-        bandwidth_metrics_dict["VENC3 DCS WR"]
-    bandwidth_metrics_dict["MEDIA DCS"] = sum([
-        bandwidth_metrics_dict["ISP DCS RD"], bandwidth_metrics_dict["ISP DCS WR"],
-        bandwidth_metrics_dict["STRM CODEC DCS RD"], bandwidth_metrics_dict["STRM CODEC DCS WR"],
-        bandwidth_metrics_dict["PRORES DCS RD"], bandwidth_metrics_dict["PRORES DCS WR"],
-        bandwidth_metrics_dict["VDEC DCS RD"], bandwidth_metrics_dict["VDEC DCS WR"],
-        bandwidth_metrics_dict["VENC DCS RD"], bandwidth_metrics_dict["VENC DCS WR"],
-        bandwidth_metrics_dict["JPG DCS RD"], bandwidth_metrics_dict["JPG DCS WR"],
-    ])
+    bandwidth_metrics_dict["PCPU DCS RD"] = (
+        bandwidth_metrics_dict["PCPU DCS RD"]
+        + bandwidth_metrics_dict["PCPU0 DCS RD"]
+        + bandwidth_metrics_dict["PCPU1 DCS RD"]
+        + bandwidth_metrics_dict["PCPU2 DCS RD"]
+        + bandwidth_metrics_dict["PCPU3 DCS RD"]
+    )
+    bandwidth_metrics_dict["PCPU DCS WR"] = (
+        bandwidth_metrics_dict["PCPU DCS WR"]
+        + bandwidth_metrics_dict["PCPU0 DCS WR"]
+        + bandwidth_metrics_dict["PCPU1 DCS WR"]
+        + bandwidth_metrics_dict["PCPU2 DCS WR"]
+        + bandwidth_metrics_dict["PCPU3 DCS WR"]
+    )
+    bandwidth_metrics_dict["JPG DCS RD"] = (
+        bandwidth_metrics_dict["JPG DCS RD"]
+        + bandwidth_metrics_dict["JPG0 DCS RD"]
+        + bandwidth_metrics_dict["JPG1 DCS RD"]
+        + bandwidth_metrics_dict["JPG2 DCS RD"]
+        + bandwidth_metrics_dict["JPG3 DCS RD"]
+    )
+    bandwidth_metrics_dict["JPG DCS WR"] = (
+        bandwidth_metrics_dict["JPG DCS WR"]
+        + bandwidth_metrics_dict["JPG0 DCS WR"]
+        + bandwidth_metrics_dict["JPG1 DCS WR"]
+        + bandwidth_metrics_dict["JPG2 DCS WR"]
+        + bandwidth_metrics_dict["JPG3 DCS WR"]
+    )
+    bandwidth_metrics_dict["VENC DCS RD"] = (
+        bandwidth_metrics_dict["VENC DCS RD"]
+        + bandwidth_metrics_dict["VENC0 DCS RD"]
+        + bandwidth_metrics_dict["VENC1 DCS RD"]
+        + bandwidth_metrics_dict["VENC2 DCS RD"]
+        + bandwidth_metrics_dict["VENC3 DCS RD"]
+    )
+    bandwidth_metrics_dict["VENC DCS WR"] = (
+        bandwidth_metrics_dict["VENC DCS WR"]
+        + bandwidth_metrics_dict["VENC0 DCS WR"]
+        + bandwidth_metrics_dict["VENC1 DCS WR"]
+        + bandwidth_metrics_dict["VENC2 DCS WR"]
+        + bandwidth_metrics_dict["VENC3 DCS WR"]
+    )
+    bandwidth_metrics_dict["MEDIA DCS"] = sum(
+        [
+            bandwidth_metrics_dict["ISP DCS RD"],
+            bandwidth_metrics_dict["ISP DCS WR"],
+            bandwidth_metrics_dict["STRM CODEC DCS RD"],
+            bandwidth_metrics_dict["STRM CODEC DCS WR"],
+            bandwidth_metrics_dict["PRORES DCS RD"],
+            bandwidth_metrics_dict["PRORES DCS WR"],
+            bandwidth_metrics_dict["VDEC DCS RD"],
+            bandwidth_metrics_dict["VDEC DCS WR"],
+            bandwidth_metrics_dict["VENC DCS RD"],
+            bandwidth_metrics_dict["VENC DCS WR"],
+            bandwidth_metrics_dict["JPG DCS RD"],
+            bandwidth_metrics_dict["JPG DCS WR"],
+        ]
+    )
     return bandwidth_metrics_dict
 
 
@@ -147,7 +193,9 @@ def parse_cpu_metrics(powermetrics_parse):
                 continue
             cpu_freq_mhz = _to_int(_to_float(cpu.get("freq_hz")) / 1e6)
             cpu_active = _active_percent(cpu.get("idle_ratio"))
-            cpu_metric_dict[cluster_prefix + str(cpu_index) + "_freq_Mhz"] = cpu_freq_mhz
+            cpu_metric_dict[cluster_prefix + str(cpu_index) + "_freq_Mhz"] = (
+                cpu_freq_mhz
+            )
             cpu_metric_dict[cluster_prefix + str(cpu_index) + "_active"] = cpu_active
             if is_e_cluster:
                 cpu_metric_dict["e_core"].append(cpu_index)
@@ -155,10 +203,14 @@ def parse_cpu_metrics(powermetrics_parse):
                 cpu_metric_dict["p_core"].append(cpu_index)
 
     if e_cluster_active:
-        cpu_metric_dict["E-Cluster_active"] = _to_int(sum(e_cluster_active) / len(e_cluster_active))
+        cpu_metric_dict["E-Cluster_active"] = _to_int(
+            sum(e_cluster_active) / len(e_cluster_active)
+        )
         cpu_metric_dict["E-Cluster_freq_Mhz"] = _to_int(max(e_cluster_freq))
     if p_cluster_active:
-        cpu_metric_dict["P-Cluster_active"] = _to_int(sum(p_cluster_active) / len(p_cluster_active))
+        cpu_metric_dict["P-Cluster_active"] = _to_int(
+            sum(p_cluster_active) / len(p_cluster_active)
+        )
         cpu_metric_dict["P-Cluster_freq_Mhz"] = _to_int(max(p_cluster_freq))
 
     cpu_metric_dict["e_core"] = sorted(set(cpu_metric_dict["e_core"]))
