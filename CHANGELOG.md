@@ -15,6 +15,18 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ### Fixed
 - No changes yet.
 
+## [0.1.2] - 2026-02-16
+
+### Added
+- Added `scripts/update_formula.py` to auto-update `Formula/agtop.rb` `url` and `sha256` from a target tag.
+- Added `scripts/release_prepare.py` to automate version bump, changelog sync, optional formula update, and release validation commands.
+
+### Changed
+- Bumped package version in `setup.py` to `0.1.2`.
+
+### Fixed
+- Updated `Formula/agtop.rb` checksum for `v0.0.25` source tarball to match GitHub download content.
+
 ## [0.1.1] - 2026-02-16
 
 ### Added
