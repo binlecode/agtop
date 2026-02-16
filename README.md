@@ -8,7 +8,7 @@ Apple GPU Top for Apple Silicon.
 
 `agtop` is an independent hard fork with its own release cycle and maintenance policy.
 
-Origin attribution: this project started from `tlkh/asitop` and is now maintained as `binlecode/agtop`.
+Origin attribution: this project is inspired by `tlkh/asitop` and is now refactored to a new utility as `binlecode/agtop`.
 
 ## Features
 
@@ -26,14 +26,14 @@ Origin attribution: this project started from `tlkh/asitop` and is now maintaine
 
 ## Install
 
-Install from this tap:
+This project uses the source repo itself as the tap remote (not a separate `homebrew-*` tap repo).
+Run this one-time tap setup first:
 
 ```shell
 brew tap --custom-remote binlecode/agtop https://github.com/binlecode/agtop.git
-brew install agtop
 ```
 
-If formula names are ambiguous:
+Then install:
 
 ```shell
 brew install binlecode/agtop/agtop
@@ -43,8 +43,8 @@ brew install binlecode/agtop/agtop
 
 ```shell
 brew update
-brew upgrade agtop
-brew uninstall agtop
+brew upgrade binlecode/agtop/agtop
+brew uninstall binlecode/agtop/agtop
 ```
 
 ## Usage
