@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+## Project
+
+**agtop** — performance monitoring CLI for Apple Silicon Macs. Hard fork of `tlkh/asitop`. Uses IOReport (in-process, no sudo) as the primary backend for Apple Silicon power/frequency/residency metrics, with `powermetrics` (privileged) as a fallback. Combines these with `psutil`, `sysctl`, and `system_profiler` into a real-time terminal dashboard showing CPU/GPU/ANE utilization, per-core frequency, memory/bandwidth, thermal state, and process info.
+
 ## Python Environment (Required)
 - Always use the repository virtual environment at `.venv`.
 - Prefer explicit executables over shell-global tools:
@@ -8,30 +12,46 @@
   - `.venv/bin/pytest`
 - Do not run `python`, `pip`, or `pytest` from the global environment for this repo.
 
-## Project Structure & Module Organization
-`agtop` is a small Python CLI package.
-- `agtop/agtop.py`: CLI entry point, argument parsing, and terminal dashboard rendering.
-- `agtop/utils.py`: system calls (`powermetrics`, `sysctl`, `system_profiler`) and runtime helpers.
-- `agtop/parsers.py`: parsing logic for `powermetrics` plist payloads.
-- `tests/`: functional/runtime validation for CLI behavior, parser resilience, and scaling logic.
-- `images/`: README/demo assets.
-- `pyproject.toml`: package metadata, dependencies, and `console_scripts` entry point (`agtop`).
-
 ## Build, Test, and Development Commands
-- `.venv/bin/python -m pip install -e .`: install in editable mode for local development.
+- `.venv/bin/python -m pip install -e ".[dev]"`: install editable + dev deps (ruff).
 - `.venv/bin/python -m agtop.agtop --help`: validate CLI parsing and flags.
-- `sudo agtop --interval 1 --avg 30`: run the tool locally (requires `sudo` for `powermetrics`).
+- `agtop --interval 1 --avg 30`: run the tool locally (IOReport backend, no sudo needed).
 - `.venv/bin/python -m build`: build source/wheel artifacts.
 - `.venv/bin/pytest -q`: run automated tests.
 
+## Architecture
+
+| Module | Role |
+|--------|------|
+| `agtop/agtop.py` | CLI entry point (`cli()`), argument parsing, terminal dashboard rendering, main event loop |
+| `agtop/sampler.py` | Unified sampler abstraction: `IOReportSampler` (primary) and `PowermetricsSampler` (fallback), DVFS table discovery |
+| `agtop/ioreport.py` | IOReport + CoreFoundation ctypes bindings for in-process Apple Silicon metrics |
+| `agtop/parsers.py` | Parses `powermetrics` plist payloads (used by fallback path) |
+| `agtop/utils.py` | System integration: `powermetrics` subprocess management, `sysctl`/`system_profiler` calls, process collection |
+| `agtop/soc_profiles.py` | SoC profiles (M1–M4 families) with power/bandwidth reference values for scaling |
+| `agtop/power_scaling.py` | Power scaling logic: `auto` (rolling peak) vs `profile` (SoC reference) |
+| `agtop/color_modes.py` | Terminal color detection and gradient/index mapping |
+| `agtop/gradient.py` | Per-cell gradient rendering subclasses for `dashing` widgets |
+
+**Data flow**: `sampler.py` selects backend (IOReport or powermetrics) → backend produces `SampleResult` (cpu/gpu/thermal/bandwidth dicts) → `agtop.py` merges with `psutil`/`sysctl` data from `utils.py` → renders via `dashing` widgets.
+
+**SoC compatibility**: Explicit M1–M4 recognition (16 profiles). Unknown future chips fall back to tier defaults (base/Pro/Max/Ultra). Powermetrics parser uses fallback logic (tries last 2 plist frames if current is corrupted).
+
+## Release Process
+
+Releases are driven by `scripts/tag_release.sh [version]`. CI handles formula sync — never manually edit `Formula/agtop.rb` during releases. See `GUIDE-release-operations.md` for the full runbook.
+
 ## Coding Style & Naming Conventions
 - Follow existing Python style: 4-space indentation, snake_case for functions/variables, short focused modules.
+- Never use `from x import *`; always import explicitly.
 - Keep parser keys and metric field names consistent with existing patterns (for example, `P-Cluster_active`, `gpu_W`).
 - Prefer small, incremental changes in existing files over large refactors.
 - No formatter/linter config is checked in; match surrounding code style when editing.
 
 ## Testing Guidelines
 - Run `.venv/bin/pytest -q` for all code changes.
+- Run a single test file: `.venv/bin/pytest tests/test_cli_contract.py -q`
+- Run a single test function: `.venv/bin/pytest tests/test_cli_contract.py::test_name -q`
 - Functional tests only: validate behavior through public/runtime entrypoints (for example CLI invocation, real file I/O paths, and end-to-end parse flows).
 - Do not use mocks, fakes, monkeypatching, or fixture-based synthetic harnesses for new tests.
 - Do not add unit tests that assert internal implementation details, helper math constants, or private function behavior in isolation.
@@ -55,5 +75,6 @@
   - screenshot or terminal capture for UI-visible changes.
 
 ## Security & Configuration Tips
-- `powermetrics` requires elevated privileges; review `sudo` usage carefully.
+- The default IOReport backend runs unprivileged (no sudo).
+- The `powermetrics` fallback requires elevated privileges; review `sudo` usage carefully.
 - Avoid introducing persistent privileged processes or unsafe temporary-file handling.

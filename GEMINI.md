@@ -21,7 +21,7 @@ The project is structured as a standard Python package.
     -   `parsers.py`: Parses the complex text/plist output from `powermetrics` into structured dictionaries.
 -   **UI & Rendering:**
     -   `agtop/color_modes.py`: Manages color themes (monochrome, basic, 256-color, truecolor) and dynamic gradient logic.
-    -   `agtop/experimental_gradient.py`: Extensions to `dashing` widgets for gradient-based visualization.
+    -   `agtop/gradient.py`: Extensions to `dashing` widgets for gradient-based visualization.
 -   **Hardware Profiles (`agtop/soc_profiles.py`):** Defines `SocProfile` dataclasses containing reference values (TDP, max bandwidth) for various Apple Silicon chips (M1-M4 families). It includes fallback logic for unknown "Pro", "Max", or "Ultra" variants.
 -   **Scaling Logic (`agtop/power_scaling.py`):** Utilities for normalizing power readings against reference values for visualization.
 

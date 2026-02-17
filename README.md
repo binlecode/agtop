@@ -12,18 +12,19 @@ Origin attribution: this project is inspired by `tlkh/asitop` and is now refacto
 
 ## At a Glance
 
-- Platform: Apple Silicon macOS with `powermetrics` available.
-- Permission model: runtime requires `sudo` because `powermetrics` is privileged.
+- Platform: Apple Silicon macOS.
+- Permission model: **no `sudo` required** — reads Apple Silicon metrics directly via IOReport. Falls back to `powermetrics` (requires `sudo`) if IOReport is unavailable.
 - Core value: combines CPU/GPU/ANE/power/memory/bandwidth/process signals in one terminal dashboard.
 - Compatibility model: explicit M1-M4 support plus tiered fallback for future Apple Silicon names.
 
 ## Key Features
 
-- Unified telemetry stack: `powermetrics` + `psutil` + `sysctl` + `system_profiler`.
+- **No sudo needed**: uses Apple's IOReport framework to read power, frequency, and residency metrics in-process via ctypes.
 - Real-time dashboard: E/P CPU clusters, optional per-core gauges/history, GPU, ANE, RAM/swap, and memory bandwidth.
 - Diagnosis-oriented status line: thermal state, bandwidth saturation, swap growth, and package power alerts.
 - Process visibility: top CPU/RSS processes with optional regex filter (`--proc-filter`).
 - Profile-aware scaling: `--power-scale auto|profile` for consistent chart interpretation across SoC classes.
+- Automatic DVFS frequency table discovery from IOKit for accurate per-core MHz reporting.
 
 ## Installation
 
@@ -46,11 +47,17 @@ brew uninstall binlecode/agtop/agtop
 
 ```shell
 agtop --help
-sudo agtop
-sudo agtop --interval 1 --avg 30 --power-scale profile
-sudo agtop --show_cores --core-view both --interval 1 --avg 30 --power-scale profile
-sudo agtop --proc-filter "python|ollama|vllm|docker|mlx"
-sudo agtop --alert-bw-sat-percent 90 --alert-package-power-percent 85 --alert-swap-rise-gb 0.5 --alert-sustain-samples 4
+agtop
+agtop --interval 1 --avg 30 --power-scale profile
+agtop --show_cores --core-view both --interval 1 --avg 30 --power-scale profile
+agtop --proc-filter "python|ollama|vllm|docker|mlx"
+agtop --alert-bw-sat-percent 90 --alert-package-power-percent 85 --alert-swap-rise-gb 0.5 --alert-sustain-samples 4
+```
+
+To force the legacy `powermetrics` backend (requires `sudo`):
+
+```shell
+AGTOP_FORCE_POWERMETRICS=1 sudo agtop
 ```
 
 ## CLI Quick Reference
@@ -74,19 +81,27 @@ sudo agtop --alert-bw-sat-percent 90 --alert-package-power-percent 85 --alert-sw
 | Signal Domain | Primary Source | Why |
 | --- | --- | --- |
 | CPU utilization (per-core/cluster) | `psutil` | Aligns better with Activity Monitor / btop-style load semantics |
-| CPU/GPU freq, ANE power, CPU/GPU/package power, thermal, bandwidth | `powermetrics` plist | Apple-specific counters are not fully available from generic CPU APIs |
+| CPU/GPU freq, power, residency | IOReport (`libIOReport.dylib`) via ctypes | In-process, no sudo, no subprocess overhead |
+| DVFS frequency tables | IOKit `pmgr` device via `ioreg` | Maps P-state indices to actual MHz values |
 | SoC identity and profile hints | `sysctl`, `system_profiler`, built-in SoC profiles | Stable scaling defaults and compatibility across chip families |
+| Bandwidth counters, thermal pressure | `powermetrics` plist (fallback only) | Not available from IOReport; shown as N/A with IOReport backend |
 
-Practical result: `agtop` is built for Apple Silicon diagnosis where CPU load behavior should feel familiar while still exposing Apple-only accelerator and bandwidth counters.
+### Backend Selection
+
+agtop automatically selects the best available backend at startup:
+
+1. **IOReport** (default): reads Apple Silicon metrics directly via the private `libIOReport.dylib` C library using Python ctypes. No sudo, no subprocess, no temp files.
+2. **powermetrics** (fallback): spawns a privileged `powermetrics` subprocess. Used when IOReport is unavailable or when `AGTOP_FORCE_POWERMETRICS=1` is set.
+
+The active backend is shown during startup: `[2/3] Backend: ioreport ...`
 
 ## Troubleshooting
 
-- `Failed to start powermetrics due to missing sudo privileges`:
-  run with `sudo agtop`.
-- `powermetrics` not found:
-  verify you are on macOS with `powermetrics` available in PATH.
-- Metric differences versus other tools:
-  small differences are expected due to sampling windows and source timing.
+- **Bandwidth shows N/A**: bandwidth counters are not available from the IOReport backend. Use `AGTOP_FORCE_POWERMETRICS=1 sudo agtop` for bandwidth data.
+- **Thermal shows "Unknown"**: thermal pressure is not exposed by IOReport. Use the powermetrics fallback for thermal readings.
+- **Frequencies show 0 MHz**: DVFS table discovery failed for your SoC. File an issue with your chip model (`sysctl -n machdep.cpu.brand_string`).
+- **`Failed to start powermetrics`**: only applies to the powermetrics fallback. The IOReport backend does not need `sudo`.
+- **Metric differences versus other tools**: small differences are expected due to sampling windows and source timing.
 
 ## Development
 
@@ -100,8 +115,8 @@ Validate CLI and run the app in development:
 
 ```bash
 .venv/bin/python -m agtop.agtop --help
-sudo .venv/bin/python -m agtop.agtop --interval 1 --avg 30 --power-scale profile
-sudo .venv/bin/python -m agtop.agtop --show_cores --core-view both --interval 1 --avg 30 --power-scale profile
+.venv/bin/python -m agtop.agtop --interval 1 --avg 30 --power-scale profile
+.venv/bin/python -m agtop.agtop --show_cores --core-view both --interval 1 --avg 30 --power-scale profile
 ```
 
 Run tests:
@@ -192,10 +207,25 @@ brew info binlecode/agtop/agtop
 7. Confirm install path:
    `brew update && brew upgrade binlecode/agtop/agtop && brew info binlecode/agtop/agtop`
 
+## Architecture
+
+| Module | Role |
+| --- | --- |
+| `agtop/agtop.py` | CLI entry point, argument parsing, terminal dashboard, main event loop |
+| `agtop/sampler.py` | Unified sampler abstraction: `IOReportSampler` (primary) and `PowermetricsSampler` (fallback) |
+| `agtop/ioreport.py` | IOReport + CoreFoundation ctypes bindings for in-process Apple Silicon metrics |
+| `agtop/parsers.py` | Parses `powermetrics` plist payloads (used by fallback path) |
+| `agtop/utils.py` | System integration: `powermetrics` subprocess management, `sysctl`/`system_profiler` calls |
+| `agtop/soc_profiles.py` | SoC profiles (M1-M4 families) with power/bandwidth reference values |
+| `agtop/power_scaling.py` | Power scaling logic: `auto` (rolling peak) vs `profile` (SoC reference) |
+| `agtop/color_modes.py` | Terminal color detection and gradient/index mapping |
+| `agtop/gradient.py` | Per-cell gradient rendering subclasses for `dashing` widgets |
+
 ## Compatibility Notes
 
 - Chip families `M1` through `M4` are recognized directly.
 - Unknown future Apple Silicon names fall back to tier defaults (`base`, `Pro`, `Max`, `Ultra`).
-- Available `powermetrics` fields vary by macOS and chip generation.
+- IOReport backend requires macOS with `libIOReport.dylib` (available on all Apple Silicon Macs).
+- The powermetrics fallback supports older macOS versions where IOReport may not be available.
 
 Use `agtop` for install and runtime commands in this repository.

@@ -11,9 +11,8 @@ from .utils import (
     get_top_processes,
     get_ram_metrics_dict,
     get_soc_info,
-    parse_powermetrics,
-    run_powermetrics_process,
 )
+from .sampler import create_sampler
 from .color_modes import (
     COLOR_MODE_BASIC,
     COLOR_MODE_MONO,
@@ -164,37 +163,18 @@ def _shorten_process_command(command, max_len=30):
     return command[: max_len - 3] + "..."
 
 
-def _process_display_name(command, max_len=18):
+def _process_display_name(command, max_len=24):
     command = str(command or "").strip()
     if not command:
         return "?"
+    # Extract macOS .app bundle name (e.g. "Visual Studio Code" from
+    # "/Applications/Visual Studio Code.app/Contents/MacOS/Electron")
+    app_match = re.search(r"([^/]+)\.app(?:/| |$)", command)
+    if app_match:
+        return _shorten_process_command(app_match.group(1), max_len=max_len)
     executable = command.split(" ", 1)[0]
     executable_name = os.path.basename(executable) or executable
     return _shorten_process_command(executable_name, max_len=max_len)
-
-
-def _terminate_powermetrics_process(process):
-    if process is None:
-        return
-    try:
-        process.terminate()
-    except Exception:
-        pass
-
-
-def _read_powermetrics_stderr(process):
-    if process is None or process.poll() is None:
-        return ""
-    try:
-        _, stderr_data = process.communicate(timeout=0.2)
-    except Exception:
-        return ""
-    if not stderr_data:
-        return ""
-    try:
-        return stderr_data.decode("utf-8", errors="replace").strip()
-    except Exception:
-        return str(stderr_data).strip()
 
 
 def _supports_cursor_addressing(terminal):
@@ -202,92 +182,6 @@ def _supports_cursor_addressing(terminal):
         return bool(terminal.move(0, 0))
     except Exception:
         return False
-
-
-def _build_powermetrics_start_error(stderr_text="", returncode=None):
-    stderr_lower = stderr_text.lower()
-    if "powermetrics" in stderr_lower and (
-        "command not found" in stderr_lower or "no such file" in stderr_lower
-    ):
-        message = (
-            "Failed to start powermetrics: the `powermetrics` binary was not found. "
-            "agtop requires macOS with powermetrics available."
-        )
-    elif any(
-        token in stderr_lower
-        for token in [
-            "a password is required",
-            "terminal is required",
-            "no tty present",
-            "not in the sudoers",
-            "permission denied",
-            "operation not permitted",
-        ]
-    ):
-        message = (
-            "Failed to start powermetrics due to missing sudo privileges. "
-            "Run `sudo agtop` and try again."
-        )
-    else:
-        message = "Failed to start powermetrics subprocess."
-        if returncode is not None:
-            message = "{} Exit code: {}.".format(message, returncode)
-    if stderr_text:
-        message = "{} Details: {}".format(message, stderr_text)
-    return message
-
-
-def _start_powermetrics_process(timecode, sample_interval):
-    def _spawn(include_extra_power_info):
-        return run_powermetrics_process(
-            timecode,
-            interval=sample_interval * 1000,
-            include_extra_power_info=include_extra_power_info,
-        )
-
-    try:
-        process = _spawn(include_extra_power_info=True)
-    except FileNotFoundError as e:
-        missing_bin = str(e).lower()
-        if "powermetrics" in missing_bin:
-            raise RuntimeError(
-                "Failed to start powermetrics: the `powermetrics` binary was not found. "
-                "agtop requires macOS with powermetrics available."
-            ) from e
-        raise RuntimeError(
-            "Failed to start powermetrics subprocess: {}".format(e)
-        ) from e
-    except PermissionError as e:
-        raise RuntimeError(
-            "Failed to start powermetrics due to missing sudo privileges. "
-            "Run `sudo agtop` and try again."
-        ) from e
-    except OSError as e:
-        raise RuntimeError(
-            "Failed to start powermetrics subprocess: {}".format(e)
-        ) from e
-
-    time.sleep(0.15)
-    if process.poll() is not None:
-        stderr_text = _read_powermetrics_stderr(process)
-        if (
-            "show-extra-power-info" in stderr_text.lower()
-            and "unrecognized" in stderr_text.lower()
-        ):
-            try:
-                process = _spawn(include_extra_power_info=False)
-            except Exception:
-                process = None
-            if process is None:
-                raise RuntimeError(_build_powermetrics_start_error(stderr_text, None))
-            time.sleep(0.15)
-            if process.poll() is None:
-                return process
-            stderr_text = _read_powermetrics_stderr(process)
-        raise RuntimeError(
-            _build_powermetrics_start_error(stderr_text, process.returncode)
-        )
-    return process
 
 
 def _run_dashboard(args, runtime_state):
@@ -314,17 +208,17 @@ def _run_dashboard(args, runtime_state):
         COLOR_MODE_256,
         COLOR_MODE_TRUECOLOR,
     }
-    gradient_override = os.getenv("AGTOP_EXPERIMENTAL_GRADIENT")
+    gradient_override = os.getenv("AGTOP_GRADIENT") or os.getenv("AGTOP_EXPERIMENTAL_GRADIENT")
     if gradient_override is None:
         gradient_bars_enabled = dynamic_color_enabled
     else:
-        gradient_bars_enabled = gradient_override.strip() == "1"
+        gradient_bars_enabled = gradient_override.strip() != "0"
     GaugeClass = HGauge
     VGaugeClass = VGauge
     HChartClass = HChart
     if gradient_bars_enabled and dynamic_color_enabled:
         try:
-            from .experimental_gradient import (
+            from .gradient import (
                 GradientHGauge,
                 GradientVGauge,
                 GradientHChart,
@@ -347,7 +241,10 @@ def _run_dashboard(args, runtime_state):
         flush=True,
     )
     print("Get help at `https://github.com/binlecode/agtop`", flush=True)
-    print("P.S. You are recommended to run AGTOP with `sudo agtop`", flush=True)
+    print(
+        "P.S. Use AGTOP_FORCE_POWERMETRICS=1 sudo agtop for bandwidth/thermal data",
+        flush=True,
+    )
     print("", flush=True)
     print("\033[?25l", end="", flush=True)
     runtime_state["cursor_hidden"] = True
@@ -383,59 +280,72 @@ def _run_dashboard(args, runtime_state):
 
     p_core_count = max(0, int(soc_info_dict["p_core_count"]))
     p_core_gauges_all = [
-        VGaugeClass(val=0, color=base_color, border_color=base_color)
+        VGaugeClass(val=0, color=base_color, border_color=None)
         for _ in range(p_core_count)
     ]
-    p_core_gauges = p_core_gauges_all[:8]
-    p_core_gauges_ext = p_core_gauges_all[8:]
     p_core_history_charts_all = [
         HChartClass(title="P{}".format(i + 1), color=base_color)
         for i in range(p_core_count)
     ]
-    p_core_history_charts = p_core_history_charts_all[:8]
-    p_core_history_charts_ext = p_core_history_charts_all[8:]
     p_core_history_buffers = [
         deque([], maxlen=core_history_window) for _ in range(p_core_count)
     ]
 
-    p_core_gauge_split = []
-    if p_core_gauges:
-        p_core_gauge_split.append(HSplit(*p_core_gauges))
-    if p_core_gauges_ext:
-        p_core_gauge_split.append(HSplit(*p_core_gauges_ext))
-
-    p_core_history_split = []
-    if p_core_history_charts:
-        p_core_history_split.append(HSplit(*p_core_history_charts))
-    if p_core_history_charts_ext:
-        p_core_history_split.append(HSplit(*p_core_history_charts_ext))
+    p_core_items_per_row = 4
+    p_core_gauge_split = [
+        HSplit(*p_core_gauges_all[i : i + p_core_items_per_row])
+        for i in range(0, len(p_core_gauges_all), p_core_items_per_row)
+    ]
+    p_core_history_split = [
+        HSplit(*p_core_history_charts_all[i : i + p_core_items_per_row])
+        for i in range(0, len(p_core_history_charts_all), p_core_items_per_row)
+    ]
 
     show_core_gauges = args.show_cores and args.core_view in {"gauge", "both"}
     show_core_history = args.show_cores and args.core_view in {"history", "both"}
 
+    # === Row 1: Processor Utilization (E-CPU | P-CPU) ===
+    ecpu_elements = [HSplit(cpu1_gauge, ecpu_usage_chart)]
     if args.show_cores:
-        processor_gauges = [HSplit(cpu1_gauge, ecpu_usage_chart)]
         if show_core_gauges and e_core_gauges:
-            processor_gauges.append(HSplit(*e_core_gauges))
+            ecpu_elements.append(HSplit(*e_core_gauges))
         if show_core_history and e_core_history_charts:
-            processor_gauges.append(HSplit(*e_core_history_charts))
-        processor_gauges.append(HSplit(cpu2_gauge, pcpu_usage_chart))
+            ecpu_elements.append(HSplit(*e_core_history_charts))
+
+    ecpu_block = VSplit(
+        *ecpu_elements,
+        title="E-CPU",
+        border_color=base_color,
+    )
+
+    pcpu_elements = [HSplit(cpu2_gauge, pcpu_usage_chart)]
+    if args.show_cores:
         if show_core_gauges:
-            processor_gauges.extend(p_core_gauge_split)
-        if show_core_history:
-            processor_gauges.extend(p_core_history_split)
-        processor_gauges.append(HSplit(gpu_gauge, gpu_usage_chart))
-        processor_gauges.append(HSplit(ane_gauge, ane_usage_chart))
-    else:
-        processor_gauges = [
-            HSplit(cpu1_gauge, ecpu_usage_chart),
-            HSplit(cpu2_gauge, pcpu_usage_chart),
-            HSplit(gpu_gauge, gpu_usage_chart),
-            HSplit(ane_gauge, ane_usage_chart),
-        ]
-    processor_split = VSplit(
-        *processor_gauges,
-        title="Processor Utilization",
+            pcpu_elements.extend(p_core_gauge_split)
+        # Keep P-core bars readable when both modes are enabled by
+        # avoiding extra per-core history rows in the same panel.
+        render_p_core_history_rows = show_core_history and not show_core_gauges
+        if render_p_core_history_rows:
+            pcpu_elements.extend(p_core_history_split)
+
+    pcpu_block = VSplit(
+        *pcpu_elements,
+        title="P-CPU",
+        border_color=base_color,
+    )
+
+    row1 = HSplit(
+        ecpu_block,
+        pcpu_block,
+        title="Processors",
+        border_color=base_color,
+    )
+
+    # === Row 2: GPU/ANE and Memory ===
+    gpu_ane_block = VSplit(
+        HSplit(gpu_gauge, gpu_usage_chart),
+        HSplit(ane_gauge, ane_usage_chart),
+        title="GPU & ANE",
         border_color=base_color,
     )
 
@@ -482,27 +392,26 @@ def _run_dashboard(args, runtime_state):
         title="Memory",
     )
 
+    row2 = HSplit(
+        gpu_ane_block,
+        memory_gauges,
+        title="Graphics & Memory",
+        border_color=base_color,
+    )
+
+    # === Row 3: Power and Processes ===
     cpu_power_chart = HChartClass(title="CPU Power", color=base_color)
     gpu_power_chart = HChartClass(title="GPU Power", color=base_color)
-    power_charts = (
-        VSplit(
-            cpu_power_chart,
-            gpu_power_chart,
-            title="Power Chart",
-            border_color=base_color,
-        )
-        if args.show_cores
-        else HSplit(
-            cpu_power_chart,
-            gpu_power_chart,
-            title="Power Chart",
-            border_color=base_color,
-        )
+    power_charts = HSplit(
+        cpu_power_chart,
+        gpu_power_chart,
+        title="Power Chart",
+        border_color=base_color,
     )
 
     process_display_count = 8
     process_list = Text(
-        "NAME                 CPU%   RSS\n(no data yet)",
+        "  PID NAME                      CPU%    RSS\n(no data yet)",
         color=base_color,
         border_color=base_color,
     )
@@ -512,25 +421,21 @@ def _run_dashboard(args, runtime_state):
         title="Processes (top CPU)",
     )
 
-    ui = (
-        HSplit(
-            processor_split,
-            VSplit(
-                memory_gauges,
-                power_charts,
-                process_panel,
-            ),
-        )
-        if args.show_cores
-        else VSplit(
-            processor_split,
-            memory_gauges,
-            power_charts,
-            process_panel,
-        )
+    row3 = HSplit(
+        power_charts,
+        process_panel,
+        title="Power & Processes",
+        border_color=base_color,
     )
 
-    usage_gauges = ui.items[0]
+    ui = VSplit(
+        row1,
+        row2,
+        row3,
+        border_color=base_color,
+    )
+
+    usage_gauges = ui
 
     cpu_title = "".join(
         [
@@ -566,40 +471,29 @@ def _run_dashboard(args, runtime_state):
     ane_usage_peak = 0
     ram_usage_peak = 0
 
-    print("[2/3] Starting powermetrics process ...", flush=True)
-
-    timecode = str(int(time.time()))
-
-    powermetrics_process = _start_powermetrics_process(timecode, sample_interval)
-    runtime_state["powermetrics_process"] = powermetrics_process
+    sampler, backend_name = create_sampler(sample_interval)
+    runtime_state["sampler"] = sampler
+    print("[2/3] Backend: {} ...".format(backend_name), flush=True)
 
     print("[3/3] Waiting for first reading ...", flush=True)
     print("", flush=True)
 
+    sampler.sample()  # prime first snapshot (IOReport needs two for delta)
+    time.sleep(sample_interval)
+
     first_reading_timeout_s = max(8.0, float(sample_interval) * 4.0)
-
-    def get_reading(wait=0.1):
-        start_wait = time.time()
-        ready = parse_powermetrics(timecode=timecode)
-        while not ready:
-            if powermetrics_process.poll() is not None:
-                stderr_text = _read_powermetrics_stderr(powermetrics_process)
-                raise RuntimeError(
-                    _build_powermetrics_start_error(
-                        stderr_text, powermetrics_process.returncode
-                    )
+    start_wait = time.time()
+    ready = sampler.sample()
+    while ready is None:
+        if time.time() - start_wait >= first_reading_timeout_s:
+            raise RuntimeError(
+                "Timed out waiting for first reading from {} backend.".format(
+                    backend_name
                 )
-            if time.time() - start_wait >= first_reading_timeout_s:
-                raise RuntimeError(
-                    "Timed out waiting for first powermetrics reading. "
-                    "Run `sudo agtop` to grant powermetrics access."
-                )
-            time.sleep(wait)
-            ready = parse_powermetrics(timecode=timecode)
-        return ready
-
-    ready = get_reading()
-    last_timestamp = ready[-1]
+            )
+        time.sleep(0.5)
+        ready = sampler.sample()
+    last_timestamp = ready.timestamp
 
     def get_avg(inlist):
         avg = sum(inlist) / len(inlist)
@@ -642,7 +536,7 @@ def _run_dashboard(args, runtime_state):
     swap_history_points = alert_sustain_samples + 1
     swap_used_history = deque([], maxlen=swap_history_points)
 
-    core_gauges = e_core_gauges + p_core_gauges + p_core_gauges_ext
+    core_gauges = e_core_gauges + p_core_gauges_all
     core_history_charts = e_core_history_charts + p_core_history_charts_all
     usage_track_charts = [
         ecpu_usage_chart,
@@ -664,14 +558,25 @@ def _run_dashboard(args, runtime_state):
             gauge.color = color_index
         cpu_power_chart.color = color_index
         gpu_power_chart.color = color_index
-        processor_split.border_color = color_index
+
+        ui.border_color = color_index
+        row1.border_color = color_index
+        row2.border_color = color_index
+        row3.border_color = color_index
+        ecpu_block.border_color = color_index
+        pcpu_block.border_color = color_index
+        gpu_ane_block.border_color = color_index
+
         memory_gauges.border_color = color_index
         memory_bandwidth_panel.border_color = color_index
         power_charts.border_color = color_index
         process_panel.border_color = color_index
         for gauge in core_gauges:
             gauge.color = color_index
-            gauge.border_color = color_index
+            if gauge in p_core_gauges_all:
+                gauge.border_color = None
+            else:
+                gauge.border_color = color_index
         for chart in core_history_charts:
             chart.color = color_index
         process_list.color = color_index
@@ -703,24 +608,14 @@ def _run_dashboard(args, runtime_state):
         if args.max_count > 0:
             if count >= args.max_count:
                 count = 0
-                _terminate_powermetrics_process(powermetrics_process)
-                powermetrics_process = None
-                runtime_state["powermetrics_process"] = None
-                timecode = str(int(time.time()))
-                powermetrics_process = _start_powermetrics_process(
-                    timecode, sample_interval
-                )
-                runtime_state["powermetrics_process"] = powermetrics_process
+                sampler.close()
+                sampler, backend_name = create_sampler(sample_interval)
+                runtime_state["sampler"] = sampler
+                sampler.sample()  # prime
+                time.sleep(sample_interval)
             count += 1
-        ready = parse_powermetrics(timecode=timecode)
-        if not ready and powermetrics_process.poll() is not None:
-            stderr_text = _read_powermetrics_stderr(powermetrics_process)
-            raise RuntimeError(
-                _build_powermetrics_start_error(
-                    stderr_text, powermetrics_process.returncode
-                )
-            )
-        if ready:
+        ready = sampler.sample()
+        if ready is not None:
             (
                 cpu_metrics_dict,
                 gpu_metrics_dict,
@@ -732,7 +627,7 @@ def _run_dashboard(args, runtime_state):
             if timestamp > last_timestamp:
                 last_timestamp = timestamp
 
-                thermal_alert = thermal_pressure != "Nominal"
+                thermal_alert = thermal_pressure not in ("Nominal", "Unknown")
 
                 system_core_usage = get_system_core_usage()
 
@@ -996,10 +891,11 @@ def _run_dashboard(args, runtime_state):
                 except Exception:
                     pass
                 cpu_processes = process_metrics.get("cpu", [])
-                process_rows = ["NAME                 CPU%   RSS"]
+                process_rows = ["  PID NAME                      CPU%    RSS"]
                 for proc in cpu_processes[:process_display_count]:
                     process_rows.append(
-                        "{:<20} {:>5.1f}% {:>5.1f}M".format(
+                        "{:>5} {:<24} {:>5.1f}% {:>5.1f}M".format(
+                            proc.get("pid", "?"),
                             _process_display_name(proc.get("command")),
                             max(0.0, float(proc.get("cpu_percent", 0.0) or 0.0)),
                             max(0.0, float(proc.get("rss_mb", 0.0) or 0.0)),
@@ -1259,7 +1155,10 @@ def _run_dashboard(args, runtime_state):
                         process_list.border_color = process_list.color
                         for gauge in core_gauges:
                             gauge.color = color_for(gauge.value)
-                            gauge.border_color = gauge.color
+                            if gauge in p_core_gauges_all:
+                                gauge.border_color = None
+                            else:
+                                gauge.border_color = gauge.color
                         for idx, chart in enumerate(e_core_history_charts):
                             history_val = (
                                 e_core_history_buffers[idx][-1]
@@ -1289,7 +1188,7 @@ def _run_dashboard(args, runtime_state):
 def main(args=None):
     if args is None:
         args = build_parser().parse_args()
-    runtime_state = {"powermetrics_process": None, "cursor_hidden": False}
+    runtime_state = {"sampler": None, "cursor_hidden": False}
     try:
         _run_dashboard(args, runtime_state)
         return 0
@@ -1297,7 +1196,9 @@ def main(args=None):
         print("Stopping...")
         return 130
     finally:
-        _terminate_powermetrics_process(runtime_state["powermetrics_process"])
+        sampler = runtime_state.get("sampler")
+        if sampler is not None:
+            sampler.close()
         if runtime_state["cursor_hidden"]:
             print("\033[?25h")
 
