@@ -1,3 +1,5 @@
+import re
+
 from agtop import utils
 
 
@@ -20,11 +22,11 @@ def test_ram_metrics_contract():
         "total_GB",
         "free_GB",
         "used_GB",
-        "free_percent",
+        "used_percent",
         "swap_total_GB",
         "swap_used_GB",
         "swap_free_GB",
-        "swap_free_percent",
+        "swap_used_percent",
     ]
     for key in required_keys:
         assert key in ram_metrics
@@ -32,11 +34,11 @@ def test_ram_metrics_contract():
     _assert_non_negative_number(ram_metrics["total_GB"])
     _assert_non_negative_number(ram_metrics["free_GB"])
     _assert_non_negative_number(ram_metrics["used_GB"])
-    _assert_percent_or_none(ram_metrics["free_percent"])
+    _assert_percent_or_none(ram_metrics["used_percent"])
     _assert_non_negative_number(ram_metrics["swap_total_GB"])
     _assert_non_negative_number(ram_metrics["swap_used_GB"])
     _assert_non_negative_number(ram_metrics["swap_free_GB"])
-    _assert_percent_or_none(ram_metrics["swap_free_percent"])
+    _assert_percent_or_none(ram_metrics["swap_used_percent"])
 
     assert ram_metrics["used_GB"] <= ram_metrics["total_GB"] + 0.5
     assert ram_metrics["free_GB"] <= ram_metrics["total_GB"] + 0.5
@@ -96,3 +98,18 @@ def test_top_processes_contract():
             _assert_non_negative_number(row.get("cpu_percent"))
             _assert_non_negative_number(row.get("rss_mb"))
             _assert_non_negative_number(row.get("memory_percent"))
+
+
+def test_top_processes_with_filter_contract():
+    # pytest runs as a Python process, so "python" always matches at least one
+    process_metrics = utils.get_top_processes(limit=100, proc_filter="python")
+
+    assert "cpu" in process_metrics
+    assert "memory" in process_metrics
+    assert len(process_metrics["cpu"]) >= 1
+
+    pattern = re.compile("python", re.IGNORECASE)
+    for proc in process_metrics["cpu"]:
+        assert pattern.search(proc["command"]), (
+            "Process command {!r} does not match filter".format(proc["command"])
+        )

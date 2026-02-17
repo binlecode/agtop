@@ -93,6 +93,18 @@ def test_cli_rejects_invalid_alert_sustain_samples():
     assert "sustain samples must be >= 1" in result.stderr
 
 
+def test_cli_rejects_removed_max_count_flag():
+    result = subprocess.run(
+        [sys.executable, "-m", "agtop.agtop", "--max_count", "10"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "unrecognized arguments" in result.stderr
+
+
 def test_module_import_is_safe_with_unrelated_argv():
     script = (
         "import sys; "

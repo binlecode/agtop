@@ -1,72 +1,26 @@
 # Release Operations Guide
 
-This guide is the canonical runbook for releasing `agtop` and publishing formula updates.
+This document serves two purposes:
 
-## Purpose
+1. **Tutorial** — explains the Homebrew packaging model, CI/CD component ownership, and end-to-end release flow so that new contributors (human or AI) can understand how releases work without reading CI workflow files.
+2. **Runbook** — provides step-by-step release instructions, operational rules, and failure recovery playbooks for day-to-day release execution.
 
-- Keep release operations deterministic.
-- Avoid duplicate/manual formula-sync commits (including Python resource updates).
-- Define clear ownership between local scripts and CI workflows.
+## Homebrew Packaging Model
 
-## Scope
+`agtop` uses Homebrew's Python virtualenv formula pattern:
 
-This guide covers:
+- Formula includes `Language::Python::Virtualenv` and depends on `python@3.13`.
+- `virtualenv_install_with_resources` creates a `libexec` venv and pip-installs declared `resource` blocks (blessed, dashing, psutil, wcwidth).
+- Brew upgrade logs showing `python3.13 -m venv` and `python3.13 -m pip` are expected — this is a self-contained CLI install, not a stale formula.
 
-- Version bump and tagging
-- CI/CD responsibilities
-- Formula synchronization
-- Homebrew Python packaging model (self-contained install behavior)
-- Post-release verification
-- Common failure playbooks
+## Component Ownership
 
-## Homebrew Packaging Model (Important)
-
-`agtop` uses Homebrew's Python virtualenv formula pattern by design.
-
-- Formula uses `include Language::Python::Virtualenv`.
-- Formula depends on Homebrew Python (`depends_on "python@3.13"`).
-- Install path uses `virtualenv_install_with_resources`, which creates `libexec` venv and pip-installs declared `resource` blocks.
-- Result: brew upgrade logs that show `python3.13 -m venv ...` and `python3.13 -m pip ... blessed/dashing/psutil/wcwidth` are expected and correct.
-
-This behavior is intentional for a self-contained CLI install and does not indicate a stale formula by itself.
-
-## Components and Ownership
-
-### Local Operator (Maintainer)
-
-- Updates `pyproject.toml` version.
-- Updates `CHANGELOG.md`.
-- Runs local checks.
-- Creates/pushes release tag using `scripts/tag_release.sh`.
-
-### Script (`scripts/tag_release.sh`)
-
-- Verifies clean working tree.
-- Validates requested version matches `pyproject.toml`.
-- Fast-forwards local `main` from `origin/main`.
-- Pushes `main`.
-- Creates and pushes tag `vX.Y.Z`.
-
-It does **not** modify `Formula/agtop.rb`.
-
-### CI Workflow (`.github/workflows/main-ci.yml`)
-
-- Runs on `main` pushes.
-- Resolves Python version from `Formula/agtop.rb`.
-- Installs formula-style dependencies into isolated `.ci-venv`.
-- Verifies formula resources match runtime dependency resolution in a separate clean venv.
-- Runs lint/format check/help/tests.
-
-### CI Workflow (`.github/workflows/release-formula.yml`)
-
-- Runs on `v*` tag pushes.
-- Supports manual `workflow_dispatch` with `tag_name` and `refresh_resources` toggle.
-- Validates tag version against `pyproject.toml` from the tag commit.
-- Computes tarball SHA256 for the tag.
-- Updates `Formula/agtop.rb` `url` + `sha256`.
-- Regenerates Python `resource` blocks from the release tarball dependency resolution by default.
-- Pushes a formula-sync commit to `main`.
-- Uses serialized concurrency + retry loop to reduce push-race failures.
+| Component | Responsibility |
+| --- | --- |
+| **Maintainer** | Bumps `pyproject.toml` version, updates `CHANGELOG.md`, runs local checks, triggers release |
+| **`scripts/tag_release.sh`** | Verifies clean tree, validates version vs `pyproject.toml`, fast-forwards local `main`, pushes `main`, creates and pushes `vX.Y.Z` tag. Does **not** modify `Formula/agtop.rb` |
+| **`main-ci.yml`** | Runs on `main` push. Resolves Python version from formula, installs formula-style deps, verifies resource alignment, runs lint/format/help/tests |
+| **`release-formula.yml`** | Runs on `v*` tag push (or manual `workflow_dispatch`). Validates tag/version match, computes tarball SHA256, updates formula `url` + `sha256`, regenerates `resource` blocks, pushes formula-sync commit to `main`. Serialized concurrency + retry to avoid push races |
 
 ## End-to-End Flow
 
@@ -81,20 +35,19 @@ local commit (version + changelog)
             -> main-ci (formula-sync push)
 ```
 
-## Happy Path (Standard Release)
+## Release Steps
 
-1. Ensure clean working tree.
+### 1. Clean working tree
 
 ```bash
 git status --short
 ```
 
-2. Update release metadata.
+### 2. Bump version and changelog
 
-- `pyproject.toml` `[project].version`
-- `CHANGELOG.md` (move completed items from `Unreleased` to new version section)
+Edit `pyproject.toml` (`[project].version`) and `CHANGELOG.md` (move items from `Unreleased` to new version section with date).
 
-3. Run required checks.
+### 3. Run checks
 
 ```bash
 .venv/bin/python -m ruff check --fix .
@@ -103,163 +56,83 @@ git status --short
 .venv/bin/pytest -q
 ```
 
-4. Commit release metadata.
+### 4. Commit and tag
 
 ```bash
-export VERSION="0.1.8"
 git add pyproject.toml CHANGELOG.md
 git commit -m "Release v$VERSION"
-```
-
-5. Push via release helper.
-
-```bash
 scripts/tag_release.sh "$VERSION"
 ```
 
-6. Monitor workflows.
+### 5. Monitor CI
 
 ```bash
 gh run list -R binlecode/agtop --limit 10
 ```
 
-7. Verify formula and install path.
+Wait for both `main-ci` and `release-formula` to complete successfully.
+
+### 6. Verify
 
 ```bash
-sed -n '1,20p' Formula/agtop.rb
-brew update
-brew upgrade binlecode/agtop/agtop
+git pull --ff-only origin main          # pull formula-sync commit
+sed -n '1,20p' Formula/agtop.rb        # confirm url + sha256
+brew update && brew upgrade binlecode/agtop/agtop
 brew info binlecode/agtop/agtop
 ```
 
-## Do / Do Not
+## Rules
 
-### Do
-
-- Use `scripts/tag_release.sh` for release tags.
+**Do:**
+- Use `scripts/tag_release.sh` for all release tags.
 - Let `release-formula.yml` own formula sync commits.
-- Verify `main-ci` and `release-formula` after each release.
-- Treat venv/resource install lines in `brew upgrade` output as expected for this formula style.
-- Keep `refresh_resources=true` for normal releases so resources stay aligned.
+- Verify both CI workflows after each release.
+- Keep `refresh_resources=true` (default) for normal releases.
 
-### Do Not
-
-- Do not manually sync `Formula/agtop.rb` during normal releases.
-- Do not push a release tag before version/changelog are committed.
-- Do not force-push `main` during release windows.
-- Do not disable resource refresh except for short-lived emergency reruns.
+**Do not:**
+- Manually edit `Formula/agtop.rb` during releases.
+- Push a tag before version/changelog are committed.
+- Force-push `main` during release windows.
+- Disable resource refresh except for emergency reruns.
 
 ## Failure Playbooks
 
-### 1) `scripts/tag_release.sh` fails on `git pull --ff-only`
+### `tag_release.sh` fails on `git pull --ff-only`
 
-Meaning: local `main` is behind/diverged.
-
-Action:
+Local `main` is behind or diverged.
 
 ```bash
-git fetch origin
-git checkout main
-git pull --ff-only origin main
+git fetch origin && git checkout main && git pull --ff-only origin main
+scripts/tag_release.sh "$VERSION"
 ```
 
-Then re-run `scripts/tag_release.sh`.
+### `release-formula` fails with tag/version mismatch
 
-### 2) `release-formula` fails with tag/version mismatch
+Tag `vX.Y.Z` does not match `pyproject.toml` in the tag commit. Fix the version, create a new commit and tag (do not reuse the old tag).
 
-Meaning: tag `vX.Y.Z` does not match `pyproject.toml` version in tag commit.
+### `release-formula` fails with push race
 
-Action:
+Rare due to serialized concurrency. Wait for in-progress workflows to finish, then re-run the failed job from GitHub Actions UI.
 
-- Fix version in source.
-- Create a new release commit/tag (do not reuse old tag).
+### `main-ci` fails after formula-sync commit
 
-### 3) `release-formula` fails with push race
-
-Expected to be rare due to retry/concurrency.
-
-Action:
-
-- Wait for in-progress workflow completion.
-- Re-run failed job from GitHub Actions UI if needed.
-- If still failing, manually inspect `main` head and workflow logs before retry.
-
-### 4) Formula already up to date
-
-Workflow may exit successfully with "already up to date".
-
-Action:
-
-- No manual action needed.
-- Confirm formula content on `main`.
-
-### 5) `main-ci` fails after formula-sync commit
-
-Action:
-
-- Inspect failed run logs:
+Inspect logs, fix on `main` in a follow-up commit. If caused by resource drift, re-run `release-formula` with resource refresh enabled.
 
 ```bash
-gh run list -R binlecode/agtop --limit 10
 gh run view -R binlecode/agtop <RUN_ID> --log-failed
 ```
 
-- Fix issue on `main` in a follow-up commit.
+### Emergency rerun without resource refresh
 
-Common cause:
+Use `workflow_dispatch` with `refresh_resources=false` as a temporary workaround. Follow up with a normal run (`refresh_resources=true`) to restore full synchronization.
 
-- Formula resource drift check failed (missing/extra/version mismatch vs clean runtime dependency resolution).
-
-Action:
-
-- Re-run `release-formula` with resource refresh enabled or update formula resources.
-
-### 6) Brew output still shows pip installing Python resources after release
-
-Meaning:
-
-- Formula is using `virtualenv_install_with_resources`, so resource installation is expected.
-
-Action:
-
-- Confirm formula install method and resources:
+## Quick Reference
 
 ```bash
-sed -n '1,80p' Formula/agtop.rb
-brew deps --formula --include-requirements binlecode/agtop/agtop
-```
-
-- Do not treat these lines as a release failure by themselves.
-
-### 7) Emergency manual rerun without resource refresh
-
-Meaning:
-
-- A release rerun is needed and dependency/resource refresh must be temporarily bypassed.
-
-Action:
-
-- Use `workflow_dispatch` and set `refresh_resources=false` only as a temporary workaround.
-- Follow up with a normal run (`refresh_resources=true`) to restore full formula synchronization.
-
-## Operational Quick Commands
-
-```bash
-# latest runs
-gh run list -R binlecode/agtop --limit 12
-
-# inspect one run
-gh run view -R binlecode/agtop <RUN_ID>
+gh run list -R binlecode/agtop --limit 12          # recent CI runs
+gh run view -R binlecode/agtop <RUN_ID>             # inspect run
 gh run view -R binlecode/agtop <RUN_ID> --log-failed
-
-# confirm release tag exists remotely
-git ls-remote --tags origin "v*"
+git ls-remote --tags origin "v*"                     # remote tags
 ```
 
-## Source of Truth
-
-- Version: `pyproject.toml`
-- Release notes: `CHANGELOG.md`
-- Formula definition: `Formula/agtop.rb`
-- Tag helper: `scripts/tag_release.sh`
-- CI workflows: `.github/workflows/main-ci.yml`, `.github/workflows/release-formula.yml`
+**Source of truth:** version in `pyproject.toml`, notes in `CHANGELOG.md`, formula in `Formula/agtop.rb`, tag helper in `scripts/tag_release.sh`, CI in `.github/workflows/`.

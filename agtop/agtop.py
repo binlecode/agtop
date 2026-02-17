@@ -37,8 +37,8 @@ def build_parser():
     parser.add_argument(
         "--interval",
         type=int,
-        default=1,
-        help="Display interval and sampling interval for powermetrics (seconds)",
+        default=2,
+        help="Display and sampling interval in seconds",
     )
     parser.add_argument(
         "--color", type=int, default=2, help="Choose display color (0~8)"
@@ -47,7 +47,10 @@ def build_parser():
         "--avg", type=int, default=30, help="Interval for averaged values (seconds)"
     )
     parser.add_argument(
-        "--show_cores", action="store_true", help="Choose show cores mode"
+        "--show_cores",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable per-core panels (disable with --no-show_cores)",
     )
     parser.add_argument(
         "--core-view",
@@ -56,16 +59,10 @@ def build_parser():
         help="Per-core rendering mode for --show_cores: gauge, history, or both",
     )
     parser.add_argument(
-        "--max_count",
-        type=int,
-        default=0,
-        help="Max show count to restart powermetrics",
-    )
-    parser.add_argument(
         "--power-scale",
         choices=["auto", "profile"],
-        default="auto",
-        help="Power chart scaling mode: auto uses rolling peak, profile uses SoC reference",
+        default="profile",
+        help="Power chart scaling mode: profile uses SoC reference, auto uses rolling peak",
     )
     parser.add_argument(
         "--proc-filter",
@@ -208,7 +205,9 @@ def _run_dashboard(args, runtime_state):
         COLOR_MODE_256,
         COLOR_MODE_TRUECOLOR,
     }
-    gradient_override = os.getenv("AGTOP_GRADIENT") or os.getenv("AGTOP_EXPERIMENTAL_GRADIENT")
+    gradient_override = os.getenv("AGTOP_GRADIENT") or os.getenv(
+        "AGTOP_EXPERIMENTAL_GRADIENT"
+    )
     if gradient_override is None:
         gradient_bars_enabled = dynamic_color_enabled
     else:
@@ -216,17 +215,20 @@ def _run_dashboard(args, runtime_state):
     GaugeClass = HGauge
     VGaugeClass = VGauge
     HChartClass = HChart
+    TextClass = Text
     if gradient_bars_enabled and dynamic_color_enabled:
         try:
             from .gradient import (
                 GradientHGauge,
                 GradientVGauge,
                 GradientHChart,
+                GradientText,
             )
 
             GaugeClass = GradientHGauge
             VGaugeClass = GradientVGauge
             HChartClass = GradientHChart
+            TextClass = GradientText
         except Exception as e:
             print(
                 "Warning: gradient renderer init failed: {}. Using default renderer.".format(
@@ -241,10 +243,6 @@ def _run_dashboard(args, runtime_state):
         flush=True,
     )
     print("Get help at `https://github.com/binlecode/agtop`", flush=True)
-    print(
-        "P.S. Use AGTOP_FORCE_POWERMETRICS=1 sudo agtop for bandwidth/thermal data",
-        flush=True,
-    )
     print("", flush=True)
     print("\033[?25l", end="", flush=True)
     runtime_state["cursor_hidden"] = True
@@ -410,7 +408,7 @@ def _run_dashboard(args, runtime_state):
     )
 
     process_display_count = 8
-    process_list = Text(
+    process_list = TextClass(
         "  PID NAME                      CPU%    RSS\n(no data yet)",
         color=base_color,
         border_color=base_color,
@@ -602,18 +600,8 @@ def _run_dashboard(args, runtime_state):
     except Exception:
         pass
 
-    count = 0
     first_frame_rendered = False
     while True:
-        if args.max_count > 0:
-            if count >= args.max_count:
-                count = 0
-                sampler.close()
-                sampler, backend_name = create_sampler(sample_interval)
-                runtime_state["sampler"] = sampler
-                sampler.sample()  # prime
-                time.sleep(sample_interval)
-            count += 1
         ready = sampler.sample()
         if ready is not None:
             (
@@ -859,8 +847,8 @@ def _run_dashboard(args, runtime_state):
                             "GB",
                         ]
                     )
-                ram_gauge.value = ram_metrics_dict["free_percent"]
-                ram_used_percent = clamp_percent(ram_metrics_dict["free_percent"])
+                ram_gauge.value = ram_metrics_dict["used_percent"]
+                ram_used_percent = clamp_percent(ram_metrics_dict["used_percent"])
                 ram_usage_peak = max(ram_usage_peak, ram_used_percent)
                 avg_ram_usage_list.append(ram_used_percent)
                 swap_used_history.append(
@@ -892,18 +880,24 @@ def _run_dashboard(args, runtime_state):
                     pass
                 cpu_processes = process_metrics.get("cpu", [])
                 process_rows = ["  PID NAME                      CPU%    RSS"]
+                process_row_percents = [None]
                 for proc in cpu_processes[:process_display_count]:
+                    cpu_pct = max(0.0, float(proc.get("cpu_percent", 0.0) or 0.0))
                     process_rows.append(
                         "{:>5} {:<24} {:>5.1f}% {:>5.1f}M".format(
                             proc.get("pid", "?"),
                             _process_display_name(proc.get("command")),
-                            max(0.0, float(proc.get("cpu_percent", 0.0) or 0.0)),
+                            cpu_pct,
                             max(0.0, float(proc.get("rss_mb", 0.0) or 0.0)),
                         )
                     )
+                    process_row_percents.append(cpu_pct)
                 if len(process_rows) == 1:
                     process_rows.append("(no matching processes)")
+                    process_row_percents.append(None)
                 process_list.text = "\n".join(process_rows)
+                if hasattr(process_list, "line_percents"):
+                    process_list.line_percents = process_row_percents
 
                 if args.proc_filter:
                     filter_label = _shorten_process_command(
@@ -1135,7 +1129,7 @@ def _run_dashboard(args, runtime_state):
                         pcpu_usage_chart.color = color_for(pcpu_usage)
                         gpu_usage_chart.color = color_for(gpu_usage)
                         ane_usage_chart.color = color_for(ane_util_percent)
-                        ram_gauge.color = color_for(ram_metrics_dict["free_percent"])
+                        ram_gauge.color = color_for(ram_metrics_dict["used_percent"])
                         ram_usage_chart.color = color_for(ram_used_percent)
                         ecpu_bw_gauge.color = color_for(ecpu_bw_percent)
                         pcpu_bw_gauge.color = color_for(pcpu_bw_percent)
@@ -1152,7 +1146,7 @@ def _run_dashboard(args, runtime_state):
                             else 0.0
                         )
                         process_list.color = color_for(top_process_cpu)
-                        process_list.border_color = process_list.color
+                        process_list.border_color = None
                         for gauge in core_gauges:
                             gauge.color = color_for(gauge.value)
                             if gauge in p_core_gauges_all:

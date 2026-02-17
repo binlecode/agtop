@@ -1,14 +1,11 @@
-"""Unified metrics sampler with IOReport and powermetrics backends."""
+"""Unified metrics sampler with IOReport backend."""
 
-import os
 import plistlib
 import re
 import struct
 import subprocess
 import time
 from typing import NamedTuple
-
-from .utils import parse_powermetrics, run_powermetrics_process
 
 
 class SampleResult(NamedTuple):
@@ -205,78 +202,12 @@ class IOReportSampler:
         self._sub.close()
 
 
-class PowermetricsSampler:
-    """Fallback: existing powermetrics subprocess approach."""
-
-    def __init__(self, interval):
-        self._interval = interval
-        self._timecode = str(int(time.time()))
-        self._process = self._start_process()
-
-    def _start_process(self):
-        process = run_powermetrics_process(
-            self._timecode,
-            interval=self._interval * 1000,
-            include_extra_power_info=True,
-        )
-        time.sleep(0.15)
-        if process.poll() is not None:
-            stderr_text = _read_process_stderr(process)
-            if (
-                "show-extra-power-info" in stderr_text.lower()
-                and "unrecognized" in stderr_text.lower()
-            ):
-                process = run_powermetrics_process(
-                    self._timecode,
-                    interval=self._interval * 1000,
-                    include_extra_power_info=False,
-                )
-                time.sleep(0.15)
-                if process.poll() is None:
-                    return process
-                stderr_text = _read_process_stderr(process)
-            raise RuntimeError(
-                _build_powermetrics_error(stderr_text, process.returncode)
-            )
-        return process
-
-    def sample(self):
-        result = parse_powermetrics(timecode=self._timecode)
-        if not result:
-            if self._process is not None and self._process.poll() is not None:
-                stderr_text = _read_process_stderr(self._process)
-                raise RuntimeError(
-                    _build_powermetrics_error(stderr_text, self._process.returncode)
-                )
-            return None
-        cpu, gpu, thermal, bw, ts = result
-        return SampleResult(cpu, gpu, thermal, bw, ts)
-
-    def close(self):
-        if self._process is not None:
-            try:
-                self._process.terminate()
-            except Exception:
-                pass
-            self._process = None
-
-
 def create_sampler(interval):
-    """Try IOReport first, fall back to powermetrics.
+    """Create an IOReport sampler.
 
-    Returns (sampler, backend_name) where backend_name is
-    'ioreport' or 'powermetrics'.
+    Returns (sampler, backend_name) where backend_name is always 'ioreport'.
     """
-    if os.environ.get("AGTOP_FORCE_POWERMETRICS"):
-        return (PowermetricsSampler(interval), "powermetrics")
-
-    try:
-        sampler = IOReportSampler(interval)
-        return (sampler, "ioreport")
-    except Exception:
-        pass
-
-    return (PowermetricsSampler(interval), "powermetrics")
+    return (IOReportSampler(interval), "ioreport")
 
 
 # --- Private helpers ---
@@ -505,51 +436,3 @@ def _read_dvfs_tables():
             break
 
     return {"ecpu": ecpu, "pcpu": pcpu, "gpu": gpu}
-
-
-def _read_process_stderr(process):
-    """Read stderr from a terminated process."""
-    try:
-        _, stderr_data = process.communicate(timeout=0.2)
-    except Exception:
-        return ""
-    if not stderr_data:
-        return ""
-    try:
-        return stderr_data.decode("utf-8", errors="replace").strip()
-    except Exception:
-        return str(stderr_data).strip()
-
-
-def _build_powermetrics_error(stderr_text="", returncode=None):
-    """Build an error message for powermetrics failure."""
-    stderr_lower = stderr_text.lower()
-    if "powermetrics" in stderr_lower and (
-        "command not found" in stderr_lower or "no such file" in stderr_lower
-    ):
-        message = (
-            "Failed to start powermetrics: the `powermetrics` binary was "
-            "not found. agtop requires macOS with powermetrics available."
-        )
-    elif any(
-        token in stderr_lower
-        for token in [
-            "a password is required",
-            "terminal is required",
-            "no tty present",
-            "not in the sudoers",
-            "permission denied",
-            "operation not permitted",
-        ]
-    ):
-        message = (
-            "Failed to start powermetrics due to missing sudo privileges. "
-            "Run `sudo agtop` and try again."
-        )
-    else:
-        message = "Failed to start powermetrics subprocess."
-        if returncode is not None:
-            message = "{} Exit code: {}.".format(message, returncode)
-    if stderr_text:
-        message = "{} Details: {}".format(message, stderr_text)
-    return message

@@ -1,58 +1,40 @@
 import os
-import glob
 import subprocess
-from subprocess import PIPE
 import re
 import psutil
-from .parsers import (
-    parse_bandwidth_metrics,
-    parse_cpu_metrics,
-    parse_gpu_metrics,
-    parse_thermal_pressure,
-)
 from .soc_profiles import get_soc_profile
-import plistlib
 
 
-def parse_powermetrics(path="/tmp/agtop_powermetrics", timecode="0"):
-    data = None
+def _get_vm_stat_used_bytes():
+    """Return RAM used bytes matching Activity Monitor's formula.
+
+    Parses macOS ``vm_stat`` output to compute:
+        (Anonymous - Purgeable + Wired + CompressorOccupied) * page_size
+
+    Returns None on any failure.
+    """
     try:
-        with open(path + timecode, "rb") as fp:
-            data = fp.read()
-        data = data.split(b"\x00")
-        powermetrics_parse = plistlib.loads(data[-1])
-        thermal_pressure = parse_thermal_pressure(powermetrics_parse)
-        cpu_metrics_dict = parse_cpu_metrics(powermetrics_parse)
-        gpu_metrics_dict = parse_gpu_metrics(powermetrics_parse)
-        bandwidth_metrics = parse_bandwidth_metrics(powermetrics_parse)
-        timestamp = powermetrics_parse.get("timestamp", 0)
-        return (
-            cpu_metrics_dict,
-            gpu_metrics_dict,
-            thermal_pressure,
-            bandwidth_metrics,
-            timestamp,
-        )
+        raw = subprocess.check_output(["vm_stat"], timeout=5, text=True)
     except Exception:
-        if data:
-            if len(data) > 1:
-                try:
-                    powermetrics_parse = plistlib.loads(data[-2])
-                    thermal_pressure = parse_thermal_pressure(powermetrics_parse)
-                    cpu_metrics_dict = parse_cpu_metrics(powermetrics_parse)
-                    gpu_metrics_dict = parse_gpu_metrics(powermetrics_parse)
-                    bandwidth_metrics = parse_bandwidth_metrics(powermetrics_parse)
-                    timestamp = powermetrics_parse.get("timestamp", 0)
-                    return (
-                        cpu_metrics_dict,
-                        gpu_metrics_dict,
-                        thermal_pressure,
-                        bandwidth_metrics,
-                        timestamp,
-                    )
-                except Exception:
-                    return False
-        return False
+        return None
+    try:
+        lines = raw.splitlines()
+        # First line: "Mach Virtual Memory Statistics: (page size of NNNNN bytes)"
+        page_size = int(lines[0].split("page size of")[1].split("bytes")[0].strip())
+        stats = {}
+        for line in lines[1:]:
+            if ":" not in line:
+                continue
+            key, val = line.rsplit(":", 1)
+            stats[key.strip()] = int(val.strip().rstrip("."))
+        internal = stats.get("Anonymous pages", 0)
+        purgeable = stats.get("Pages purgeable", 0)
+        wired = stats.get("Pages wired down", 0)
+        compressor = stats.get("Pages occupied by compressor", 0)
+        used = (internal - purgeable + wired + compressor) * page_size
+        return used
+    except Exception:
+        return None
 
 
 def clear_console():
@@ -64,63 +46,28 @@ def convert_to_GB(value):
     return round(value / 1024 / 1024 / 1024, 1)
 
 
-def run_powermetrics_process(
-    timecode, nice=10, interval=1000, include_extra_power_info=True
-):
-    # ver, *_ = platform.mac_ver()
-    # major_ver = int(ver.split(".")[0])
-    for tmpf in glob.glob("/tmp/agtop_powermetrics*"):
-        try:
-            os.remove(tmpf)
-        except (FileNotFoundError, PermissionError, IsADirectoryError):
-            pass
-    output_file_flag = "-o"
-    command_parts = [
-        "sudo -n nice -n",
-        str(nice),
-        "powermetrics",
-        "--samplers cpu_power,gpu_power,ane_power,thermal",
-    ]
-    if include_extra_power_info:
-        command_parts.append("--show-extra-power-info")
-    command_parts.extend(
-        [
-            output_file_flag,
-            "/tmp/agtop_powermetrics" + timecode,
-            "-f plist",
-            "-i",
-            str(interval),
-        ]
-    )
-    command = " ".join(command_parts)
-    process = subprocess.Popen(command.split(" "), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    return process
-
-
 def get_ram_metrics_dict():
-    ram_metrics = psutil.virtual_memory()
-    swap_metrics = psutil.swap_memory()
-    total_GB = convert_to_GB(ram_metrics.total)
-    free_GB = convert_to_GB(ram_metrics.available)
-    used_GB = convert_to_GB(ram_metrics.total - ram_metrics.available)
-    swap_total_GB = convert_to_GB(swap_metrics.total)
-    swap_used_GB = convert_to_GB(swap_metrics.used)
-    swap_free_GB = convert_to_GB(swap_metrics.total - swap_metrics.used)
-    if swap_total_GB > 0:
-        swap_free_percent = int(100 - (swap_free_GB / swap_total_GB * 100))
+    total_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    used_bytes = _get_vm_stat_used_bytes()
+    free_bytes = max(0, total_bytes - used_bytes)
+    used_percent = min(100, int(used_bytes / total_bytes * 100))
+
+    swap = psutil.swap_memory()
+    if swap.total > 0:
+        swap_used_percent = int(swap.used / swap.total * 100)
     else:
-        swap_free_percent = None
-    ram_metrics_dict = {
-        "total_GB": round(total_GB, 1),
-        "free_GB": round(free_GB, 1),
-        "used_GB": round(used_GB, 1),
-        "free_percent": int(100 - (ram_metrics.available / ram_metrics.total * 100)),
-        "swap_total_GB": swap_total_GB,
-        "swap_used_GB": swap_used_GB,
-        "swap_free_GB": swap_free_GB,
-        "swap_free_percent": swap_free_percent,
+        swap_used_percent = None
+
+    return {
+        "total_GB": convert_to_GB(total_bytes),
+        "free_GB": convert_to_GB(free_bytes),
+        "used_GB": convert_to_GB(used_bytes),
+        "used_percent": used_percent,
+        "swap_total_GB": convert_to_GB(swap.total),
+        "swap_used_GB": convert_to_GB(swap.used),
+        "swap_free_GB": convert_to_GB(swap.total - swap.used),
+        "swap_used_percent": swap_used_percent,
     }
-    return ram_metrics_dict
 
 
 def get_cpu_info():

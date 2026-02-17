@@ -1,4 +1,4 @@
-from dashing.dashing import HGauge, VGauge, HChart, hbar_elements, vbar_elements
+from dashing.dashing import HGauge, VGauge, HChart, Text, hbar_elements, vbar_elements
 
 from .color_modes import value_to_rgb
 
@@ -128,3 +128,43 @@ class GradientHChart(_GradientRendererMixin, HChart):
                     cells.append((" ", None))
 
             print(tbox.t.move(tbox.x + dx, tbox.y) + self._render_cells(tbox.t, cells))
+
+
+class GradientText(_GradientRendererMixin, Text):
+    """Text widget where each line can have its own gradient color.
+
+    Set ``line_percents`` to a list of percent values (one per line)
+    to color each line independently based on its value.
+    Lines without a corresponding entry use the fallback ``self.color``.
+    """
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.line_percents = []
+
+    def _display(self, tbox, parent):
+        tbox = self._draw_borders_and_title(tbox)
+        lines = self.text.splitlines()
+        dx = 0
+        for dx, line in enumerate(lines):
+            if dx >= tbox.h:
+                break
+            pct = None
+            if dx < len(self.line_percents):
+                pct = self.line_percents[dx]
+
+            truncated = line[: tbox.w]
+            pad = " " * max(0, tbox.w - len(truncated))
+            move = tbox.t.move(tbox.x + dx, tbox.y)
+
+            if pct is not None:
+                cells = [(ch, pct) for ch in truncated] + [(" ", None)] * max(
+                    0, tbox.w - len(truncated)
+                )
+                print(move + self._render_cells(tbox.t, cells))
+            else:
+                print(tbox.t.color(self.color) + move + truncated + pad)
+        dx += 1
+        while dx < tbox.h:
+            print(tbox.t.move(tbox.x + dx, tbox.y) + " " * tbox.w)
+            dx += 1

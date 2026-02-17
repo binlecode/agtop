@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agtop"
-version = "0.1.10"
+version = "0.2.0"
 description = "Performance monitoring CLI tool for Apple Silicon"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
   { name = "binlecode", email = "bin.le.code@gmail.com" },
 ]
-keywords = ["agtop", "apple-silicon", "powermetrics"]
+keywords = ["agtop", "apple-silicon", "ioreport", "performance-monitor"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",

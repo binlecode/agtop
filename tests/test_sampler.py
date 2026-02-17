@@ -1,24 +1,7 @@
 import sys
+import time
 
 import pytest
-
-from agtop.sampler import SampleResult
-
-
-def test_sample_result_unpacking():
-    result = SampleResult(
-        cpu_metrics={"cpu_W": 1.0},
-        gpu_metrics={"freq_MHz": 500},
-        thermal_pressure="Nominal",
-        bandwidth_metrics={"_available": False},
-        timestamp=1000.0,
-    )
-    cpu, gpu, thermal, bw, ts = result
-    assert cpu == {"cpu_W": 1.0}
-    assert gpu == {"freq_MHz": 500}
-    assert thermal == "Nominal"
-    assert bw == {"_available": False}
-    assert ts == 1000.0
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
@@ -28,10 +11,82 @@ def test_create_sampler_returns_sampler_and_backend():
     try:
         sampler, backend = create_sampler(1)
     except RuntimeError:
-        pytest.skip("Neither IOReport nor powermetrics available")
+        pytest.skip("IOReport not available")
     try:
-        assert backend in ("ioreport", "powermetrics")
+        assert backend == "ioreport"
         assert hasattr(sampler, "sample")
         assert hasattr(sampler, "close")
+    finally:
+        sampler.close()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
+def test_sampler_sample_returns_valid_metrics():
+    from agtop.sampler import SampleResult, create_sampler
+
+    try:
+        sampler, _ = create_sampler(1)
+    except RuntimeError:
+        pytest.skip("IOReport not available")
+    try:
+        # First call primes the delta (returns None)
+        first = sampler.sample()
+        assert first is None
+
+        time.sleep(1)
+
+        # Retry until a valid result or timeout
+        result = None
+        deadline = time.monotonic() + 5.0
+        while result is None and time.monotonic() < deadline:
+            result = sampler.sample()
+            if result is None:
+                time.sleep(0.5)
+
+        assert result is not None, "Sampler did not produce a reading within timeout"
+        assert isinstance(result, SampleResult)
+
+        cpu, gpu, thermal, bw, ts = result
+
+        # CPU metrics contract — keys consumed by agtop.py
+        assert isinstance(cpu, dict)
+        for key in [
+            "E-Cluster_active",
+            "E-Cluster_freq_Mhz",
+            "P-Cluster_active",
+            "P-Cluster_freq_Mhz",
+            "ane_W",
+            "cpu_W",
+            "gpu_W",
+            "package_W",
+            "e_core",
+            "p_core",
+        ]:
+            assert key in cpu, "Missing CPU metric key: {}".format(key)
+        assert isinstance(cpu["e_core"], list)
+        assert isinstance(cpu["p_core"], list)
+        assert cpu["cpu_W"] >= 0
+        assert cpu["gpu_W"] >= 0
+        assert cpu["ane_W"] >= 0
+        assert cpu["package_W"] >= 0
+
+        # GPU metrics contract
+        assert isinstance(gpu, dict)
+        assert "freq_MHz" in gpu
+        assert "active" in gpu
+        assert isinstance(gpu["active"], int)
+        assert 0 <= gpu["active"] <= 100
+
+        # Thermal pressure
+        assert isinstance(thermal, str)
+
+        # Bandwidth metrics contract
+        assert isinstance(bw, dict)
+        assert "_available" in bw
+        assert isinstance(bw["_available"], bool)
+
+        # Timestamp
+        assert isinstance(ts, (int, float))
+        assert ts > 0
     finally:
         sampler.close()
