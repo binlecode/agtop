@@ -1,17 +1,14 @@
-import sys
 import time
 
 import pytest
 
+from agtop.sampler import SampleResult, create_sampler
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
+pytestmark = pytest.mark.local
+
+
 def test_create_sampler_returns_sampler_and_backend():
-    from agtop.sampler import create_sampler
-
-    try:
-        sampler, backend = create_sampler(1)
-    except RuntimeError:
-        pytest.skip("IOReport not available")
+    sampler, backend = create_sampler(1)
     try:
         assert backend == "ioreport"
         assert hasattr(sampler, "sample")
@@ -20,14 +17,8 @@ def test_create_sampler_returns_sampler_and_backend():
         sampler.close()
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
 def test_sampler_sample_returns_valid_metrics():
-    from agtop.sampler import SampleResult, create_sampler
-
-    try:
-        sampler, _ = create_sampler(1)
-    except RuntimeError:
-        pytest.skip("IOReport not available")
+    sampler, _ = create_sampler(1)
     try:
         # First call primes the delta (returns None)
         first = sampler.sample()

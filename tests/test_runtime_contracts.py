@@ -1,6 +1,10 @@
 import re
 
+import pytest
+
 from agtop import utils
+
+pytestmark = pytest.mark.local
 
 
 def _assert_percent_or_none(value):

@@ -1,12 +1,11 @@
-import sys
-
 import pytest
 
+from agtop.ioreport import cf_release, cfstr, from_cfstr, IOReportSubscription
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
+pytestmark = pytest.mark.local
+
+
 def test_cfstr_from_cfstr_roundtrip():
-    from agtop.ioreport import cf_release, cfstr, from_cfstr
-
     test_str = "Hello, IOReport!"
     ref = cfstr(test_str)
     assert ref is not None
@@ -15,10 +14,7 @@ def test_cfstr_from_cfstr_roundtrip():
     assert result == test_str
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
 def test_subscription_sample_returns_ref():
-    from agtop.ioreport import IOReportSubscription, cf_release
-
     sub = IOReportSubscription([("Energy Model", None)])
     try:
         sample = sub.sample()

@@ -71,10 +71,16 @@ jobs:
           .ci-venv/bin/python -m pip install -e .
           .ci-venv/bin/python -m pip install ruff pytest
 
-      - name: Lint, format check, and tests
+      - name: Lint and format check
         run: |
           set -euo pipefail
           .ci-venv/bin/python -m ruff check .
           .ci-venv/bin/python -m ruff format --check .
-          .ci-venv/bin/python -m agtop.agtop --help
-          .ci-venv/bin/pytest -q
+
+      - name: Run CI-safe tests
+        run: |
+          set -euo pipefail
+          .ci-venv/bin/python -m pytest -m "not local" -q
+
+      - name: CLI smoke test
+        run: .ci-venv/bin/python -m agtop.agtop --help
