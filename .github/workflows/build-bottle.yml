@@ -78,7 +78,7 @@ jobs:
         uses: Homebrew/actions/setup-homebrew@master
 
       - name: Tap formula
-        run: brew tap binlecode/agtop
+        run: brew tap binlecode/agtop https://github.com/binlecode/agtop
 
       - name: Install formula from source (build-bottle mode)
         run: brew install --build-bottle binlecode/agtop/agtop
@@ -127,7 +127,7 @@ jobs:
 
       - name: Compute formula with bottle block
         run: |
-          brew tap binlecode/agtop
+          brew tap binlecode/agtop https://github.com/binlecode/agtop
           TAP_REPO="$(brew --repository binlecode/agtop)"
           cp Formula/agtop.rb "${TAP_REPO}/Formula/agtop.rb"
           brew bottle --merge --write --no-commit *.bottle.json
