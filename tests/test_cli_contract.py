@@ -19,6 +19,7 @@ def test_cli_help_runs_and_exposes_show_cores_as_flag():
     assert "--alert-package-power-percent ALERT_PACKAGE_POWER_PERCENT" in result.stdout
     assert "--alert-swap-rise-gb ALERT_SWAP_RISE_GB" in result.stdout
     assert "--alert-sustain-samples ALERT_SUSTAIN_SAMPLES" in result.stdout
+    assert "--subsamples SUBSAMPLES" in result.stdout
 
 
 def test_cli_rejects_legacy_show_cores_value_form():
@@ -103,6 +104,18 @@ def test_cli_rejects_removed_max_count_flag():
 
     assert result.returncode == 2
     assert "unrecognized arguments" in result.stderr
+
+
+def test_cli_rejects_invalid_subsamples_value():
+    result = subprocess.run(
+        [sys.executable, "-m", "agtop.agtop", "--subsamples", "0"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "subsamples must be >= 1" in result.stderr
 
 
 def test_module_import_is_safe_with_unrelated_argv():

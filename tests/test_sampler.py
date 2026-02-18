@@ -17,6 +17,15 @@ def test_create_sampler_returns_sampler_and_backend():
         sampler.close()
 
 
+def test_create_sampler_supports_subsamples_mode():
+    sampler, backend = create_sampler(1, subsamples=2)
+    try:
+        assert backend == "ioreport"
+        assert getattr(sampler, "manages_timing", False) is True
+    finally:
+        sampler.close()
+
+
 def test_sampler_sample_returns_valid_metrics():
     sampler, _ = create_sampler(1)
     try:
@@ -83,5 +92,7 @@ def test_sampler_sample_returns_valid_metrics():
         # Timestamp
         assert isinstance(ts, (int, float))
         assert ts > 0
+        assert result.cpu_temp_c >= 0.0
+        assert result.gpu_temp_c >= 0.0
     finally:
         sampler.close()

@@ -4,16 +4,12 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
-## [Unreleased]
-
-### Added
-- No changes yet.
+## [0.3.1] - 2026-02-17
 
 ### Changed
-- No changes yet.
-
-### Fixed
-- No changes yet.
+- Extracted `DashboardState` and `DashboardConfig` dataclasses into `agtop/state.py` and metric/widget update functions into `agtop/updaters.py`, slimming `_run_dashboard()` to a focused render loop.
+- Added `--subsamples` CLI option for sampler-level smoothing via multi-delta averaging within each interval.
+- Added cross-platform tests for state factories, metric updates, and widget binding.
 
 ## [0.3.0] - 2026-02-17
 

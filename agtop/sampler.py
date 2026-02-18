@@ -21,7 +21,7 @@ class SampleResult(NamedTuple):
 class IOReportSampler:
     """Direct IOReport sampling. No sudo required."""
 
-    def __init__(self, interval):
+    def __init__(self, interval, subsamples=1):
         from .ioreport import IOReportSubscription
         from .smc import SMCReader
 
@@ -33,6 +33,7 @@ class IOReportSampler:
             ]
         )
         self._interval = interval
+        self._subsamples = max(1, int(subsamples))
         self._prev_sample = None
         self._prev_time = None
         self._core_counts = _get_core_counts()
@@ -40,6 +41,35 @@ class IOReportSampler:
         self._smc = SMCReader()
 
     def sample(self):
+        if self._subsamples <= 1:
+            return self._sample_once(include_temperatures=True)
+
+        if self._prev_sample is None:
+            self._sample_once(include_temperatures=False)
+            return None
+
+        step_s = self._interval / float(self._subsamples)
+        parts = []
+        for _ in range(self._subsamples):
+            time.sleep(step_s)
+            part = self._sample_once(include_temperatures=False)
+            if part is not None:
+                parts.append(part)
+
+        if not parts:
+            return None
+
+        cpu_temp, gpu_temp = self._read_temperatures()
+        return self._average_samples(parts)._replace(
+            cpu_temp_c=cpu_temp,
+            gpu_temp_c=gpu_temp,
+        )
+
+    @property
+    def manages_timing(self):
+        return self._subsamples > 1
+
+    def _sample_once(self, include_temperatures):
         from .ioreport import cf_release
 
         new_sample = self._sub.sample()
@@ -60,11 +90,77 @@ class IOReportSampler:
         if elapsed_s <= 0:
             return None
 
-        temps = self._smc.read_temperatures()
-        cpu_temp = max(temps.cpu_temps_c) if temps.cpu_temps_c else 0.0
-        gpu_temp = max(temps.gpu_temps_c) if temps.gpu_temps_c else 0.0
+        if include_temperatures:
+            cpu_temp, gpu_temp = self._read_temperatures()
+        else:
+            cpu_temp = 0.0
+            gpu_temp = 0.0
 
         return self._convert(items, elapsed_s, cpu_temp, gpu_temp)
+
+    def _read_temperatures(self):
+        temps = self._smc.read_temperatures()
+        cpu_temps = temps.cpu_temps_c
+        gpu_temps = temps.gpu_temps_c
+        cpu_temp = max(cpu_temps) if cpu_temps else 0.0
+        gpu_temp = max(gpu_temps) if gpu_temps else 0.0
+        return (cpu_temp, gpu_temp)
+
+    def _average_samples(self, samples):
+        count = len(samples)
+        base = samples[-1]
+
+        cpu_metrics = {}
+        for key, value in base.cpu_metrics.items():
+            if isinstance(value, list):
+                cpu_metrics[key] = list(value)
+            elif isinstance(value, bool):
+                cpu_metrics[key] = value
+            elif isinstance(value, (int, float)):
+                avg = sum(float(s.cpu_metrics.get(key, 0.0)) for s in samples) / count
+                if _is_int_cpu_metric(key):
+                    cpu_metrics[key] = int(avg)
+                else:
+                    cpu_metrics[key] = avg
+            else:
+                cpu_metrics[key] = value
+
+        gpu_metrics = {}
+        for key, value in base.gpu_metrics.items():
+            if isinstance(value, bool):
+                gpu_metrics[key] = value
+            elif isinstance(value, (int, float)):
+                avg = sum(float(s.gpu_metrics.get(key, 0.0)) for s in samples) / count
+                if key in ("freq_MHz", "active"):
+                    gpu_metrics[key] = int(avg)
+                else:
+                    gpu_metrics[key] = avg
+            else:
+                gpu_metrics[key] = value
+
+        bandwidth_metrics = {}
+        for key, value in base.bandwidth_metrics.items():
+            if isinstance(value, bool):
+                bandwidth_metrics[key] = any(
+                    bool(s.bandwidth_metrics.get(key, False)) for s in samples
+                )
+            elif isinstance(value, (int, float)):
+                bandwidth_metrics[key] = (
+                    sum(float(s.bandwidth_metrics.get(key, 0.0)) for s in samples)
+                    / count
+                )
+            else:
+                bandwidth_metrics[key] = value
+
+        return SampleResult(
+            cpu_metrics=cpu_metrics,
+            gpu_metrics=gpu_metrics,
+            thermal_pressure=base.thermal_pressure,
+            bandwidth_metrics=bandwidth_metrics,
+            timestamp=base.timestamp,
+            cpu_temp_c=base.cpu_temp_c,
+            gpu_temp_c=base.gpu_temp_c,
+        )
 
     def _convert(self, items, elapsed_s, cpu_temp_c=0.0, gpu_temp_c=0.0):
         """Convert IOReport items to the same dict format as parsers.py output."""
@@ -213,12 +309,12 @@ class IOReportSampler:
         self._smc.close()
 
 
-def create_sampler(interval):
+def create_sampler(interval, subsamples=1):
     """Create an IOReport sampler.
 
     Returns (sampler, backend_name) where backend_name is always 'ioreport'.
     """
-    return (IOReportSampler(interval), "ioreport")
+    return (IOReportSampler(interval, subsamples=subsamples), "ioreport")
 
 
 # --- Private helpers ---
@@ -267,6 +363,17 @@ def _energy_to_joules(value, unit):
 
 
 _CORE_INDEX_PATTERN = re.compile(r"^[EP]CPU(\d+)")
+
+
+def _is_int_cpu_metric(key):
+    if key in (
+        "E-Cluster_active",
+        "E-Cluster_freq_Mhz",
+        "P-Cluster_active",
+        "P-Cluster_freq_Mhz",
+    ):
+        return True
+    return key.endswith("_active") or key.endswith("_freq_Mhz")
 
 
 def _parse_core_index(channel_name, prefix):
