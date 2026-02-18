@@ -91,7 +91,7 @@ jobs:
         run: |
           BOTTLE=$(find . -maxdepth 1 -name "agtop*.tar.gz" | head -1)
           echo "Uploading: ${BOTTLE}"
-          gh release upload "${TAG_NAME}" "${BOTTLE}" --clobber
+          gh release upload "${TAG_NAME}" "${BOTTLE}" --clobber --repo "${{ github.repository }}"
 
       - name: Upload bottle JSON as artifact
         uses: actions/upload-artifact@v4
