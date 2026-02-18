@@ -89,9 +89,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ needs.create-release.outputs.tag_name }}
         run: |
-          BOTTLE=$(find . -maxdepth 1 -name "agtop*.tar.gz" | head -1)
-          echo "Uploading: ${BOTTLE}"
-          gh release upload "${TAG_NAME}" "${BOTTLE}" --clobber --repo "${{ github.repository }}"
+          # brew bottle creates local_filename with double-dash (tap convention) but
+          # Homebrew's download URL uses the single-dash filename field. Rename before
+          # uploading so the release asset name matches what Homebrew will request.
+          LOCAL=$(find . -maxdepth 1 -name "agtop*.tar.gz" | head -1)
+          FILENAME=$(jq -r '.[].bottle.tags | to_entries[0].value.filename' agtop*.json)
+          mv "${LOCAL}" "${FILENAME}"
+          echo "Uploading: ${FILENAME}"
+          gh release upload "${TAG_NAME}" "${FILENAME}" --clobber --repo "${{ github.repository }}"
 
       - name: Upload bottle JSON as artifact
         uses: actions/upload-artifact@v4
