@@ -4,6 +4,13 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.3.2] - 2026-02-18
+
+### Added
+- Added runtime keyboard input: `q` to quit, `c`/`m`/`p` to toggle process sort by CPU%, RSS, or PID.
+- Added sort indicator (`*`) in process column header and sort label in panel title.
+- Added `agtop/input.py` module with `InteractiveState`, `handle_keypress()`, and `sort_processes()`.
+
 ## [0.3.1] - 2026-02-17
 
 ### Changed

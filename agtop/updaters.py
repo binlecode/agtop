@@ -5,6 +5,12 @@ import re
 
 import psutil
 
+from .input import (
+    SORT_CPU,
+    SORT_MEMORY,
+    SORT_PID,
+    SORT_LABELS,
+)
 from .power_scaling import (
     DEFAULT_CPU_FLOOR_W,
     DEFAULT_GPU_FLOOR_W,
@@ -356,7 +362,50 @@ def update_metrics(
     return True
 
 
-def update_widgets(state, widgets, config):
+def update_process_panel(state, widgets, config, interactive=None):
+    """Update only the process list text and panel title from current state."""
+    process_list = widgets["process_list"]
+    if interactive is not None and interactive.sort_mode == SORT_MEMORY:
+        process_rows = ["  PID NAME                      CPU%   *RSS"]
+    elif interactive is not None and interactive.sort_mode == SORT_PID:
+        process_rows = [" *PID NAME                      CPU%    RSS"]
+    else:
+        process_rows = ["  PID NAME                     *CPU%    RSS"]
+    for proc in state.cpu_processes[: config.process_display_count]:
+        cpu_pct = max(0.0, float(proc.get("cpu_percent", 0.0) or 0.0))
+        process_rows.append(
+            "{:>5} {:<24} {:>5.1f}% {:>5.1f}M".format(
+                proc.get("pid", "?"),
+                _process_display_name(proc.get("command")),
+                cpu_pct,
+                max(0.0, float(proc.get("rss_mb", 0.0) or 0.0)),
+            )
+        )
+    if len(process_rows) == 1:
+        process_rows.append("(no matching processes)")
+    process_list.text = "\n".join(process_rows)
+    if hasattr(process_list, "line_percents"):
+        process_list.line_percents = state.process_row_percents
+
+    process_panel = widgets["process_panel"]
+    title_parts = []
+    if interactive is not None and interactive.sort_mode != SORT_CPU:
+        title_parts.append("sort: {}".format(SORT_LABELS[interactive.sort_mode]))
+    if config.proc_filter_raw:
+        filter_label = _shorten_process_command(config.proc_filter_raw, max_len=28)
+        title_parts.append("filter: {}".format(filter_label))
+    if title_parts:
+        if not state.cpu_processes and config.proc_filter_raw:
+            process_panel.title = "Processes: no match ({})".format(
+                ", ".join(title_parts)
+            )
+        else:
+            process_panel.title = "Processes ({})".format(", ".join(title_parts))
+    else:
+        process_panel.title = "Processes (PID command CPU% RSS)"
+
+
+def update_widgets(state, widgets, config, interactive=None):
     """Write computed state values into widget objects. No computation."""
     cpu_temp_suffix = (
         " ({0:.0f}\u00b0C)".format(state.cpu_temp_c) if state.cpu_temp_c > 0 else ""
@@ -579,35 +628,7 @@ def update_widgets(state, widgets, config):
     )
     ram_usage_chart.append(state.ram_used_percent)
 
-    # Process list
-    process_list = widgets["process_list"]
-    process_rows = ["  PID NAME                      CPU%    RSS"]
-    for proc in state.cpu_processes[: config.process_display_count]:
-        cpu_pct = max(0.0, float(proc.get("cpu_percent", 0.0) or 0.0))
-        process_rows.append(
-            "{:>5} {:<24} {:>5.1f}% {:>5.1f}M".format(
-                proc.get("pid", "?"),
-                _process_display_name(proc.get("command")),
-                cpu_pct,
-                max(0.0, float(proc.get("rss_mb", 0.0) or 0.0)),
-            )
-        )
-    if len(process_rows) == 1:
-        process_rows.append("(no matching processes)")
-    process_list.text = "\n".join(process_rows)
-    if hasattr(process_list, "line_percents"):
-        process_list.line_percents = state.process_row_percents
-
-    # Process panel title
-    process_panel = widgets["process_panel"]
-    if config.proc_filter_raw:
-        filter_label = _shorten_process_command(config.proc_filter_raw, max_len=28)
-        if not state.cpu_processes:
-            process_panel.title = "Processes: no match ({})".format(filter_label)
-        else:
-            process_panel.title = "Processes (filter: {})".format(filter_label)
-    else:
-        process_panel.title = "Processes (PID command CPU% RSS)"
+    update_process_panel(state, widgets, config, interactive)
 
     # Bandwidth gauges
     ecpu_bw_gauge = widgets["ecpu_bw_gauge"]

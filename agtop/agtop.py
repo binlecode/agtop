@@ -2,6 +2,7 @@ import time
 import os
 import argparse
 import re
+from importlib.metadata import version as _pkg_version
 from blessed import Terminal
 from dashing import VSplit, HSplit, HGauge, HChart, VGauge, Text
 from .utils import (
@@ -19,6 +20,12 @@ from .color_modes import (
     detect_color_mode,
     parse_color_mode_override,
     value_to_color_index,
+)
+from .input import (
+    InteractiveState,
+    SORT_MEMORY,
+    handle_keypress,
+    sort_processes,
 )
 from .state import create_dashboard_config, create_dashboard_state
 from .updaters import (
@@ -158,6 +165,20 @@ def _validate_subsamples(value):
     return subsamples
 
 
+def _recompute_process_row_percents(state, config, sort_mode):
+    """Recompute process_row_percents based on the active sort mode."""
+    rows = [None]
+    for proc in state.cpu_processes[: config.process_display_count]:
+        if sort_mode == SORT_MEMORY:
+            pct = max(0.0, float(proc.get("memory_percent", 0.0) or 0.0))
+        else:
+            pct = max(0.0, float(proc.get("cpu_percent", 0.0) or 0.0))
+        rows.append(pct)
+    if len(rows) == 1:
+        rows.append(None)
+    state.process_row_percents = rows
+
+
 def _supports_cursor_addressing(terminal):
     try:
         return bool(terminal.move(0, 0))
@@ -221,7 +242,16 @@ def _run_dashboard(args, runtime_state):
             )
     base_color = 0 if color_mode == COLOR_MODE_MONO else args.color
 
-    print("AGTOP - Performance monitoring CLI tool for Apple Silicon", flush=True)
+    try:
+        _version = _pkg_version("agtop")
+    except Exception:
+        _version = "dev"
+    print(
+        "AGTOP v{} - Performance monitoring CLI tool for Apple Silicon".format(
+            _version
+        ),
+        flush=True,
+    )
     print(
         "Update with your package manager (for Homebrew: `brew upgrade agtop`)",
         flush=True,
@@ -477,6 +507,7 @@ def _run_dashboard(args, runtime_state):
 
     state = create_dashboard_state(config)
     state.last_timestamp = ready.timestamp
+    interactive = InteractiveState()
 
     core_gauges = e_core_gauges + p_core_gauges_all
     core_history_charts = e_core_history_charts + p_core_history_charts_all
@@ -546,44 +577,61 @@ def _run_dashboard(args, runtime_state):
         pass
 
     first_frame_rendered = False
-    while True:
-        ready = sampler.sample()
-        if ready is not None:
-            if ready.timestamp > state.last_timestamp:
-                system_core_usage = get_system_core_usage()
-                ram_metrics = get_ram_metrics_dict()
-                process_metrics = {"cpu": [], "memory": []}
-                try:
-                    process_metrics = get_top_processes(
-                        limit=config.process_display_count,
-                        proc_filter=config.process_filter_pattern,
-                    )
-                except Exception:
-                    pass
-
-                update_metrics(
-                    state,
-                    ready,
-                    config,
-                    system_core_usage,
-                    ram_metrics,
-                    process_metrics,
-                )
-                update_widgets(state, widgets, config)
-                if dynamic_color_enabled:
+    with terminal.cbreak():
+        while True:
+            ready = sampler.sample()
+            if ready is not None:
+                if ready.timestamp > state.last_timestamp:
+                    system_core_usage = get_system_core_usage()
+                    ram_metrics = get_ram_metrics_dict()
+                    process_metrics = {"cpu": [], "memory": []}
                     try:
-                        apply_dynamic_colors(state, widgets, config, color_for)
+                        process_metrics = get_top_processes(
+                            limit=config.process_display_count,
+                            proc_filter=config.process_filter_pattern,
+                        )
                     except Exception:
-                        dynamic_color_enabled = False
-                        reset_static_colors(args.color)
+                        pass
 
-            if use_full_clear_redraw or not first_frame_rendered:
-                print("\033[2J\033[H", end="", flush=True)
-            ui.display()
-            first_frame_rendered = True
+                    update_metrics(
+                        state,
+                        ready,
+                        config,
+                        system_core_usage,
+                        ram_metrics,
+                        process_metrics,
+                    )
+                    state.cpu_processes = sort_processes(
+                        process_metrics,
+                        interactive.sort_mode,
+                        config.process_display_count,
+                    )
+                    _recompute_process_row_percents(
+                        state, config, interactive.sort_mode
+                    )
+                    update_widgets(state, widgets, config, interactive)
+                    if dynamic_color_enabled:
+                        try:
+                            apply_dynamic_colors(state, widgets, config, color_for)
+                        except Exception:
+                            dynamic_color_enabled = False
+                            reset_static_colors(args.color)
 
-        if not sampler_manages_timing:
-            time.sleep(config.sample_interval)
+                if use_full_clear_redraw or not first_frame_rendered:
+                    print("\033[2J\033[H", end="", flush=True)
+                ui.display()
+                first_frame_rendered = True
+
+            if not sampler_manages_timing:
+                timeout = config.sample_interval
+            else:
+                timeout = 0
+            key = terminal.inkey(timeout=timeout)
+            while key:
+                handle_keypress(key, interactive)
+                if interactive.quit_requested:
+                    return
+                key = terminal.inkey(timeout=0)
 
 
 def main(args=None):
