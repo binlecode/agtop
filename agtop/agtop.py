@@ -265,16 +265,16 @@ def _run_dashboard(args, runtime_state):
     soc_info_dict = get_soc_info()
     config = create_dashboard_config(args, soc_info_dict)
 
-    cpu1_gauge = GaugeClass(title="E-CPU Usage", val=0, color=base_color)
-    cpu2_gauge = GaugeClass(title="P-CPU Usage", val=0, color=base_color)
-    gpu_gauge = GaugeClass(title="GPU Usage", val=0, color=base_color)
+    cpu1_gauge = GaugeClass(title="E-CPU", val=0, color=base_color)
+    cpu2_gauge = GaugeClass(title="P-CPU", val=0, color=base_color)
+    gpu_gauge = GaugeClass(title="GPU", val=0, color=base_color)
     ane_gauge = GaugeClass(title="ANE", val=0, color=base_color)
 
-    ecpu_usage_chart = HChartClass(title="E-CPU Track", color=base_color)
-    pcpu_usage_chart = HChartClass(title="P-CPU Track", color=base_color)
-    gpu_usage_chart = HChartClass(title="GPU Track", color=base_color)
-    ane_usage_chart = HChartClass(title="ANE Track", color=base_color)
-    ram_usage_chart = HChartClass(title="RAM Track", color=base_color)
+    ecpu_usage_chart = HChartClass(title="E-CPU", color=base_color)
+    pcpu_usage_chart = HChartClass(title="P-CPU", color=base_color)
+    gpu_usage_chart = HChartClass(title="GPU", color=base_color)
+    ane_usage_chart = HChartClass(title="ANE", color=base_color)
+    ram_usage_chart = HChartClass(title="RAM", color=base_color)
 
     e_core_gauges = [
         VGaugeClass(val=0, color=base_color, border_color=base_color)
@@ -350,7 +350,7 @@ def _run_dashboard(args, runtime_state):
         border_color=base_color,
     )
 
-    ram_gauge = GaugeClass(title="RAM Usage", val=0, color=base_color)
+    ram_gauge = GaugeClass(title="RAM", val=0, color=base_color)
     ecpu_bw_gauge = GaugeClass(title="E-CPU B/W: N/A", val=0, color=base_color)
     pcpu_bw_gauge = GaugeClass(title="P-CPU B/W: N/A", val=0, color=base_color)
     gpu_bw_gauge = GaugeClass(title="GPU B/W: N/A", val=0, color=base_color)

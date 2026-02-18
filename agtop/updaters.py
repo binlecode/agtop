@@ -418,11 +418,11 @@ def update_widgets(state, widgets, config, interactive=None):
     cpu1_gauge = widgets["cpu1_gauge"]
     cpu1_gauge.title = "".join(
         [
-            "E-CPU Usage: ",
+            "E-CPU ",
             str(state.ecpu_usage),
-            "% @ ",
+            "% @",
             str(state.ecpu_freq_mhz),
-            " MHz",
+            "MHz",
             cpu_temp_suffix,
         ]
     )
@@ -431,13 +431,13 @@ def update_widgets(state, widgets, config, interactive=None):
     ecpu_usage_chart = widgets["ecpu_usage_chart"]
     ecpu_usage_chart.title = "".join(
         [
-            "E-CPU Track: ",
+            "E-CPU ",
             str(state.ecpu_usage),
-            "% (avg: ",
+            "% avg:",
             "{0:.1f}".format(_get_avg(state.avg_ecpu_usage_list)),
-            "% peak: ",
+            " pk:",
             str(state.ecpu_usage_peak),
-            "%)",
+            "%",
         ]
     )
     ecpu_usage_chart.append(state.ecpu_usage)
@@ -446,11 +446,11 @@ def update_widgets(state, widgets, config, interactive=None):
     cpu2_gauge = widgets["cpu2_gauge"]
     cpu2_gauge.title = "".join(
         [
-            "P-CPU Usage: ",
+            "P-CPU ",
             str(state.pcpu_usage),
-            "% @ ",
+            "% @",
             str(state.pcpu_freq_mhz),
-            " MHz",
+            "MHz",
             cpu_temp_suffix,
         ]
     )
@@ -459,13 +459,13 @@ def update_widgets(state, widgets, config, interactive=None):
     pcpu_usage_chart = widgets["pcpu_usage_chart"]
     pcpu_usage_chart.title = "".join(
         [
-            "P-CPU Track: ",
+            "P-CPU ",
             str(state.pcpu_usage),
-            "% (avg: ",
+            "% avg:",
             "{0:.1f}".format(_get_avg(state.avg_pcpu_usage_list)),
-            "% peak: ",
+            " pk:",
             str(state.pcpu_usage_peak),
-            "%)",
+            "%",
         ]
     )
     pcpu_usage_chart.append(state.pcpu_usage)
@@ -533,11 +533,11 @@ def update_widgets(state, widgets, config, interactive=None):
     gpu_gauge = widgets["gpu_gauge"]
     gpu_gauge.title = "".join(
         [
-            "GPU Usage: ",
+            "GPU ",
             str(state.gpu_usage),
-            "% @ ",
+            "% @",
             str(state.gpu_freq_mhz),
-            " MHz",
+            "MHz",
             gpu_temp_suffix,
         ]
     )
@@ -546,13 +546,13 @@ def update_widgets(state, widgets, config, interactive=None):
     gpu_usage_chart = widgets["gpu_usage_chart"]
     gpu_usage_chart.title = "".join(
         [
-            "GPU Track: ",
+            "GPU ",
             str(state.gpu_usage),
-            "% (avg: ",
+            "% avg:",
             "{0:.1f}".format(_get_avg(state.avg_gpu_usage_list)),
-            "% peak: ",
+            " pk:",
             str(state.gpu_usage_peak),
-            "%)",
+            "%",
         ]
     )
     gpu_usage_chart.append(state.gpu_usage)
@@ -561,11 +561,11 @@ def update_widgets(state, widgets, config, interactive=None):
     ane_gauge = widgets["ane_gauge"]
     ane_gauge.title = "".join(
         [
-            "ANE Usage: ",
+            "ANE ",
             str(state.ane_util_percent),
-            "% @ ",
+            "% @",
             "{0:.1f}".format(state.ane_power_w),
-            " W",
+            "W",
         ]
     )
     ane_gauge.value = state.ane_util_percent
@@ -573,13 +573,13 @@ def update_widgets(state, widgets, config, interactive=None):
     ane_usage_chart = widgets["ane_usage_chart"]
     ane_usage_chart.title = "".join(
         [
-            "ANE Track: ",
+            "ANE ",
             str(state.ane_util_percent),
-            "% (avg: ",
+            "% avg:",
             "{0:.1f}".format(_get_avg(state.avg_ane_usage_list)),
-            "% peak: ",
+            " pk:",
             str(state.ane_usage_peak),
-            "%)",
+            "%",
         ]
     )
     ane_usage_chart.append(state.ane_util_percent)
@@ -590,22 +590,21 @@ def update_widgets(state, widgets, config, interactive=None):
     if ram.get("swap_total_GB", 0.0) < 0.1:
         ram_gauge.title = "".join(
             [
-                "RAM Usage: ",
+                "RAM ",
                 str(ram["used_GB"]),
                 "/",
                 str(ram["total_GB"]),
-                "GB - swap inactive",
+                "GB",
             ]
         )
     else:
         ram_gauge.title = "".join(
             [
-                "RAM Usage: ",
+                "RAM ",
                 str(ram["used_GB"]),
                 "/",
                 str(ram["total_GB"]),
-                "GB",
-                " - swap:",
+                "GB sw:",
                 str(ram["swap_used_GB"]),
                 "/",
                 str(ram["swap_total_GB"]),
@@ -617,13 +616,13 @@ def update_widgets(state, widgets, config, interactive=None):
     ram_usage_chart = widgets["ram_usage_chart"]
     ram_usage_chart.title = "".join(
         [
-            "RAM Track: ",
+            "RAM ",
             str(state.ram_used_percent),
-            "% (avg: ",
+            "% avg:",
             "{0:.1f}".format(_get_avg(state.avg_ram_usage_list)),
-            "% peak: ",
+            " pk:",
             str(state.ram_usage_peak),
-            "%)",
+            "%",
         ]
     )
     ram_usage_chart.append(state.ram_used_percent)
