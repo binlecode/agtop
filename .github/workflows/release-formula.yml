@@ -93,7 +93,7 @@ jobs:
             git checkout -B main origin/main
 
             sed -E -i '' "s|^  url \".*\"$|  url \"${URL}\"|" Formula/agtop.rb
-            sed -E -i '' "s|^  sha256 \"[0-9a-f]{64}\"$|  sha256 \"${SHA256}\"|" Formula/agtop.rb
+            sed -E -i '' "s|^  sha256 \".*\"$|  sha256 \"${SHA256}\"|" Formula/agtop.rb
 
             if [ "${REFRESH_RESOURCES}" = "true" ]; then
               TEMP_TAP="local/agtop-ci"
