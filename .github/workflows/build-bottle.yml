@@ -29,23 +29,14 @@ jobs:
       tag_name: ${{ steps.tag.outputs.name }}
 
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
       - name: Resolve tag name
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "name=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
           else
-            TAG=$(awk 'match($0, /refs\/tags\/([^"]+)/, a) { print a[1]; exit }' Formula/agtop.rb)
-            if [ -z "$TAG" ]; then
-              echo "Could not resolve tag from Formula/agtop.rb" >&2
-              exit 1
-            fi
-            echo "name=${TAG}" >> "$GITHUB_OUTPUT"
+            # For workflow_run triggered by a tag push, head_branch is the tag name.
+            echo "name=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create GitHub Release (if not already exists)
@@ -90,18 +81,23 @@ jobs:
           brew bottle --json \
             --root-url "https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}" \
             binlecode/agtop/agtop
+          echo "--- bottle files ---"
+          ls -1 *.tar.gz *.json 2>/dev/null || true
 
       - name: Upload bottle tarball to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ needs.create-release.outputs.tag_name }}
-        run: gh release upload "${TAG_NAME}" agtop*.bottle.tar.gz --clobber
+        run: |
+          BOTTLE=$(find . -maxdepth 1 -name "agtop*.tar.gz" | head -1)
+          echo "Uploading: ${BOTTLE}"
+          gh release upload "${TAG_NAME}" "${BOTTLE}" --clobber
 
       - name: Upload bottle JSON as artifact
         uses: actions/upload-artifact@v4
         with:
           name: bottle-json-${{ matrix.platform }}
-          path: "*.bottle.json"
+          path: "agtop*.json"
 
   # Merges both bottle JSONs into a `bottle do` block in Formula/agtop.rb and
   # commits the result to main.
@@ -130,7 +126,7 @@ jobs:
           brew tap binlecode/agtop https://github.com/binlecode/agtop
           TAP_REPO="$(brew --repository binlecode/agtop)"
           cp Formula/agtop.rb "${TAP_REPO}/Formula/agtop.rb"
-          brew bottle --merge --write --no-commit *.bottle.json
+          brew bottle --merge --write --no-commit agtop*.json
           cp "${TAP_REPO}/Formula/agtop.rb" /tmp/agtop_bottled.rb
 
       - name: Commit and push formula with bottle block
