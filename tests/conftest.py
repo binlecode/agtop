@@ -14,5 +14,6 @@ if sys.platform != "darwin":
     collect_ignore_glob += [
         "test_ioreport.py",
         "test_sampler.py",
+        "test_smc.py",
         "test_runtime_contracts.py",
     ]

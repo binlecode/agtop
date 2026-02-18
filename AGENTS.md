@@ -26,13 +26,14 @@
 | `agtop/agtop.py` | CLI entry point (`cli()`), argument parsing, dashboard layout and main render loop |
 | `agtop/sampler.py` | `IOReportSampler`: subscription lifecycle, delta computation, `SampleResult` conversion, DVFS table discovery via `ioreg` |
 | `agtop/ioreport.py` | ctypes bindings to `libIOReport.dylib` and CoreFoundation (`IOReportSubscription`, `cfstr`, `cf_release`) |
-| `agtop/utils.py` | System queries: `vm_stat` RAM metrics, `sysctl`/`system_profiler` SoC info, `psutil` process collection |
+| `agtop/smc.py` | SMC temperature reader: IOKit ctypes bindings to `AppleSMC`, key discovery, CPU/GPU die temperature reads |
+| `agtop/utils.py` | System queries: `psutil` RAM/swap metrics, `sysctl`/`system_profiler` SoC info, `psutil` process collection |
 | `agtop/soc_profiles.py` | 16 built-in M1–M4 SoC profiles with power/bandwidth reference values; tier fallbacks for unknown chips |
 | `agtop/power_scaling.py` | Power chart scaling: `auto` mode (rolling peak x1.25) vs `profile` mode (SoC reference wattage) |
 | `agtop/color_modes.py` | Terminal capability detection (mono/basic/256/truecolor) and percent-to-color-index mapping |
 | `agtop/gradient.py` | Per-cell gradient rendering subclasses for `dashing` gauge/chart/text widgets |
 
-**Data flow**: `ioreport.py` provides ctypes bindings for IOReport snapshots and deltas → `sampler.py` subscribes to Energy Model / CPU Stats / GPU Stats channels, computes deltas between consecutive snapshots, converts raw items into a `SampleResult` (power in watts, frequency in MHz, activity in percent) using DVFS tables read from `ioreg` at startup → `agtop.py` merges `SampleResult` with `psutil` per-core CPU usage, `vm_stat` RAM/swap metrics, and `psutil` top processes from `utils.py` → renders via `dashing` widgets with optional gradient coloring from `color_modes.py` and `gradient.py`.
+**Data flow**: `ioreport.py` provides ctypes bindings for IOReport snapshots and deltas → `sampler.py` subscribes to Energy Model / CPU Stats / GPU Stats channels, computes deltas between consecutive snapshots, reads SMC die temperatures via `smc.py`, and converts raw items into a `SampleResult` (power in watts, frequency in MHz, activity in percent, temperatures in °C) using DVFS tables read from `ioreg` at startup → `agtop.py` merges `SampleResult` with `psutil` per-core CPU usage, `psutil` RAM/swap metrics, and `psutil` top processes from `utils.py` → renders via `dashing` widgets with optional gradient coloring from `color_modes.py` and `gradient.py`.
 
 **SoC compatibility**: Explicit M1–M4 recognition (16 profiles). Unknown future chips fall back to tier defaults (base/Pro/Max/Ultra) using the latest known generation's reference values.
 

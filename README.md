@@ -19,6 +19,7 @@ The original `asitop` shells out to Apple's `powermetrics` CLI, a high-level too
 - **Process monitoring**: top CPU/RSS processes panel with optional regex filtering (`--proc-filter`).
 - **Profile-aware power scaling**: `profile` mode (default) scales charts against the SoC's known reference wattage for stable cross-session comparison; `auto` mode scales against rolling peak.
 - **SoC compatibility**: 16 built-in M1–M4 profiles (base, Pro, Max, Ultra). Unknown future chips fall back to tier-based defaults using the latest generation's reference values.
+- **CPU/GPU temperature**: reads die temperatures from the Apple SMC (System Management Controller) via IOKit ctypes. Displayed inline in gauge titles (e.g. "P-CPU Usage: 12% @ 3504 MHz (58°C)"). No sudo required.
 - **Adaptive terminal color**: auto-detects color capability (mono, 8-color, 256-color, truecolor) and applies gradient coloring to gauges, charts, and process rows based on utilization level.
 
 ## Installation
@@ -88,12 +89,15 @@ All CoreFoundation objects are managed via `CFRelease` to prevent memory leaks.
 
 At startup, reads `ioreg -a -r -d 1 -n pmgr` to get DVFS frequency tables from the power manager device node. Parses `voltage-states*` binary blobs as 8-byte `(freq_hz, voltage)` pairs and heuristically assigns tables to E-CPU, P-CPU, and GPU clusters. These translate opaque `V{n}P{m}` (CPU) and `P{n}` (GPU) state names into actual MHz values, computed as weighted averages across active P-states by residency time.
 
+### SMC (System Management Controller)
+
+Reads CPU and GPU die temperatures via IOKit ctypes bindings to the `AppleSMC` kernel service. Discovers temperature sensor keys (Tp*/Te* for CPU, Tg* for GPU) at startup and reads `flt ` (IEEE 754 float) values each sample. Runs unprivileged.
+
 ### System context
 
 - `sysctl`: SoC chip name, total/P/E core counts.
 - `system_profiler`: GPU core count.
-- `vm_stat` + `os.sysconf`: RAM usage matching Activity Monitor's formula (`(Anonymous - Purgeable + Wired + Compressor) * page_size`).
-- `psutil`: per-core CPU utilization (primary source, Activity Monitor-aligned; IOReport residency as fallback), swap usage, and process enumeration.
+- `psutil`: RAM/swap usage (`virtual_memory()`, `swap_memory()`), per-core CPU utilization (primary source, Activity Monitor-aligned; IOReport residency as fallback), and process enumeration.
 
 ### Signal Sources
 
@@ -103,7 +107,8 @@ At startup, reads `ioreg -a -r -d 1 -n pmgr` to get DVFS frequency tables from t
 | Per-core frequency (MHz) | IOReport residency + DVFS tables | Weighted average of active P-states |
 | Per-core activity (%) | `psutil.cpu_percent(percpu=True)` | IOReport residency as fallback |
 | GPU frequency and activity | IOReport GPU Performance States | Weighted average of GPUPH residencies |
-| RAM / swap | `vm_stat` + `os.sysconf` + `psutil` | Activity Monitor-compatible |
+| CPU/GPU temperature (°C) | SMC via IOKit ctypes | Max die temp per cluster |
+| RAM / swap | `psutil.virtual_memory()` + `psutil.swap_memory()` | `total - available` for used |
 | SoC profile | `sysctl` brand → 16 M1–M4 profiles | Tier fallbacks for unknown chips |
 | Top processes | `psutil.process_iter` | Optional `--proc-filter` regex |
 | Bandwidth | IOReport (when available) | N/A if DCS counters not exposed |
@@ -115,8 +120,9 @@ At startup, reads `ioreg -a -r -d 1 -n pmgr` to get DVFS frequency tables from t
 | --- | --- |
 | `agtop/agtop.py` | CLI entry point, argument parsing, dashboard layout, main render loop with rolling averages, peak tracking, and alert evaluation |
 | `agtop/ioreport.py` | ctypes bindings to `libIOReport.dylib` and CoreFoundation — `IOReportSubscription` lifecycle, snapshot, delta, and CF helpers |
-| `agtop/sampler.py` | `IOReportSampler`: two-snapshot delta logic, `SampleResult` conversion, DVFS table discovery from `ioreg pmgr` |
-| `agtop/utils.py` | System context: `vm_stat` RAM, `sysctl`/`system_profiler` SoC info, `psutil` CPU/swap/processes |
+| `agtop/sampler.py` | `IOReportSampler`: two-snapshot delta logic, `SampleResult` conversion, DVFS table discovery from `ioreg pmgr`, SMC temperature integration |
+| `agtop/smc.py` | SMC temperature reader: IOKit ctypes bindings to `AppleSMC`, key discovery, CPU/GPU die temperature reads |
+| `agtop/utils.py` | System context: `psutil` RAM/swap, `sysctl`/`system_profiler` SoC info, `psutil` CPU/processes |
 | `agtop/soc_profiles.py` | 16 `SocProfile` dataclasses (M1–M4) with reference wattage/bandwidth; tier fallbacks for unknown chips |
 | `agtop/power_scaling.py` | `power_to_percent()`: profile mode (SoC reference) vs auto mode (rolling peak x1.25) |
 | `agtop/color_modes.py` | Terminal color detection and utilization-to-color mapping (green → yellow → orange → red) |
@@ -133,7 +139,6 @@ graph TD
     subgraph "macOS System Commands"
         SYSCTL[sysctl<br/>CPU brand, core counts]
         SYSPROF[system_profiler<br/>GPU core count]
-        VMSTAT[vm_stat<br/>RAM page statistics]
     end
 
     subgraph "Python Libraries"
@@ -145,6 +150,7 @@ graph TD
     subgraph "agtop Modules"
         IORPY[ioreport.py<br/>ctypes bindings]
         SAMPLER[sampler.py<br/>IOReportSampler]
+        SMC[smc.py<br/>SMC temperature reader]
         UTILS[utils.py<br/>system context]
         PROFILES[soc_profiles.py<br/>M1-M4 profiles]
         POWER[power_scaling.py<br/>chart scaling]
@@ -158,11 +164,11 @@ graph TD
     IOKIT -->|ioreg -a -r -d 1 -n pmgr| SAMPLER
 
     IORPY -->|IOReportSubscription<br/>sample/delta| SAMPLER
+    SMC -->|TemperatureReading| SAMPLER
     SAMPLER -->|SampleResult| MAIN
 
     SYSCTL --> UTILS
     SYSPROF --> UTILS
-    VMSTAT --> UTILS
     PSUTIL --> UTILS
     UTILS -->|SoC info, RAM, processes| MAIN
 

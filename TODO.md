@@ -6,123 +6,11 @@ do well.
 
 ---
 
-## Phase 1: IOReport Migration (drop sudo, drop subprocess)
-
-**Goal:** Replace `powermetrics` subprocess + file IPC with direct IOReport
-calls. This is the highest-impact change: eliminates sudo, removes subprocess
-lifecycle, and enables faster sampling.
-
-### 1.1 Create `agtop/ioreport.py` — IOReport ctypes bindings
-
-New module wrapping the private `libIOReport.dylib` via Python `ctypes`.
-
-**Functions to bind:**
-```
-IOReportCopyChannelsInGroup(group, subgroup, 0, 0, 0) → CFDictionaryRef
-IOReportMergeChannels(ch1, ch2, NULL)
-IOReportCreateSubscription(NULL, channels, &sub, 0, NULL) → SubscriptionRef
-IOReportCreateSamples(subscription, channels, NULL) → CFDictionaryRef
-IOReportCreateSamplesDelta(sample1, sample2, NULL) → CFDictionaryRef
-IOReportChannelGetGroup(item) → CFStringRef
-IOReportChannelGetSubGroup(item) → CFStringRef
-IOReportChannelGetChannelName(item) → CFStringRef
-IOReportSimpleGetIntegerValue(item, 0) → int64
-IOReportStateGetCount(item) → int32
-IOReportStateGetNameForIndex(item, idx) → CFStringRef
-IOReportStateGetResidency(item, idx) → int64
-```
-
-**CoreFoundation helpers needed** (via `ctypes.cdll.LoadLibrary`):
-- `CFRelease`, `CFDictionaryGetCount`, `CFDictionaryCreateMutableCopy`
-- `CFArrayGetCount`, `CFArrayGetValueAtIndex`
-- `CFStringCreateWithCString`, `CFStringGetCString`
-- `CFDictionaryGetValue`
-
-**Reference implementation:** macmon's `sources.rs` lines 100-170 (IOReport
-bindings) and lines 500-600 (channel setup + subscription).
-
-**Files:**
-- Create: `agtop/ioreport.py`
-- Tests: `tests/test_ioreport.py`
-
-**Risks:**
-- Private API — no stability guarantee across macOS versions. Add version
-  detection and graceful fallback to powermetrics if IOReport fails.
-- ctypes + CoreFoundation is verbose. Consider `pyobjc-framework-IOKit` as
-  alternative if ctypes becomes unwieldy.
-
-### 1.2 Create `agtop/sampler.py` — unified metrics sampler
-
-New module that replaces `parse_powermetrics()` and `run_powermetrics_process()`
-from `utils.py`. Provides a clean interface for the main loop.
-
-**Class design:**
-```python
-class Sampler:
-    def __init__(self):
-        # Subscribe to IOReport channels:
-        #   ("Energy Model", None)        → power metrics
-        #   ("CPU Stats", "CPU Core Performance States") → CPU freq/residency
-        #   ("GPU Stats", "GPU Performance States")      → GPU freq/residency
-        # Fallback: spawn powermetrics if IOReport unavailable
-
-    def sample(self) -> SampleResult:
-        # Take two IOReport snapshots, compute delta
-        # Return structured metrics dict matching current format
-
-    def close(self):
-        # Release IOReport subscription (or kill powermetrics fallback)
-```
-
-**`SampleResult` fields** (matching current `parse_powermetrics` return tuple):
-- `cpu_metrics`: E/P-Cluster active %, freq MHz, per-core active %, power W
-- `gpu_metrics`: active %, freq MHz
-- `thermal_pressure`: str
-- `bandwidth_metrics`: dict of GB/s per subsystem
-- `timestamp`: float
-
-**Migration path:** `_run_dashboard()` currently calls `parse_powermetrics()`
-at line 739. Replace with `sampler.sample()`. The return format stays the same
-so the 250+ lines of widget-update code don't change.
-
-**Files:**
-- Create: `agtop/sampler.py`
-- Modify: `agtop/agtop.py` (replace `parse_powermetrics` + process management)
-- Modify: `agtop/utils.py` (deprecate `run_powermetrics_process`, `parse_powermetrics`)
-- Tests: `tests/test_sampler.py`
-
-### 1.3 Graceful fallback to powermetrics
-
-Keep powermetrics as a fallback for:
-- Older macOS versions where IOReport symbols differ
-- Bandwidth counters (less documented in IOReport)
-- Any IOReport initialization failure
-
-**Logic:**
-```python
-try:
-    sampler = IOReportSampler()
-except (OSError, AttributeError):
-    sampler = PowermetricsSampler(timecode, interval)
-```
-
-Print a one-line notice: `"Using powermetrics fallback (sudo required)"` or
-`"Using IOReport (sudoless)"`.
-
-### 1.4 Remove sudo requirement from CLI
-
-Once IOReport is the primary path:
-- Remove `sudo -n nice -n` prefix from powermetrics command (fallback only)
-- Update startup messages in `_run_dashboard()` (line 354-355)
-- Update `_build_powermetrics_start_error()` messages
-- Update README and help text
-
----
-
 ## Phase 2: Temperature Metrics
 
 **Goal:** Add CPU/GPU temperature display. Currently agtop shows thermal
-pressure (nominal/heavy/critical) but not actual degrees.
+pressure as "Unknown" (IOReport has no temperature channels). Actual die
+temperatures are available via SMC (no sudo required).
 
 ### 2.1 SMC reader via IOKit
 
@@ -135,14 +23,24 @@ macmon uses IOKit's `AppleSMC` service to read temperature sensors:
 **Approach:** Add `agtop/smc.py` using ctypes to call:
 ```
 IOServiceMatching("AppleSMC") → matching dict
-IOServiceGetMatchingService(kIOMasterPortDefault, matching) → service
+IOServiceGetMatchingServices → iterate to AppleSMCKeysEndpoint
+IOServiceOpen(device, mach_task_self(), 0, &conn)
+IOConnectCallStructMethod(conn, 2, &input, 80, &output, &80)
 ```
-Then use the SMC user client to read keys.
+Use 80-byte KeyData struct with selectors: 9=ReadKeyInfo, 5=ReadBytes.
+Temperature keys have type `"flt "` (4-byte IEEE float).
 
-**Alternative:** `pyobjc-framework-IOKit` provides higher-level access.
+**Dynamic key discovery** (like macmon): enumerate all SMC keys, filter for
+`data_type == "flt "` and `data_size == 4`, classify by prefix:
+- `Tp*` / `Te*` → CPU sensors
+- `Tg*` → GPU sensors
+
+This avoids hardcoding chip-specific key lists and provides forward
+compatibility with future chips.
 
 **Fallback:** IOHIDSensors for M1 chips (macmon uses `pACC MTR Temp Sensor*`
-and `GPU MTR Temp Sensor*` as HID fallback).
+and `GPU MTR Temp Sensor*` as HID fallback). Note: IOHID caps at ~80°C on
+macOS 14+, so SMC is preferred.
 
 ### 2.2 Display temperature in UI
 
@@ -160,7 +58,7 @@ and `GPU MTR Temp Sensor*` as HID fallback).
 
 ## Phase 3: Extract Data Model from `_run_dashboard()`
 
-**Goal:** Break the 1050-line monolithic function into testable components.
+**Goal:** Break the monolithic function into testable components.
 This is prerequisite for Phase 4 (interactivity) and general maintainability.
 
 ### 3.1 Extract `DashboardState` dataclass
@@ -198,14 +96,14 @@ class DashboardState:
 
 ### 3.2 Extract `update_metrics(state, sample, args)` function
 
-Move the ~200 lines of metric calculation (lines 756-1012) into a pure
-function that takes the current state + new sample and returns updated state.
-This becomes independently testable.
+Move the metric calculation lines into a pure function that takes the current
+state + new sample and returns updated state. This becomes independently
+testable.
 
 ### 3.3 Extract `update_widgets(state, widgets, args)` function
 
-Move the ~200 lines of widget property assignment (lines 801-1307) into a
-function that reads from `DashboardState` and writes to widget objects.
+Move the widget property assignment lines into a function that reads from
+`DashboardState` and writes to widget objects.
 
 ### 3.4 Slim down `_run_dashboard()`
 
@@ -282,12 +180,6 @@ Uses the already-collected `memory`-sorted list from `get_top_processes()`
 
 Lower-priority improvements, each independently shippable.
 
-### 5.1 DVFS frequency distribution
-
-IOReport provides per-core DVFS residency (time spent at each frequency step).
-macmon displays this. agtop currently shows only the average frequency. Add
-optional DVFS breakdown in the per-core view (`--show_cores`).
-
 ### 5.2 DRAM and GPU SRAM power
 
 IOReport's `"Energy Model"` group includes `DRAM*` and `GPU SRAM*` channels.
@@ -296,7 +188,8 @@ macmon displays these. Add to the power panel as additional lines.
 ### 5.3 System power (SMC `PSTR`)
 
 Total system power draw from the wall (or battery), not just CPU+GPU+ANE.
-Available via SMC key `PSTR`. Add to power panel title.
+Available via SMC key `PSTR`. Add to power panel title. Depends on Phase 2
+(SMC reader).
 
 ### 5.4 Responsive layout
 
@@ -313,14 +206,8 @@ Add configurable columns. MVP set: MEM%, user. Use the already-collected
 ## Dependency Map
 
 ```
-Phase 1 (IOReport)
-  ├── 1.1 ioreport.py bindings
-  ├── 1.2 sampler.py (depends on 1.1)
-  ├── 1.3 fallback logic (depends on 1.2)
-  └── 1.4 remove sudo (depends on 1.2)
-
 Phase 2 (Temperature)
-  └── 2.1 smc.py (independent of Phase 1)
+  └── 2.1 smc.py (independent)
   └── 2.2 UI display (depends on 2.1)
 
 Phase 3 (Refactor)
@@ -333,10 +220,10 @@ Phase 4 (Interactivity)
   └── 4.1-4.4 all depend on Phase 3
 
 Phase 5 (Polish)
-  ├── 5.1, 5.2, 5.3 depend on Phase 1 (IOReport access)
+  ├── 5.2, 5.3 depend on Phase 2 (SMC access)
   ├── 5.4 independent
   └── 5.5 independent
 ```
 
-Phases 1, 2, and 3 can proceed in parallel. Phase 4 requires Phase 3.
+Phases 2, 3 can proceed in parallel. Phase 4 requires Phase 3.
 Phase 5 items are independent and can be picked up opportunistically.

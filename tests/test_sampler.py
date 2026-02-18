@@ -37,7 +37,11 @@ def test_sampler_sample_returns_valid_metrics():
         assert result is not None, "Sampler did not produce a reading within timeout"
         assert isinstance(result, SampleResult)
 
-        cpu, gpu, thermal, bw, ts = result
+        cpu = result.cpu_metrics
+        gpu = result.gpu_metrics
+        thermal = result.thermal_pressure
+        bw = result.bandwidth_metrics
+        ts = result.timestamp
 
         # CPU metrics contract — keys consumed by agtop.py
         assert isinstance(cpu, dict)

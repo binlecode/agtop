@@ -610,6 +610,8 @@ def _run_dashboard(args, runtime_state):
                 thermal_pressure,
                 bandwidth_metrics,
                 timestamp,
+                cpu_temp_c,
+                gpu_temp_c,
             ) = ready
 
             if timestamp > last_timestamp:
@@ -657,6 +659,9 @@ def _run_dashboard(args, runtime_state):
                     else clamp_percent(cpu_metrics_dict["P-Cluster_active"])
                 )
 
+                cpu_temp_suffix = (
+                    " ({0:.0f}\u00b0C)".format(cpu_temp_c) if cpu_temp_c > 0 else ""
+                )
                 cpu1_gauge.title = "".join(
                     [
                         "E-CPU Usage: ",
@@ -664,6 +669,7 @@ def _run_dashboard(args, runtime_state):
                         "% @ ",
                         str(cpu_metrics_dict["E-Cluster_freq_Mhz"]),
                         " MHz",
+                        cpu_temp_suffix,
                     ]
                 )
                 cpu1_gauge.value = ecpu_usage
@@ -689,6 +695,7 @@ def _run_dashboard(args, runtime_state):
                         "% @ ",
                         str(cpu_metrics_dict["P-Cluster_freq_Mhz"]),
                         " MHz",
+                        cpu_temp_suffix,
                     ]
                 )
                 cpu2_gauge.value = pcpu_usage
@@ -766,6 +773,9 @@ def _run_dashboard(args, runtime_state):
                             p_core_history_buffers[core_count].append(core_active)
                             chart.append(core_active)
 
+                gpu_temp_suffix = (
+                    " ({0:.0f}\u00b0C)".format(gpu_temp_c) if gpu_temp_c > 0 else ""
+                )
                 gpu_gauge.title = "".join(
                     [
                         "GPU Usage: ",
@@ -773,6 +783,7 @@ def _run_dashboard(args, runtime_state):
                         "% @ ",
                         str(gpu_metrics_dict["freq_MHz"]),
                         " MHz",
+                        gpu_temp_suffix,
                     ]
                 )
                 gpu_gauge.value = gpu_metrics_dict["active"]

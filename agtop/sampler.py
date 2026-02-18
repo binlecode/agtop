@@ -14,6 +14,8 @@ class SampleResult(NamedTuple):
     thermal_pressure: str
     bandwidth_metrics: dict
     timestamp: float
+    cpu_temp_c: float = 0.0  # max CPU die temperature (Celsius), 0 if unavailable
+    gpu_temp_c: float = 0.0  # max GPU die temperature (Celsius), 0 if unavailable
 
 
 class IOReportSampler:
@@ -21,6 +23,7 @@ class IOReportSampler:
 
     def __init__(self, interval):
         from .ioreport import IOReportSubscription
+        from .smc import SMCReader
 
         self._sub = IOReportSubscription(
             [
@@ -34,6 +37,7 @@ class IOReportSampler:
         self._prev_time = None
         self._core_counts = _get_core_counts()
         self._dvfs = _read_dvfs_tables()
+        self._smc = SMCReader()
 
     def sample(self):
         from .ioreport import cf_release
@@ -56,9 +60,13 @@ class IOReportSampler:
         if elapsed_s <= 0:
             return None
 
-        return self._convert(items, elapsed_s)
+        temps = self._smc.read_temperatures()
+        cpu_temp = max(temps.cpu_temps_c) if temps.cpu_temps_c else 0.0
+        gpu_temp = max(temps.gpu_temps_c) if temps.gpu_temps_c else 0.0
 
-    def _convert(self, items, elapsed_s):
+        return self._convert(items, elapsed_s, cpu_temp, gpu_temp)
+
+    def _convert(self, items, elapsed_s, cpu_temp_c=0.0, gpu_temp_c=0.0):
         """Convert IOReport items to the same dict format as parsers.py output."""
         cpu_energy_j = 0.0
         gpu_energy_j = 0.0
@@ -191,6 +199,8 @@ class IOReportSampler:
             thermal_pressure="Unknown",
             bandwidth_metrics=bandwidth_metrics,
             timestamp=time.time(),
+            cpu_temp_c=cpu_temp_c,
+            gpu_temp_c=gpu_temp_c,
         )
 
     def close(self):
@@ -200,6 +210,7 @@ class IOReportSampler:
             cf_release(self._prev_sample)
             self._prev_sample = None
         self._sub.close()
+        self._smc.close()
 
 
 def create_sampler(interval):

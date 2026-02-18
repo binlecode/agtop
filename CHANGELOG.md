@@ -15,6 +15,16 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 ### Fixed
 - No changes yet.
 
+## [0.3.0] - 2026-02-17
+
+### Added
+- Added SMC temperature reader (`agtop/smc.py`) for CPU and GPU die temperatures via IOKit ctypes, no sudo required.
+- Added CPU and GPU temperature display in gauge titles (e.g. "P-CPU Usage: 12% @ 3504 MHz (58°C)").
+
+### Changed
+- Replaced `vm_stat` subprocess with `psutil.virtual_memory()` for RAM metrics, eliminating fork/exec overhead every sample interval.
+- Split test suite into CI-safe and macOS-local groups using pytest markers.
+
 ## [0.2.0] - 2026-02-17
 
 ### Added

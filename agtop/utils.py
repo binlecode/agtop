@@ -1,40 +1,7 @@
 import os
-import subprocess
 import re
 import psutil
 from .soc_profiles import get_soc_profile
-
-
-def _get_vm_stat_used_bytes():
-    """Return RAM used bytes matching Activity Monitor's formula.
-
-    Parses macOS ``vm_stat`` output to compute:
-        (Anonymous - Purgeable + Wired + CompressorOccupied) * page_size
-
-    Returns None on any failure.
-    """
-    try:
-        raw = subprocess.check_output(["vm_stat"], timeout=5, text=True)
-    except Exception:
-        return None
-    try:
-        lines = raw.splitlines()
-        # First line: "Mach Virtual Memory Statistics: (page size of NNNNN bytes)"
-        page_size = int(lines[0].split("page size of")[1].split("bytes")[0].strip())
-        stats = {}
-        for line in lines[1:]:
-            if ":" not in line:
-                continue
-            key, val = line.rsplit(":", 1)
-            stats[key.strip()] = int(val.strip().rstrip("."))
-        internal = stats.get("Anonymous pages", 0)
-        purgeable = stats.get("Pages purgeable", 0)
-        wired = stats.get("Pages wired down", 0)
-        compressor = stats.get("Pages occupied by compressor", 0)
-        used = (internal - purgeable + wired + compressor) * page_size
-        return used
-    except Exception:
-        return None
 
 
 def clear_console():
@@ -47,10 +14,13 @@ def convert_to_GB(value):
 
 
 def get_ram_metrics_dict():
-    total_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-    used_bytes = _get_vm_stat_used_bytes()
-    free_bytes = max(0, total_bytes - used_bytes)
-    used_percent = min(100, int(used_bytes / total_bytes * 100))
+    vm = psutil.virtual_memory()
+    total_bytes = vm.total
+    used_bytes = vm.total - vm.available
+    free_bytes = vm.available
+    used_percent = (
+        min(100, int(used_bytes / total_bytes * 100)) if total_bytes > 0 else 0
+    )
 
     swap = psutil.swap_memory()
     if swap.total > 0:
