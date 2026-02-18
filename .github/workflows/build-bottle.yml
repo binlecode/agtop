@@ -70,6 +70,8 @@ jobs:
             platform: arm64_sequoia
           - runner: macos-14
             platform: arm64_sonoma
+          - runner: macos-26
+            platform: arm64_tahoe
 
     steps:
       - name: Set up Homebrew
