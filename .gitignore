@@ -134,3 +134,4 @@ dmypy.json
 # Local tooling / OS artifacts
 .gemini/
 .DS_Store
+ref_mactop/
