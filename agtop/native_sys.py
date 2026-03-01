@@ -6,30 +6,138 @@ at sampler/utils initialisation).
 
 Dylib handles are module-level singletons; the OS caches dylib loads so
 loading the same path in multiple modules has no additional cost.
+
+All public functions return None/0/{} on non-Darwin platforms so that
+importing this module does not break CI or cross-platform tooling.
 """
 
 import ctypes
 import struct
+import sys
+
+_DARWIN = sys.platform == "darwin"
 
 # ---------------------------------------------------------------------------
-# libSystem (sysctl)
+# libSystem (sysctl) — macOS only
 # ---------------------------------------------------------------------------
 
-_libc = ctypes.cdll.LoadLibrary("/usr/lib/libSystem.B.dylib")
+if _DARWIN:
+    _libc = ctypes.cdll.LoadLibrary("/usr/lib/libSystem.B.dylib")
 
-_sysctlbyname = _libc.sysctlbyname
-_sysctlbyname.argtypes = [
-    ctypes.c_char_p,
-    ctypes.c_void_p,
-    ctypes.POINTER(ctypes.c_size_t),
-    ctypes.c_void_p,
-    ctypes.c_size_t,
-]
-_sysctlbyname.restype = ctypes.c_int
+    _sysctlbyname = _libc.sysctlbyname
+    _sysctlbyname.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    ]
+    _sysctlbyname.restype = ctypes.c_int
+
+    # IOKit + CoreFoundation
+    _iokit = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/IOKit.framework/IOKit")
+    _cf = ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
+    )
+
+    kCFStringEncodingUTF8 = 0x08000100
+
+    # IOKit
+    _iokit.IOServiceMatching.restype = ctypes.c_void_p
+    _iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
+
+    _iokit.IOServiceGetMatchingService.restype = ctypes.c_uint32
+    _iokit.IOServiceGetMatchingService.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+
+    _iokit.IOServiceGetMatchingServices.restype = ctypes.c_int
+    _iokit.IOServiceGetMatchingServices.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+
+    _iokit.IOIteratorNext.restype = ctypes.c_uint32
+    _iokit.IOIteratorNext.argtypes = [ctypes.c_uint32]
+
+    _iokit.IORegistryEntryGetName.restype = ctypes.c_int
+    _iokit.IORegistryEntryGetName.argtypes = [ctypes.c_uint32, ctypes.c_char_p]
+
+    _iokit.IORegistryEntryCreateCFProperty.restype = ctypes.c_void_p
+    _iokit.IORegistryEntryCreateCFProperty.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+
+    _iokit.IORegistryEntryCreateCFProperties.restype = ctypes.c_int
+    _iokit.IORegistryEntryCreateCFProperties.argtypes = [
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
+
+    _iokit.IOObjectRelease.restype = ctypes.c_int
+    _iokit.IOObjectRelease.argtypes = [ctypes.c_uint32]
+
+    # CoreFoundation
+    _cf.CFRelease.argtypes = [ctypes.c_void_p]
+    _cf.CFRelease.restype = None
+
+    _cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+    _cf.CFStringCreateWithCString.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_uint32,
+    ]
+
+    _cf.CFStringGetCString.restype = ctypes.c_bool
+    _cf.CFStringGetCString.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_long,
+        ctypes.c_uint32,
+    ]
+
+    _cf.CFNumberGetValue.restype = ctypes.c_bool
+    _cf.CFNumberGetValue.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.c_void_p]
+
+    _cf.CFDictionaryGetCount.restype = ctypes.c_long
+    _cf.CFDictionaryGetCount.argtypes = [ctypes.c_void_p]
+
+    _cf.CFDictionaryGetKeysAndValues.restype = None
+    _cf.CFDictionaryGetKeysAndValues.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+
+    _cf.CFGetTypeID.restype = ctypes.c_ulong
+    _cf.CFGetTypeID.argtypes = [ctypes.c_void_p]
+
+    _cf.CFStringGetTypeID.restype = ctypes.c_ulong
+    _cf.CFStringGetTypeID.argtypes = []
+
+    _cf.CFDataGetTypeID.restype = ctypes.c_ulong
+    _cf.CFDataGetTypeID.argtypes = []
+
+    _cf.CFDataGetLength.restype = ctypes.c_long
+    _cf.CFDataGetLength.argtypes = [ctypes.c_void_p]
+
+    _cf.CFDataGetBytePtr.restype = ctypes.c_size_t
+    _cf.CFDataGetBytePtr.argtypes = [ctypes.c_void_p]
+
+
+# ---------------------------------------------------------------------------
+# sysctl helpers
+# ---------------------------------------------------------------------------
 
 
 def get_sysctl_int(name: str):
-    """Return an integer sysctl value, or None on failure."""
+    """Return an integer sysctl value, or None on failure / non-Darwin."""
+    if not _DARWIN:
+        return None
     size = ctypes.c_size_t(8)
     val = ctypes.c_uint64(0)
     if (
@@ -43,7 +151,9 @@ def get_sysctl_int(name: str):
 
 
 def get_sysctl_string(name: str):
-    """Return a string sysctl value, or None on failure."""
+    """Return a string sysctl value, or None on failure / non-Darwin."""
+    if not _DARWIN:
+        return None
     size = ctypes.c_size_t(0)
     if _sysctlbyname(name.encode(), None, ctypes.byref(size), None, 0) == 0:
         buf = ctypes.create_string_buffer(size.value)
@@ -53,110 +163,14 @@ def get_sysctl_string(name: str):
 
 
 # ---------------------------------------------------------------------------
-# IOKit + CoreFoundation
-# ---------------------------------------------------------------------------
-
-_iokit = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/IOKit.framework/IOKit")
-_cf = ctypes.cdll.LoadLibrary(
-    "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
-)
-
-kCFStringEncodingUTF8 = 0x08000100
-
-# IOKit
-_iokit.IOServiceMatching.restype = ctypes.c_void_p
-_iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
-
-_iokit.IOServiceGetMatchingService.restype = ctypes.c_uint32
-_iokit.IOServiceGetMatchingService.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
-
-_iokit.IOServiceGetMatchingServices.restype = ctypes.c_int
-_iokit.IOServiceGetMatchingServices.argtypes = [
-    ctypes.c_uint32,
-    ctypes.c_void_p,
-    ctypes.POINTER(ctypes.c_uint32),
-]
-
-_iokit.IOIteratorNext.restype = ctypes.c_uint32
-_iokit.IOIteratorNext.argtypes = [ctypes.c_uint32]
-
-_iokit.IORegistryEntryGetName.restype = ctypes.c_int
-_iokit.IORegistryEntryGetName.argtypes = [ctypes.c_uint32, ctypes.c_char_p]
-
-_iokit.IORegistryEntryCreateCFProperty.restype = ctypes.c_void_p
-_iokit.IORegistryEntryCreateCFProperty.argtypes = [
-    ctypes.c_uint32,
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-    ctypes.c_uint32,
-]
-
-_iokit.IORegistryEntryCreateCFProperties.restype = ctypes.c_int
-_iokit.IORegistryEntryCreateCFProperties.argtypes = [
-    ctypes.c_uint32,
-    ctypes.POINTER(ctypes.c_void_p),
-    ctypes.c_void_p,
-    ctypes.c_uint32,
-]
-
-_iokit.IOObjectRelease.restype = ctypes.c_int
-_iokit.IOObjectRelease.argtypes = [ctypes.c_uint32]
-
-# CoreFoundation
-_cf.CFRelease.argtypes = [ctypes.c_void_p]
-_cf.CFRelease.restype = None
-
-_cf.CFStringCreateWithCString.restype = ctypes.c_void_p
-_cf.CFStringCreateWithCString.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_char_p,
-    ctypes.c_uint32,
-]
-
-_cf.CFStringGetCString.restype = ctypes.c_bool
-_cf.CFStringGetCString.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_char_p,
-    ctypes.c_long,
-    ctypes.c_uint32,
-]
-
-_cf.CFNumberGetValue.restype = ctypes.c_bool
-_cf.CFNumberGetValue.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.c_void_p]
-
-_cf.CFDictionaryGetCount.restype = ctypes.c_long
-_cf.CFDictionaryGetCount.argtypes = [ctypes.c_void_p]
-
-_cf.CFDictionaryGetKeysAndValues.restype = None
-_cf.CFDictionaryGetKeysAndValues.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-]
-
-_cf.CFGetTypeID.restype = ctypes.c_ulong
-_cf.CFGetTypeID.argtypes = [ctypes.c_void_p]
-
-_cf.CFStringGetTypeID.restype = ctypes.c_ulong
-_cf.CFStringGetTypeID.argtypes = []
-
-_cf.CFDataGetTypeID.restype = ctypes.c_ulong
-_cf.CFDataGetTypeID.argtypes = []
-
-_cf.CFDataGetLength.restype = ctypes.c_long
-_cf.CFDataGetLength.argtypes = [ctypes.c_void_p]
-
-_cf.CFDataGetBytePtr.restype = ctypes.c_size_t
-_cf.CFDataGetBytePtr.argtypes = [ctypes.c_void_p]
-
-
-# ---------------------------------------------------------------------------
 # GPU core count
 # ---------------------------------------------------------------------------
 
 
 def get_gpu_cores_native() -> int:
     """Return GPU core count from IORegistry AGXAccelerator, or 0 on failure."""
+    if not _DARWIN:
+        return 0
     matching = _iokit.IOServiceMatching(b"AGXAccelerator")
     service = _iokit.IOServiceGetMatchingService(0, matching)
     if not service:
@@ -186,8 +200,11 @@ def get_dvfs_tables_native() -> dict:
 
     Returns dict with keys 'ecpu', 'pcpu', 'gpu', each a list of
     MHz values in ascending frequency order (indexed by V-state or P-state).
-    Returns {'ecpu': [], 'pcpu': [], 'gpu': []} on failure.
+    Returns {'ecpu': [], 'pcpu': [], 'gpu': []} on failure or non-Darwin.
     """
+    if not _DARWIN:
+        return {"ecpu": [], "pcpu": [], "gpu": []}
+
     matching = _iokit.IOServiceMatching(b"AppleARMIODevice")
     iterator = ctypes.c_uint32()
     ret = _iokit.IOServiceGetMatchingServices(0, matching, ctypes.byref(iterator))
