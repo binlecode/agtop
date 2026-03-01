@@ -4,6 +4,13 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.4.0] - 2026-03-01
+
+### Changed
+- Replaced all `os.popen("sysctl ...")`, `subprocess.run(["sysctl" ...])`, `subprocess.run(["ioreg" ...])`, and `system_profiler` shell calls with direct `ctypes` bindings to `libSystem.B.dylib`, `IOKit`, and `CoreFoundation`.
+- Added `agtop/native_sys.py`: `get_sysctl_int`, `get_sysctl_string` (via `sysctlbyname`), `get_gpu_cores_native` (via `AGXAccelerator` IORegistry property), and `get_dvfs_tables_native` (via `IORegistryEntryCreateCFProperties` + `CFData` byte extraction, replacing `ioreg` XML/plist pipeline).
+- Removed `import subprocess` and `import plistlib` from `sampler.py`; GPU core count and DVFS table reads now complete in microseconds instead of ~250 ms at startup.
+
 ## [0.3.2] - 2026-02-18
 
 ### Added

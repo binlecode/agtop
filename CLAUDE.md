@@ -51,6 +51,7 @@ Releases are driven by `scripts/tag_release.sh [version]`. CI handles formula sy
 - No formatter/linter config is checked in; match surrounding code style when editing.
 
 ## Testing Guidelines
+- All tests are located in the `tests/` folder.
 - Run `.venv/bin/pytest -q` for all code changes.
 - Run a single test file: `.venv/bin/pytest tests/test_cli_contract.py -q`
 - Run a single test function: `.venv/bin/pytest tests/test_cli_contract.py::test_name -q`

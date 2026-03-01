@@ -1,6 +1,7 @@
 import os
 import re
 import psutil
+from .native_sys import get_gpu_cores_native, get_sysctl_int, get_sysctl_string
 from .soc_profiles import get_soc_profile
 
 
@@ -42,66 +43,34 @@ def get_ram_metrics_dict():
 
 def get_cpu_info():
     cpu_info_dict = {}
-    data_fields = ["machdep.cpu.brand_string", "machdep.cpu.core_count"]
-    for field in data_fields:
-        try:
-            value = os.popen("sysctl -n " + field).read().strip()
-        except Exception:
-            value = ""
-        if value:
-            cpu_info_dict[field] = value
-
-    if "machdep.cpu.brand_string" not in cpu_info_dict:
-        cpu_info = os.popen("sysctl -a | grep machdep.cpu").read()
-        for line in cpu_info.split("\n"):
-            if "machdep.cpu.brand_string" in line:
-                cpu_info_dict["machdep.cpu.brand_string"] = line.split(":", 1)[
-                    1
-                ].strip()
-            if "machdep.cpu.core_count" in line:
-                cpu_info_dict["machdep.cpu.core_count"] = line.split(":", 1)[1].strip()
+    brand = get_sysctl_string("machdep.cpu.brand_string")
+    if brand:
+        cpu_info_dict["machdep.cpu.brand_string"] = brand
+    core_count = get_sysctl_int("machdep.cpu.core_count")
+    if core_count is not None:
+        cpu_info_dict["machdep.cpu.core_count"] = str(core_count)
     return cpu_info_dict
 
 
 def get_core_counts():
     cores_info_dict = {}
-    for field in ["hw.perflevel0.logicalcpu", "hw.perflevel1.logicalcpu"]:
-        try:
-            value = os.popen("sysctl -n " + field).read().strip()
-            if value:
-                cores_info_dict[field] = int(value)
-        except Exception:
-            continue
-
-    if not cores_info_dict:
-        cores_info = os.popen("sysctl -a | grep hw.perflevel").read()
-        for line in cores_info.split("\n"):
-            if "hw.perflevel0.logicalcpu" in line:
-                try:
-                    cores_info_dict["hw.perflevel0.logicalcpu"] = int(
-                        line.split(":", 1)[1].strip()
-                    )
-                except Exception:
-                    pass
-            if "hw.perflevel1.logicalcpu" in line:
-                try:
-                    cores_info_dict["hw.perflevel1.logicalcpu"] = int(
-                        line.split(":", 1)[1].strip()
-                    )
-                except Exception:
-                    pass
+    p_cores = get_sysctl_int("hw.perflevel0.logicalcpu")
+    if p_cores is not None:
+        cores_info_dict["hw.perflevel0.logicalcpu"] = int(p_cores)
+    e_cores = get_sysctl_int("hw.perflevel1.logicalcpu")
+    if e_cores is not None:
+        cores_info_dict["hw.perflevel1.logicalcpu"] = int(e_cores)
     return cores_info_dict
 
 
 def get_gpu_cores():
     try:
-        cores = os.popen(
-            "system_profiler -detailLevel basic SPDisplaysDataType | grep 'Total Number of Cores'"
-        ).read()
-        cores = int(cores.split(": ")[-1])
+        cores = get_gpu_cores_native()
+        if cores and cores > 0:
+            return cores
     except Exception:
-        cores = "?"
-    return cores
+        pass
+    return "?"
 
 
 def get_soc_info():

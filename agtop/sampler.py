@@ -1,9 +1,6 @@
 """Unified metrics sampler with IOReport backend."""
 
-import plistlib
 import re
-import struct
-import subprocess
 import time
 from typing import NamedTuple
 
@@ -322,26 +319,20 @@ def create_sampler(interval, subsamples=1):
 
 def _get_core_counts():
     """Get P-core and E-core counts from sysctl."""
+    from .native_sys import get_sysctl_int
+
     p_count = 0
     e_count = 0
     try:
-        result = subprocess.run(
-            ["sysctl", "-n", "hw.perflevel0.logicalcpu"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        p_count = int(result.stdout.strip())
+        val = get_sysctl_int("hw.perflevel0.logicalcpu")
+        if val is not None:
+            p_count = int(val)
     except (ValueError, OSError):
         pass
     try:
-        result = subprocess.run(
-            ["sysctl", "-n", "hw.perflevel1.logicalcpu"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        e_count = int(result.stdout.strip())
+        val = get_sysctl_int("hw.perflevel1.logicalcpu")
+        if val is not None:
+            e_count = int(val)
     except (ValueError, OSError):
         pass
     return {"p_count": p_count, "e_count": e_count}
@@ -474,83 +465,11 @@ def _resolve_state_freq(name, freq_table):
 
 
 def _read_dvfs_tables():
-    """Read DVFS frequency tables from IOKit pmgr device via ioreg.
+    """Read DVFS frequency tables from IOKit pmgr device.
 
     Returns dict with keys 'ecpu', 'pcpu', 'gpu', each a list of
     MHz values in ascending frequency order (indexed by V-state or P-state).
     """
-    try:
-        result = subprocess.run(
-            ["ioreg", "-a", "-r", "-d", "1", "-n", "pmgr"],
-            capture_output=True,
-            check=False,
-        )
-        data = plistlib.loads(result.stdout)
-    except Exception:
-        return {"ecpu": [], "pcpu": [], "gpu": []}
+    from .native_sys import get_dvfs_tables_native
 
-    if isinstance(data, list) and data:
-        data = data[0]
-    if not isinstance(data, dict):
-        return {"ecpu": [], "pcpu": [], "gpu": []}
-
-    # Parse all voltage-states entries that contain real frequencies
-    tables = {}
-    for key, val in data.items():
-        if not key.startswith("voltage-states") or not isinstance(val, bytes):
-            continue
-        if len(val) < 8:
-            continue
-        n_entries = len(val) // 8
-        freqs = []
-        for i in range(n_entries):
-            freq_hz, _voltage = struct.unpack_from("<II", val, i * 8)
-            freqs.append(freq_hz // 1_000_000)
-        # Only keep tables where most entries have real frequencies (>50 MHz)
-        real_count = sum(1 for f in freqs if f > 50)
-        if real_count >= max(1, len(freqs) // 2):
-            tables[key] = freqs
-
-    # Match tables to clusters by entry count and frequency range.
-    # P-core: most entries (15-25 states) and highest max frequency (>2 GHz)
-    # E-core: fewer entries (5-12 states), moderate max frequency
-    # GPU: 10-20 states, max frequency < 2 GHz
-    #
-    # Strategy: pick P-core first (most distinctive — highest max freq and
-    # most entries), then E-core (fewest entries with real freqs), then GPU.
-    ecpu = []
-    pcpu = []
-    gpu = []
-
-    candidates = sorted(tables.items())
-
-    # P-core: highest max frequency, typically >2 GHz, most entries
-    best_pcpu_key = None
-    best_pcpu_max = 0
-    for key, freqs in candidates:
-        max_freq = max(freqs) if freqs else 0
-        if len(freqs) >= 15 and max_freq > best_pcpu_max:
-            best_pcpu_max = max_freq
-            best_pcpu_key = key
-    if best_pcpu_key:
-        pcpu = tables[best_pcpu_key]
-
-    # E-core: small table (5-12 entries), not the pcpu table
-    for key, freqs in candidates:
-        if key == best_pcpu_key:
-            continue
-        if 5 <= len(freqs) <= 12:
-            ecpu = freqs
-            break
-
-    # GPU: 10-20 entries, not pcpu or ecpu, first match
-    for key, freqs in candidates:
-        if key == best_pcpu_key:
-            continue
-        if freqs is ecpu:
-            continue
-        if 10 <= len(freqs) <= 20:
-            gpu = freqs
-            break
-
-    return {"ecpu": ecpu, "pcpu": pcpu, "gpu": gpu}
+    return get_dvfs_tables_native()
