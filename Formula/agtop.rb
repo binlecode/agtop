@@ -3,8 +3,8 @@ class Agtop < Formula
 
   desc "Performance monitoring CLI tool for Apple Silicon"
   homepage "https://github.com/binlecode/agtop"
-  url "https://github.com/binlecode/agtop/archive/refs/tags/v0.3.9.tar.gz"
-  sha256 "7e3748ac5c4ed4b258e779144ee48dbc9e4e01bf08c2f4491380ca25bd6d9969"
+  url "https://github.com/binlecode/agtop/archive/refs/tags/v0.4.0.tar.gz"
+  sha256 "60ae5f406770f33a256b85b2a0a509dae0496bceb3509dd0a825b0c687944925"
   license "MIT"
 
   bottle do
@@ -18,8 +18,8 @@ class Agtop < Formula
   depends_on "python@3.13"
 
   resource "blessed" do
-    url "https://files.pythonhosted.org/packages/dd/19/e926a0dbbf93c7aeb15d4dfff0d0e3de02653b3ba540b687307d0819c1ff/blessed-1.30.0.tar.gz"
-    sha256 "4d547019d7b40fc5420ea2ba2bc180fdccc31d6715298e2b49ffa7b020d44667"
+    url "https://files.pythonhosted.org/packages/e6/0c/658dea9ba35fcea19e6feaa8ba0d2dbf8cac9aeaa1f9ab1d77d36f534757/blessed-1.32.0.tar.gz"
+    sha256 "d4090e9908cf86bea15a5275845c8bfc69c4c34eb6d22de07c65d26f1e54a918"
   end
 
   resource "dashing" do
