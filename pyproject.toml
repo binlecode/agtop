@@ -33,6 +33,7 @@ Repository = "https://github.com/binlecode/agtop"
 agtop = "agtop.agtop:cli"
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 markers = [
     "local: macOS-only tests requiring IOReport, vm_stat, or Apple Silicon hardware",
 ]
