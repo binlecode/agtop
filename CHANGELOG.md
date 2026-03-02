@@ -4,6 +4,12 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.4.3] - 2026-03-01
+
+### Changed
+- Replaced `test_input.py`, `test_state.py`, `test_updaters.py` with `test_e2e.py` and `test_integration.py` (QA test suite overhaul).
+- Removed completed `TODO-agtop-improvements.md` planning document.
+
 ## [0.4.2] - 2026-03-01
 
 ### Changed

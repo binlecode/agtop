@@ -10,6 +10,7 @@ from dashing import HGauge, HChart
 
 pytestmark = pytest.mark.local
 
+
 def test_full_update_cycle_with_real_data():
     # 1. Initialize real configuration and state
     parser = argparse.ArgumentParser()
@@ -38,7 +39,7 @@ def test_full_update_cycle_with_real_data():
         # Prime the sampler
         sampler.sample()
         time.sleep(1.0)
-        
+
         # Get real sample
         deadline = time.monotonic() + 5.0
         sample = None
@@ -46,13 +47,13 @@ def test_full_update_cycle_with_real_data():
             sample = sampler.sample()
             if sample is None:
                 time.sleep(0.5)
-                
+
         assert sample is not None, "Sampler failed to produce real data"
-        
+
         # Get real peripheral metrics
         ram_metrics = get_ram_metrics_dict()
         proc_metrics = get_top_processes(limit=5)
-        
+
         # 3. Update the state with real data
         # we need system_core_usage, which updaters expects
         # we can just extract it from the real sample!
@@ -63,17 +64,19 @@ def test_full_update_cycle_with_real_data():
             system_core_usage.append(sample.cpu_metrics.get(f"P-Cluster{c}_active", 0))
         for c in e_cores:
             system_core_usage.append(sample.cpu_metrics.get(f"E-Cluster{c}_active", 0))
-            
-        success = update_metrics(state, sample, config, system_core_usage, ram_metrics, proc_metrics)
+
+        success = update_metrics(
+            state, sample, config, system_core_usage, ram_metrics, proc_metrics
+        )
         assert success is True
-        
+
         # State should be updated with actual real numbers
         assert state.ecpu_usage >= 0
         assert state.pcpu_usage >= 0
         assert state.gpu_usage >= 0
         assert state.ram_used_percent >= 0
         assert state.cpu_power_w >= 0.0
-        
+
         # 4. Update real UI widgets with the updated state
         # Create minimal real widgets
         widgets = {
@@ -97,19 +100,27 @@ def test_full_update_cycle_with_real_data():
             "gpu_bw_gauge": HGauge(title="G-BW", val=0, color=2),
             "media_bw_gauge": HGauge(title="M-BW", val=0, color=2),
             "memory_bandwidth_panel": HGauge(title="Mem BW", val=0, color=2),
-            "e_core_gauges": [HGauge(title="", val=0, color=2) for _ in range(config.e_core_count)],
-            "p_core_gauges": [HGauge(title="", val=0, color=2) for _ in range(config.p_core_count)],
-            "e_core_history_charts": [HChart(title="", color=2) for _ in range(config.e_core_count)],
-            "p_core_history_charts": [HChart(title="", color=2) for _ in range(config.p_core_count)],
+            "e_core_gauges": [
+                HGauge(title="", val=0, color=2) for _ in range(config.e_core_count)
+            ],
+            "p_core_gauges": [
+                HGauge(title="", val=0, color=2) for _ in range(config.p_core_count)
+            ],
+            "e_core_history_charts": [
+                HChart(title="", color=2) for _ in range(config.e_core_count)
+            ],
+            "p_core_history_charts": [
+                HChart(title="", color=2) for _ in range(config.p_core_count)
+            ],
         }
         widgets["process_list"].text = ""
-        
+
         update_widgets(state, widgets, config, term_width=120)
-        
+
         # Assert widgets reflect the state
         assert widgets["cpu1_gauge"].value == state.ecpu_usage
         assert widgets["cpu2_gauge"].value == state.pcpu_usage
         assert widgets["gpu_gauge"].value == state.gpu_usage
-        
+
     finally:
         sampler.close()
