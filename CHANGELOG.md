@@ -4,6 +4,12 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.4.1] - 2026-03-01
+
+### Added
+- Adaptive widget title truncation: when terminal width is < 100 columns, the four long panel titles (`power_charts`, `cpu_power_chart`, `gpu_power_chart`, `memory_bandwidth_panel`) switch to compact forms that fit without mid-word clipping, while still showing key wattage and bandwidth values.
+- Terminal resize awareness: render loop now uses `terminal.notify_on_resize()` and `InteractiveState.resize_pending` to trigger a full-clear redraw on resize; display is skipped when the terminal reports a degenerate size (< 2 cols/rows).
+
 ## [0.4.0] - 2026-03-01
 
 ### Changed

@@ -405,8 +405,9 @@ def update_process_panel(state, widgets, config, interactive=None):
         process_panel.title = "Processes (PID command CPU% RSS)"
 
 
-def update_widgets(state, widgets, config, interactive=None):
+def update_widgets(state, widgets, config, interactive=None, term_width=200):
     """Write computed state values into widget objects. No computation."""
+    narrow = term_width < 100
     cpu_temp_suffix = (
         " ({0:.0f}\u00b0C)".format(state.cpu_temp_c) if state.cpu_temp_c > 0 else ""
     )
@@ -681,17 +682,26 @@ def update_widgets(state, widgets, config, interactive=None):
         )
         media_bw_gauge.value = state.media_bw_percent
 
-        memory_bandwidth_panel.title = "".join(
-            [
-                "Memory Bandwidth: ",
-                "{0:.2f}".format(state.total_bw_gbps),
-                " GB/s (R:",
-                "{0:.2f}".format(state.total_bw_read_gbps),
-                "/W:",
-                "{0:.2f}".format(state.total_bw_write_gbps),
-                ")",
-            ]
-        )
+        if narrow:
+            memory_bandwidth_panel.title = "".join(
+                [
+                    "BW: ",
+                    "{0:.2f}".format(state.total_bw_gbps),
+                    " GB/s",
+                ]
+            )
+        else:
+            memory_bandwidth_panel.title = "".join(
+                [
+                    "Memory Bandwidth: ",
+                    "{0:.2f}".format(state.total_bw_gbps),
+                    " GB/s (R:",
+                    "{0:.2f}".format(state.total_bw_read_gbps),
+                    "/W:",
+                    "{0:.2f}".format(state.total_bw_write_gbps),
+                    ")",
+                ]
+            )
     else:
         ecpu_bw_gauge.title = "E-CPU B/W: N/A"
         pcpu_bw_gauge.title = "P-CPU B/W: N/A"
@@ -705,48 +715,77 @@ def update_widgets(state, widgets, config, interactive=None):
 
     # Power charts
     cpu_power_chart = widgets["cpu_power_chart"]
-    cpu_power_chart.title = "".join(
-        [
-            "CPU: ",
-            "{0:.2f}".format(state.cpu_power_w),
-            "W (avg: ",
-            "{0:.2f}".format(state.avg_cpu_power),
-            "W peak: ",
-            "{0:.2f}".format(state.cpu_peak_power),
-            "W)",
-        ]
-    )
+    if narrow:
+        cpu_power_chart.title = "".join(
+            [
+                "CPU ",
+                "{0:.2f}".format(state.cpu_power_w),
+                "W",
+            ]
+        )
+    else:
+        cpu_power_chart.title = "".join(
+            [
+                "CPU: ",
+                "{0:.2f}".format(state.cpu_power_w),
+                "W (avg: ",
+                "{0:.2f}".format(state.avg_cpu_power),
+                "W peak: ",
+                "{0:.2f}".format(state.cpu_peak_power),
+                "W)",
+            ]
+        )
     cpu_power_chart.append(state.cpu_power_percent)
 
     gpu_power_chart = widgets["gpu_power_chart"]
-    gpu_power_chart.title = "".join(
-        [
-            "GPU: ",
-            "{0:.2f}".format(state.gpu_power_w),
-            "W (avg: ",
-            "{0:.2f}".format(state.avg_gpu_power),
-            "W peak: ",
-            "{0:.2f}".format(state.gpu_peak_power),
-            "W)",
-        ]
-    )
+    if narrow:
+        gpu_power_chart.title = "".join(
+            [
+                "GPU ",
+                "{0:.2f}".format(state.gpu_power_w),
+                "W",
+            ]
+        )
+    else:
+        gpu_power_chart.title = "".join(
+            [
+                "GPU: ",
+                "{0:.2f}".format(state.gpu_power_w),
+                "W (avg: ",
+                "{0:.2f}".format(state.avg_gpu_power),
+                "W peak: ",
+                "{0:.2f}".format(state.gpu_peak_power),
+                "W)",
+            ]
+        )
     gpu_power_chart.append(state.gpu_power_percent)
 
     power_charts = widgets["power_charts"]
-    power_charts.title = "".join(
-        [
-            "CPU+GPU+ANE Power: ",
-            "{0:.2f}".format(state.package_power_w),
-            "W (avg: ",
-            "{0:.2f}".format(state.avg_package_power),
-            "W peak: ",
-            "{0:.2f}".format(state.package_peak_power),
-            "W) thermal: ",
-            state.thermal_pressure,
-            " alerts: ",
-            state.alerts_label,
-        ]
-    )
+    if narrow:
+        power_charts.title = "".join(
+            [
+                "Pkg ",
+                "{0:.2f}".format(state.package_power_w),
+                "W pk:",
+                "{0:.2f}".format(state.package_peak_power),
+                "W",
+            ]
+        )
+    else:
+        power_charts.title = "".join(
+            [
+                "CPU+GPU+ANE Power: ",
+                "{0:.2f}".format(state.package_power_w),
+                "W (avg: ",
+                "{0:.2f}".format(state.avg_package_power),
+                "W peak: ",
+                "{0:.2f}".format(state.package_peak_power),
+                "W) thermal: ",
+                state.thermal_pressure,
+                " alerts: ",
+                state.alerts_label,
+            ]
+        )
 
 
 def apply_dynamic_colors(state, widgets, config, color_for_fn):

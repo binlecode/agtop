@@ -311,3 +311,88 @@ def test_update_widgets_sets_values():
         or str(state.ecpu_usage) in widgets["cpu1_gauge"].title
     )
     assert "Processes" in widgets["process_panel"].title
+
+
+def _make_widgets():
+    return {
+        "cpu1_gauge": HGauge(title="", val=0, color=0),
+        "cpu2_gauge": HGauge(title="", val=0, color=0),
+        "gpu_gauge": HGauge(title="", val=0, color=0),
+        "ane_gauge": HGauge(title="", val=0, color=0),
+        "ram_gauge": HGauge(title="", val=0, color=0),
+        "ecpu_usage_chart": HChart(title="", color=0),
+        "pcpu_usage_chart": HChart(title="", color=0),
+        "gpu_usage_chart": HChart(title="", color=0),
+        "ane_usage_chart": HChart(title="", color=0),
+        "ram_usage_chart": HChart(title="", color=0),
+        "cpu_power_chart": HChart(title="", color=0),
+        "gpu_power_chart": HChart(title="", color=0),
+        "power_charts": HGauge(title="", val=0, color=0),
+        "process_list": HGauge(title="", val=0, color=0),
+        "process_panel": HGauge(title="", val=0, color=0),
+        "ecpu_bw_gauge": HGauge(title="", val=0, color=0),
+        "pcpu_bw_gauge": HGauge(title="", val=0, color=0),
+        "gpu_bw_gauge": HGauge(title="", val=0, color=0),
+        "media_bw_gauge": HGauge(title="", val=0, color=0),
+        "memory_bandwidth_panel": HGauge(title="", val=0, color=0),
+        "e_core_gauges": [HGauge(title="", val=0, color=0) for _ in range(4)],
+        "p_core_gauges": [HGauge(title="", val=0, color=0) for _ in range(4)],
+        "e_core_history_charts": [HChart(title="", color=0) for _ in range(4)],
+        "p_core_history_charts": [HChart(title="", color=0) for _ in range(4)],
+    }
+
+
+def test_update_widgets_narrow_titles():
+    config = _make_config()
+    state = create_dashboard_state(config)
+    ts = time.time()
+    sample = _make_sample(
+        ecpu_active=42,
+        pcpu_active=65,
+        gpu_active=33,
+        timestamp=ts,
+        bandwidth_available=True,
+    )
+    update_metrics(
+        state, sample, config, [], _make_ram_metrics(), _make_process_metrics()
+    )
+
+    widgets = _make_widgets()
+    widgets["process_list"].text = ""
+
+    update_widgets(state, widgets, config, term_width=80)
+
+    # Full-form discriminators must be absent in narrow mode
+    assert "thermal:" not in widgets["power_charts"].title
+    assert "W" in widgets["power_charts"].title  # wattage still present
+    assert "Memory Bandwidth:" not in widgets["memory_bandwidth_panel"].title
+    assert "GB/s" in widgets["memory_bandwidth_panel"].title  # value still present
+    assert "(avg:" not in widgets["cpu_power_chart"].title
+    assert "(avg:" not in widgets["gpu_power_chart"].title
+
+
+def test_update_widgets_wide_titles():
+    config = _make_config()
+    state = create_dashboard_state(config)
+    ts = time.time()
+    sample = _make_sample(
+        ecpu_active=42,
+        pcpu_active=65,
+        gpu_active=33,
+        timestamp=ts,
+        bandwidth_available=True,
+    )
+    update_metrics(
+        state, sample, config, [], _make_ram_metrics(), _make_process_metrics()
+    )
+
+    widgets = _make_widgets()
+    widgets["process_list"].text = ""
+
+    update_widgets(state, widgets, config, term_width=200)
+
+    # Full-form discriminators must be present in wide mode
+    assert "thermal:" in widgets["power_charts"].title
+    assert "Memory Bandwidth:" in widgets["memory_bandwidth_panel"].title
+    assert "(avg:" in widgets["cpu_power_chart"].title
+    assert "(avg:" in widgets["gpu_power_chart"].title

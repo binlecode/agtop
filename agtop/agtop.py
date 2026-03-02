@@ -578,60 +578,75 @@ def _run_dashboard(args, runtime_state):
 
     first_frame_rendered = False
     with terminal.cbreak():
-        while True:
-            ready = sampler.sample()
-            if ready is not None:
-                if ready.timestamp > state.last_timestamp:
-                    system_core_usage = get_system_core_usage()
-                    ram_metrics = get_ram_metrics_dict()
-                    process_metrics = {"cpu": [], "memory": []}
-                    try:
-                        process_metrics = get_top_processes(
-                            limit=config.process_display_count,
-                            proc_filter=config.process_filter_pattern,
-                        )
-                    except Exception:
-                        pass
-
-                    update_metrics(
-                        state,
-                        ready,
-                        config,
-                        system_core_usage,
-                        ram_metrics,
-                        process_metrics,
-                    )
-                    state.cpu_processes = sort_processes(
-                        process_metrics,
-                        interactive.sort_mode,
-                        config.process_display_count,
-                    )
-                    _recompute_process_row_percents(
-                        state, config, interactive.sort_mode
-                    )
-                    update_widgets(state, widgets, config, interactive)
-                    if dynamic_color_enabled:
+        with terminal.notify_on_resize():
+            while True:
+                ready = sampler.sample()
+                if ready is not None:
+                    if ready.timestamp > state.last_timestamp:
+                        system_core_usage = get_system_core_usage()
+                        ram_metrics = get_ram_metrics_dict()
+                        process_metrics = {"cpu": [], "memory": []}
                         try:
-                            apply_dynamic_colors(state, widgets, config, color_for)
+                            process_metrics = get_top_processes(
+                                limit=config.process_display_count,
+                                proc_filter=config.process_filter_pattern,
+                            )
                         except Exception:
-                            dynamic_color_enabled = False
-                            reset_static_colors(args.color)
+                            pass
 
-                if use_full_clear_redraw or not first_frame_rendered:
-                    print("\033[2J\033[H", end="", flush=True)
-                ui.display()
-                first_frame_rendered = True
+                        update_metrics(
+                            state,
+                            ready,
+                            config,
+                            system_core_usage,
+                            ram_metrics,
+                            process_metrics,
+                        )
+                        state.cpu_processes = sort_processes(
+                            process_metrics,
+                            interactive.sort_mode,
+                            config.process_display_count,
+                        )
+                        _recompute_process_row_percents(
+                            state, config, interactive.sort_mode
+                        )
+                        update_widgets(
+                            state,
+                            widgets,
+                            config,
+                            interactive,
+                            term_width=terminal.width,
+                        )
+                        if dynamic_color_enabled:
+                            try:
+                                apply_dynamic_colors(state, widgets, config, color_for)
+                            except Exception:
+                                dynamic_color_enabled = False
+                                reset_static_colors(args.color)
 
-            if not sampler_manages_timing:
-                timeout = config.sample_interval
-            else:
-                timeout = 0
-            key = terminal.inkey(timeout=timeout)
-            while key:
-                handle_keypress(key, interactive)
-                if interactive.quit_requested:
-                    return
-                key = terminal.inkey(timeout=0)
+                    needs_full_clear = (
+                        use_full_clear_redraw
+                        or not first_frame_rendered
+                        or interactive.resize_pending
+                    )
+                    if interactive.resize_pending:
+                        interactive.resize_pending = False
+                    if terminal.width > 2 and terminal.height > 2:
+                        if needs_full_clear:
+                            print("\033[2J\033[H", end="", flush=True)
+                        ui.display()
+                        first_frame_rendered = True
+
+                if not sampler_manages_timing:
+                    timeout = config.sample_interval
+                else:
+                    timeout = 0
+                key = terminal.inkey(timeout=timeout)
+                while key:
+                    handle_keypress(key, interactive)
+                    if interactive.quit_requested:
+                        return
+                    key = terminal.inkey(timeout=0)
 
 
 def main(args=None):

@@ -14,11 +14,16 @@ class InteractiveState:
 
     sort_mode: str = SORT_CPU
     quit_requested: bool = False
+    resize_pending: bool = False
 
 
 def handle_keypress(key, interactive):
     """Process a single keypress and mutate interactive state accordingly."""
     if not key:
+        return
+
+    if getattr(key, "name", None) == "RESIZE_EVENT":
+        interactive.resize_pending = True
         return
 
     ch = str(key)
