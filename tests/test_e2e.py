@@ -1,8 +1,12 @@
+import signal
 import subprocess
 import sys
 import time
 
+import pytest
 
+
+@pytest.mark.local
 def test_agtop_runs_and_handles_sigint():
     # Run agtop via subprocess, send SIGINT (Ctrl+C) and check it exits cleanly
     process = subprocess.Popen(
@@ -17,7 +21,7 @@ def test_agtop_runs_and_handles_sigint():
         time.sleep(4)
 
         # Send SIGINT to simulate Ctrl+C
-        process.send_signal(subprocess.signal.SIGINT)
+        process.send_signal(signal.SIGINT)
 
         # Wait for it to quit gracefully
         stdout, stderr = process.communicate(timeout=3)
