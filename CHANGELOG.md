@@ -4,6 +4,25 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.5.0] - 2026-03-01
+
+### Changed
+- Replaced the `dashing` + `blessed` terminal dashboard with a [Textual](https://textual.textualize.io/) TUI. All charts are now braille `Sparkline` widgets; layout is declarative CSS; resize is clean.
+- Per-core activity now sourced from IOReport CPU Core Performance States via `CoreSample` dataclass instead of `psutil.cpu_percent(percpu=True)`.
+- Removed `--color` and `--core-view` CLI flags (subsumed by Textual's automatic color support and always-on sparkline history charts).
+
+### Added
+- Interactive runtime keys: `/` to open a live regex filter for processes, `s` to cycle sort (CPU% → RSS → PID), `p` to pause/resume polling, `space` to collapse the hardware panel.
+- `--version` flag: `agtop --version` now prints the installed package version.
+- `agtop/config.py`: extracted `DashboardConfig` frozen dataclass and `create_dashboard_config()` from the deleted `state.py`.
+- `agtop/models.py`: `SystemSnapshot` and `CoreSample` dataclasses (public API).
+- `agtop/api.py`: `Monitor`, `Profiler`, `AsyncMonitor` — public Python API for hardware profiling (programmatic use without TUI).
+- `agtop/tui/`: Textual TUI package (`app.py`, `widgets.py`, `styles.tcss`).
+
+### Removed
+- Deleted legacy modules: `agtop/state.py`, `agtop/updaters.py`, `agtop/input.py`, `agtop/color_modes.py`, `agtop/gradient.py`.
+- Removed `dashing` dependency from `pyproject.toml`; replaced with `textual>=0.60`.
+
 ## [0.4.4] - 2026-03-02
 
 ### Fixed
@@ -87,3 +106,4 @@ For each new release:
 2. Add release date in `YYYY-MM-DD` format.
 3. Keep entries concise and user-impact focused.
 4. Tag and publish release after changelog update.
+

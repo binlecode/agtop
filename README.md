@@ -12,15 +12,14 @@ The original `asitop` shells out to Apple's `powermetrics` CLI, a high-level too
 
 ## Key Features
 
-- **Real-time terminal dashboard**: live gauges and time-series charts for E-CPU and P-CPU clusters with per-core breakdown, GPU utilization and frequency, ANE power-based activity estimate, RAM/swap usage, and memory bandwidth.
+- **Textual TUI dashboard**: braille `Sparkline` charts for E-CPU, P-CPU, GPU, ANE, RAM, and power — rendered by the [Textual](https://textual.textualize.io/) framework. Resizes cleanly; no raw ANSI escape sequences.
 - **In-process IOReport sampling**: reads Apple Silicon power, frequency, and residency metrics via Python ctypes bindings to `libIOReport.dylib` and CoreFoundation. No subprocesses, no temp files.
-- **Per-core visibility**: per-core panels on by default; `--core-view gauge|history|both` controls the visualization style.
-- **Diagnosis-oriented alerts**: configurable sustained-sample thresholds for thermal pressure, bandwidth saturation, swap growth, and package power. Active alerts are shown inline in the power status line.
-- **Process monitoring**: top CPU/RSS processes panel with optional regex filtering (`--proc-filter`).
+- **Per-core visibility**: per-core panels on by default; toggle with `--no-show_cores` for a cluster-level view.
+- **Diagnosis-oriented alerts**: configurable sustained-sample thresholds for thermal pressure, bandwidth saturation, swap growth, and package power. Active alerts are shown inline in the status line.
+- **Process monitoring**: top CPU/RSS processes panel with optional regex filtering (`--proc-filter` at launch or `/` interactively). Press `s` to cycle sort (CPU% → RSS → PID), `p` to pause, `space` to collapse the hardware panel.
 - **Profile-aware power scaling**: `profile` mode (default) scales charts against the SoC's known reference wattage for stable cross-session comparison; `auto` mode scales against rolling peak.
 - **SoC compatibility**: 16 built-in M1–M4 profiles (base, Pro, Max, Ultra). Unknown future chips fall back to tier-based defaults using the latest generation's reference values.
 - **CPU/GPU temperature**: reads die temperatures from the Apple SMC (System Management Controller) via IOKit ctypes. Displayed inline in gauge titles (e.g. "P-CPU Usage: 12% @ 3504 MHz (58°C)"). No sudo required.
-- **Adaptive terminal color**: auto-detects color capability (mono, 8-color, 256-color, truecolor) and applies gradient coloring to gauges, charts, and process rows based on utilization level.
 
 ## Installation
 
@@ -47,22 +46,22 @@ pip install git+https://github.com/binlecode/agtop.git
 ## Quick Start
 
 ```shell
-agtop                          # full dashboard with per-core gauges, profile power scaling
-agtop --core-view both         # per-core gauges + history charts
-agtop --interval 1 --avg 10   # faster refresh, shorter rolling window
-agtop --proc-filter "python|ollama|vllm|docker|mlx"
-agtop --no-show_cores          # cluster-level view without per-core panels
+agtop                                               # full dashboard with per-core panels, profile power scaling
+agtop --interval 1 --avg 10                        # faster refresh, shorter rolling window
+agtop --proc-filter "python|ollama|vllm|docker|mlx"  # filter process panel at launch
+agtop --no-show_cores                               # cluster-level view without per-core panels
 ```
+
+Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `/` filter processes · `space` toggle hardware panel · `q` quit
 
 ## CLI Reference
 
 | Option | Purpose | Default |
 | --- | --- | --- |
 | `--interval` | Sampling and refresh interval (seconds) | `2` |
-| `--color` | Color theme (0–8) | `2` |
 | `--avg` | Rolling average window (seconds) | `30` |
+| `--subsamples` | Internal sampler deltas per interval (≥1) | `1` |
 | `--show_cores` / `--no-show_cores` | Per-core panels | `on` |
-| `--core-view gauge\|history\|both` | Per-core visualization mode | `gauge` |
 | `--power-scale profile\|auto` | Power chart scaling | `profile` |
 | `--proc-filter REGEX` | Filter process panel by command name | all |
 | `--alert-bw-sat-percent` | Bandwidth saturation alert threshold | `85` |
@@ -97,7 +96,7 @@ Reads CPU and GPU die temperatures via IOKit ctypes bindings to the `AppleSMC` k
 
 - `sysctl`: SoC chip name, total/P/E core counts.
 - `system_profiler`: GPU core count.
-- `psutil`: RAM/swap usage (`virtual_memory()`, `swap_memory()`), per-core CPU utilization (primary source, Activity Monitor-aligned; IOReport residency as fallback), and process enumeration.
+- `psutil`: RAM/swap usage (`virtual_memory()`, `swap_memory()`), and process enumeration.
 
 ### Signal Sources
 
@@ -105,7 +104,7 @@ Reads CPU and GPU die temperatures via IOKit ctypes bindings to the `AppleSMC` k
 | --- | --- | --- |
 | CPU/GPU/ANE power (W) | IOReport Energy Model | nJ per sample interval → watts |
 | Per-core frequency (MHz) | IOReport residency + DVFS tables | Weighted average of active P-states |
-| Per-core activity (%) | `psutil.cpu_percent(percpu=True)` | IOReport residency as fallback |
+| Per-core activity (%) | IOReport CPU Core Performance States | Via `CoreSample` (residency-weighted active%) |
 | GPU frequency and activity | IOReport GPU Performance States | Weighted average of GPUPH residencies |
 | CPU/GPU temperature (°C) | SMC via IOKit ctypes | Max die temp per cluster |
 | RAM / swap | `psutil.virtual_memory()` + `psutil.swap_memory()` | `total - available` for used |
@@ -118,15 +117,19 @@ Reads CPU and GPU die temperatures via IOKit ctypes bindings to the `AppleSMC` k
 
 | Module | Role |
 | --- | --- |
-| `agtop/agtop.py` | CLI entry point, argument parsing, dashboard layout, main render loop with rolling averages, peak tracking, and alert evaluation |
+| `agtop/agtop.py` | CLI entry point and argument parsing; thin wrapper launching the Textual TUI |
 | `agtop/ioreport.py` | ctypes bindings to `libIOReport.dylib` and CoreFoundation — `IOReportSubscription` lifecycle, snapshot, delta, and CF helpers |
 | `agtop/sampler.py` | `IOReportSampler`: two-snapshot delta logic, `SampleResult` conversion, DVFS table discovery from `ioreg pmgr`, SMC temperature integration |
 | `agtop/smc.py` | SMC temperature reader: IOKit ctypes bindings to `AppleSMC`, key discovery, CPU/GPU die temperature reads |
-| `agtop/utils.py` | System context: `psutil` RAM/swap, `sysctl`/`system_profiler` SoC info, `psutil` CPU/processes |
+| `agtop/utils.py` | System context: `psutil` RAM/swap, `sysctl`/`system_profiler` SoC info, process enumeration |
 | `agtop/soc_profiles.py` | 16 `SocProfile` dataclasses (M1–M4) with reference wattage/bandwidth; tier fallbacks for unknown chips |
 | `agtop/power_scaling.py` | `power_to_percent()`: profile mode (SoC reference) vs auto mode (rolling peak x1.25) |
-| `agtop/color_modes.py` | Terminal color detection and utilization-to-color mapping (green → yellow → orange → red) |
-| `agtop/gradient.py` | `GradientHGauge`, `GradientVGauge`, `GradientHChart`, `GradientText` — per-cell ANSI truecolor rendering |
+| `agtop/config.py` | `DashboardConfig` frozen dataclass; `create_dashboard_config()` merges CLI args with SoC info |
+| `agtop/models.py` | `SystemSnapshot` and `CoreSample` dataclasses (public API types) |
+| `agtop/api.py` | `Monitor`, `Profiler`, `AsyncMonitor` — public Python API for hardware profiling |
+| `agtop/tui/app.py` | `AgtopApp`: Textual `App` with polling worker, process table, interactive sort/filter/pause |
+| `agtop/tui/widgets.py` | `HardwareDashboard` widget with braille `Sparkline` charts, core rows, and alert computation |
+| `agtop/tui/styles.tcss` | Textual CSS layout for the dashboard |
 
 ```mermaid
 graph TD
@@ -142,9 +145,8 @@ graph TD
     end
 
     subgraph "Python Libraries"
-        PSUTIL[psutil<br/>per-core CPU %, swap,<br/>process enumeration]
-        DASHING[dashing<br/>terminal widget rendering]
-        BLESSED[blessed<br/>terminal capabilities]
+        PSUTIL[psutil<br/>RAM, swap,<br/>process enumeration]
+        TEXTUAL[textual<br/>terminal TUI framework]
     end
 
     subgraph "agtop Modules"
@@ -154,31 +156,29 @@ graph TD
         UTILS[utils.py<br/>system context]
         PROFILES[soc_profiles.py<br/>M1-M4 profiles]
         POWER[power_scaling.py<br/>chart scaling]
-        COLOR[color_modes.py<br/>color detection]
-        GRADIENT[gradient.py<br/>gradient rendering]
-        MAIN[agtop.py<br/>dashboard render loop]
+        CONFIG[config.py<br/>DashboardConfig]
+        TUI[tui/app.py + widgets.py<br/>Textual dashboard]
+        MAIN[agtop.py<br/>CLI entry point]
     end
 
     IOR -->|ctypes.cdll| IORPY
     CF -->|ctypes.cdll| IORPY
-    IOKIT -->|ioreg -a -r -d 1 -n pmgr| SAMPLER
+    IOKIT -->|native ctypes| SAMPLER
 
     IORPY -->|IOReportSubscription<br/>sample/delta| SAMPLER
     SMC -->|TemperatureReading| SAMPLER
-    SAMPLER -->|SampleResult| MAIN
+    SAMPLER -->|SampleResult| TUI
 
     SYSCTL --> UTILS
     SYSPROF --> UTILS
     PSUTIL --> UTILS
-    UTILS -->|SoC info, RAM, processes| MAIN
+    UTILS -->|SoC info, RAM, processes| TUI
 
-    PROFILES --> MAIN
-    POWER --> MAIN
-    COLOR --> MAIN
-    GRADIENT --> MAIN
-    BLESSED --> COLOR
-    DASHING --> MAIN
-    DASHING --> GRADIENT
+    PROFILES --> CONFIG
+    CONFIG --> TUI
+    POWER --> TUI
+    TEXTUAL --> TUI
+    TUI --> MAIN
 ```
 
 ## Troubleshooting

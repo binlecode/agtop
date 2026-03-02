@@ -16,4 +16,5 @@ if sys.platform != "darwin":
         "test_sampler.py",
         "test_smc.py",
         "test_runtime_contracts.py",
+        "test_api.py",
     ]

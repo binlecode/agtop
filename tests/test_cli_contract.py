@@ -13,7 +13,6 @@ def test_cli_help_runs_and_exposes_show_cores_as_flag():
     assert result.returncode == 0
     assert "--show_cores" in result.stdout
     assert "--show_cores SHOW_CORES" not in result.stdout
-    assert "--core-view {gauge,history,both}" in result.stdout
     assert "--proc-filter PROC_FILTER" in result.stdout
     assert "--alert-bw-sat-percent ALERT_BW_SAT_PERCENT" in result.stdout
     assert "--alert-package-power-percent ALERT_PACKAGE_POWER_PERCENT" in result.stdout
@@ -32,18 +31,6 @@ def test_cli_rejects_legacy_show_cores_value_form():
 
     assert result.returncode == 2
     assert "unrecognized arguments: true" in result.stderr
-
-
-def test_cli_rejects_invalid_core_view_value():
-    result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--core-view", "sparkline"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 2
-    assert "invalid choice" in result.stderr
 
 
 def test_cli_rejects_invalid_proc_filter_regex():

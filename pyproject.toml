@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agtop"
-version = "0.4.4"
+version = "0.5.0"
 description = "Performance monitoring CLI tool for Apple Silicon"
 readme = "README.md"
 license = { text = "MIT" }
@@ -18,12 +18,13 @@ classifiers = [
   "Operating System :: MacOS",
 ]
 dependencies = [
-  "dashing",
+  "textual>=0.60",
   "psutil",
 ]
 
 [project.optional-dependencies]
 dev = ["ruff", "pytest"]
+pandas = ["pandas>=1.3"]
 
 [project.urls]
 Homepage = "https://github.com/binlecode/agtop"

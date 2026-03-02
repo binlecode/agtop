@@ -26,12 +26,13 @@ def test_agtop_runs_and_handles_sigint():
         # Wait for it to quit gracefully
         stdout, stderr = process.communicate(timeout=3)
 
-        # Python unhandled KeyboardInterrupt normally exits with 130 (128 + SIGINT)
-        # agtop has a finally block to reset terminal, so this is expected
+        # Textual manages its own lifecycle: exits 0 on clean quit, or 130 if
+        # the outer main() catches KeyboardInterrupt first.
         assert process.returncode in (0, 130)
 
-        # Verify it outputted something real (the UI)
-        assert "E-CPU" in stdout or "P-CPU" in stdout or "GPU" in stdout
+        # Textual renders to the terminal's alternate screen buffer, not plain
+        # piped stdout, so we verify no fatal Python tracebacks in stderr instead.
+        assert "Traceback" not in stderr
 
     except subprocess.TimeoutExpired:
         process.kill()
