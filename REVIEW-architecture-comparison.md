@@ -32,8 +32,8 @@ While both tools aim to monitor Apple Silicon metrics via `IOReport`, their appr
 | Feature Category | `agtop` (Python) | `mactop` (Go) | Winner |
 | :--- | :--- | :--- | :--- |
 | **Language / Distribution** | Python via Homebrew (`brew tap`), `pip` | Compiled Go (single, standalone binary) | 🏆 **mactop** |
-| **UI Library & UX** | `dashing` (simple gauge/chart widgets) | `gotui` (rich grids, tabs, mouse support) | 🏆 **mactop** |
-| **Low-Level API Efficiency** | `ctypes` directly binding `libIOReport`, `IOKit`, `sysctl` (Zero Subprocesses) | `cgo` (statically linked C/Objective-C) | 🤝 **Tie** |
+| **UI Library & UX** | `blessed` + `dashing` (gauges, charts, runtime sort/filter toggles) | `gotui` (rich grids, tabs, mouse support) | 🏆 **mactop** |
+| **Low-Level API Efficiency** | `ctypes` binding `libIOReport`, `IOKit`, `sysctl` (Zero Subprocesses) | `cgo` (statically linked C/Objective-C) | 🤝 **Tie** |
 | **Process Monitoring** | `psutil` (Python library overhead) | Native Mach `libproc` (C structs) | 🏆 **mactop** |
 | **Hardware Data Coverage** | CPU, GPU, **ANE**, RAM, Swap, SMC Temps | CPU, GPU, RAM, Swap, **Net I/O, Disk I/O**, Temps | 🤝 **Tie** (ANE vs I/O) |
 | **Peripheral Profiling** | None | USB, Displays, Thunderbolt, Storage | 🏆 **mactop** |
@@ -50,10 +50,10 @@ While both tools aim to monitor Apple Silicon metrics via `IOReport`, their appr
 
 ### Verdict & Niche Breakdown
 
-**`mactop` wins on broad DevOps features and UI richness.** Because it is a compiled Go binary using `cgo`, it boasts zero-dependency installation, much lower CPU overhead during polling, and instantaneous startups. Its inclusion of network/disk I/O, a menubar app, rich interactive TUI features (mouse support, tabs), and a Prometheus server makes it a vastly superior tool for server monitoring, devops, and general power users.
+**`mactop` wins on broad DevOps features and UI richness.** Because it is a compiled Go binary using `cgo`, it boasts zero-dependency installation, much lower CPU overhead during process polling (due to native Mach calls vs `psutil`), and instantaneous startups. Its inclusion of network/disk I/O, a menubar app, rich interactive TUI features (mouse support, tabs), and a Prometheus server makes it a vastly superior tool for server monitoring, devops, and general power users.
 
-**`agtop` has rapidly closed the performance gap and remains highly valuable for specific niches.**
-With the recent `0.4.0` release completely replacing all `powermetrics` subprocess calls with pure in-process `ctypes` bindings to `libIOReport`, `CoreFoundation`, `IOKit`, and `sysctl`, `agtop` now achieves near-native performance parity in data collection without needing `sudo` or temporary files.
+**`agtop` has rapidly closed the gap in metrics fidelity and interactivity.**
+With the `0.4.x` series, `agtop` has completely replaced all `powermetrics` subprocess calls with pure in-process `ctypes` bindings to `libIOReport`, `CoreFoundation`, `IOKit`, and `sysctl`, achieving near-native performance parity in hardware data collection without needing `sudo`. Furthermore, the addition of a `blessed` non-blocking input loop provides responsive runtime interactivity (e.g., toggling process sorts by CPU/Memory/PID and dynamic regex filtering).
 1. **AI/ML Workloads:** `agtop` is one of the very few tools that specifically tracks and breaks out **ANE (Apple Neural Engine)** wattage, which is critical for ML engineers evaluating local CoreML models.
 2. **Contextual Awareness:** `agtop`'s `soc_profiles.py` gives it a massive UX win for hardware awareness. When you run `agtop` on an M4 Max, the power charts scale precisely to the M4 Max's hardware limits out-of-the-box, giving the user immediate visual context on how hard they are pushing their specific chip.
 3. **Python Ecosystem Integration:** Being written in pure Python makes `agtop` trivially forkable for data scientists who want to import the `sampler.py` module directly into their Python training loops or Jupyter notebooks.
