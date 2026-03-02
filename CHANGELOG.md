@@ -4,6 +4,11 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.4.2] - 2026-03-01
+
+### Changed
+- Raised minimum history buffer size from 20 to 200 points (`usage_track_window`, `core_history_window` in `state.py`). Charts now fill with real data at default `--avg 30 --interval 2` settings instead of repeating the oldest sample across most of the chart width.
+
 ## [0.4.1] - 2026-03-01
 
 ### Added

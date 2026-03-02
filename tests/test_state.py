@@ -46,8 +46,8 @@ def test_create_dashboard_config_fields():
 
     assert config.sample_interval == 2
     assert config.avg_window == 15
-    assert config.usage_track_window == 20  # max(20, 30/2=15) -> 20
-    assert config.core_history_window == 20
+    assert config.usage_track_window == 200  # max(200, 30/2=15) -> 200
+    assert config.core_history_window == 200
     assert config.cpu_chart_ref_w == 30.0
     assert config.gpu_chart_ref_w == 20.0
     assert config.ane_max_power == 8.0

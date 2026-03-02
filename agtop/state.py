@@ -143,8 +143,8 @@ def create_dashboard_config(args, soc_info_dict):
     """Build an immutable DashboardConfig from parsed CLI args and SoC info."""
     sample_interval = max(1, args.interval)
     avg_window = max(1, int(args.avg / sample_interval))
-    usage_track_window = max(20, int(args.avg / sample_interval))
-    core_history_window = max(20, int(args.avg / sample_interval))
+    usage_track_window = max(200, int(args.avg / sample_interval))
+    core_history_window = max(200, int(args.avg / sample_interval))
 
     cpu_chart_ref_w = soc_info_dict["cpu_chart_ref_w"]
     gpu_chart_ref_w = soc_info_dict["gpu_chart_ref_w"]
