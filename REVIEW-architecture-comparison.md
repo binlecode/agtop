@@ -38,15 +38,15 @@ While both tools aim to monitor Apple Silicon metrics via `IOReport`, their appr
 | **Hardware Data Coverage** | CPU, GPU, **ANE**, RAM, Swap, SMC Temps | CPU, GPU, RAM, Swap, **Net I/O, Disk I/O**, Temps | 🤝 **Tie** (ANE vs I/O) |
 | **Peripheral Profiling** | None | USB, Displays, Thunderbolt, Storage | 🏆 **mactop** |
 | **Power Scaling Intelligence**| Deep M1-M4 profiles (`soc_profiles.py`) | Dynamic scaling (recent peak observations) | 🏆 **agtop** |
-| **Data Export / Headless** | None (TUI only) | JSON, YAML, CSV, Prometheus Server | 🏆 **mactop** |
+| **Data Export / Headless** | Python API (`Profiler`, `to_pandas()`) | JSON, YAML, CSV, Prometheus Server | 🤝 **Tie** (Python API vs CLI exports) |
 | **Desktop Integration** | Terminal only | Includes macOS Menubar app natively | 🏆 **mactop** |
 | **Theming & Colors** | Adaptive TrueColor RGB gradients | Rich themes (Catppuccin) + Hex overrides | 🤝 **Tie** |
-| **Extensibility / Hackability** | Trivial to import into Jupyter/ML pipelines | Requires Go/C knowledge to extend | 🏆 **agtop** |
+| **Extensibility / Hackability** | Dedicated `api.py` (sync/async/threaded profiling, alerts, DataFrames) | Requires Go/C knowledge to extend | 🏆 **agtop** |
 
 ### 🏆 Final Score
-*   **mactop:** 6 Wins
+*   **mactop:** 5 Wins
 *   **agtop:** 2 Wins
-*   **Ties:** 3
+*   **Ties:** 4
 
 ### Verdict & Niche Breakdown
 
@@ -56,4 +56,4 @@ While both tools aim to monitor Apple Silicon metrics via `IOReport`, their appr
 With the `0.4.x` series, `agtop` has completely replaced all `powermetrics` subprocess calls with pure in-process `ctypes` bindings to `libIOReport`, `CoreFoundation`, `IOKit`, and `sysctl`, achieving near-native performance parity in hardware data collection without needing `sudo`. Furthermore, the addition of a `blessed` non-blocking input loop provides responsive runtime interactivity (e.g., toggling process sorts by CPU/Memory/PID and dynamic regex filtering).
 1. **AI/ML Workloads:** `agtop` is one of the very few tools that specifically tracks and breaks out **ANE (Apple Neural Engine)** wattage, which is critical for ML engineers evaluating local CoreML models.
 2. **Contextual Awareness:** `agtop`'s `soc_profiles.py` gives it a massive UX win for hardware awareness. When you run `agtop` on an M4 Max, the power charts scale precisely to the M4 Max's hardware limits out-of-the-box, giving the user immediate visual context on how hard they are pushing their specific chip.
-3. **Python Ecosystem Integration:** Being written in pure Python makes `agtop` trivially forkable for data scientists who want to import the `sampler.py` module directly into their Python training loops or Jupyter notebooks.
+3. **First-Class Python API:** `agtop` now exposes a robust public API (`agtop.api`) with synchronous (`Monitor`), asynchronous (`AsyncMonitor`), and threaded (`Profiler`) hardware metrics collection. This allows data scientists to seamlessly profile their model training loops, trigger custom callbacks on hardware thresholds, and export results directly to Pandas DataFrames (`to_pandas()`) for analysis—a massive advantage over standalone CLI binaries.
