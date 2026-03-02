@@ -17,7 +17,7 @@ This file is the single source of truth for repository guidelines, used by Claud
 ## Build, Test, and Development Commands
 - `.venv/bin/python -m pip install -e ".[dev]"`: install editable + dev deps (ruff).
 - `.venv/bin/python -m agtop.agtop --help`: validate CLI parsing and flags.
-- `sudo .venv/bin/python -m agtop.agtop --interval 2 --avg 30`: run the tool locally (requires sudo for full metrics).
+- `.venv/bin/python -m agtop.agtop --interval 2 --avg 30`: run the tool locally.
 - `.venv/bin/python -m build`: build source/wheel artifacts.
 - `.venv/bin/pytest -q`: run automated tests.
 
@@ -25,18 +25,21 @@ This file is the single source of truth for repository guidelines, used by Claud
 
 | Module | Role |
 |--------|------|
-| `agtop/agtop.py` | CLI entry point (`cli()`), argument parsing, dashboard layout and main render loop |
-| `agtop/sampler.py` | `IOReportSampler`: subscription lifecycle, delta computation, `SampleResult` conversion, DVFS table discovery via `ioreg` |
+| `agtop/agtop.py` | CLI entry point (`cli()`), argument parsing, thin wrapper launching the Textual TUI |
+| `agtop/sampler.py` | `IOReportSampler`: subscription lifecycle, delta computation, `SampleResult` conversion, DVFS table discovery via native ctypes |
 | `agtop/ioreport.py` | ctypes bindings to `libIOReport.dylib` and CoreFoundation (`IOReportSubscription`, `cfstr`, `cf_release`) |
 | `agtop/smc.py` | SMC temperature reader: IOKit ctypes bindings to `AppleSMC`, key discovery, CPU/GPU die temperature reads |
 | `agtop/utils.py` | System queries: `psutil` RAM/swap metrics, `sysctl`/`system_profiler` SoC info, `psutil` process collection |
 | `agtop/soc_profiles.py` | 16 built-in M1–M4 SoC profiles with power/bandwidth reference values; tier fallbacks for unknown chips |
 | `agtop/power_scaling.py` | Power chart scaling: `auto` mode (rolling peak x1.25) vs `profile` mode (SoC reference wattage) |
-| `agtop/color_modes.py` | Terminal capability detection (mono/basic/256/truecolor) and percent-to-color-index mapping |
-| `agtop/gradient.py` | Per-cell gradient rendering subclasses for `dashing` gauge/chart/text widgets |
-| `agtop/parsers.py` | Logic for interpreting complex system output into structured dictionaries |
+| `agtop/config.py` | `DashboardConfig` frozen dataclass; `create_dashboard_config()` merges CLI args with SoC info |
+| `agtop/models.py` | `SystemSnapshot` and `CoreSample` dataclasses (public API types) |
+| `agtop/api.py` | `Monitor`, `Profiler`, `AsyncMonitor` — public Python API for hardware profiling |
+| `agtop/tui/app.py` | `AgtopApp`: Textual `App` with polling worker, process table, interactive sort/filter/pause |
+| `agtop/tui/widgets.py` | `HardwareDashboard` widget with braille `Sparkline` charts, core rows, and alert computation |
+| `agtop/tui/styles.tcss` | Textual CSS layout for the dashboard |
 
-**Data flow**: `ioreport.py` provides ctypes bindings for IOReport snapshots and deltas → `sampler.py` subscribes to Energy Model / CPU Stats / GPU Stats channels, computes deltas between consecutive snapshots, reads SMC die temperatures via `smc.py`, and converts raw items into a `SampleResult` (power in watts, frequency in MHz, activity in percent, temperatures in °C) using DVFS tables read from `ioreg` at startup → `agtop.py` merges `SampleResult` with `psutil` per-core CPU usage, `psutil` RAM/swap metrics, and `psutil` top processes from `utils.py` → renders via `dashing` widgets with optional gradient coloring from `color_modes.py` and `gradient.py`.
+**Data flow**: `ioreport.py` provides ctypes bindings for IOReport snapshots and deltas → `sampler.py` subscribes to Energy Model / CPU Stats / GPU Stats channels, computes deltas between consecutive snapshots, reads SMC die temperatures via `smc.py`, and converts raw items into a `SampleResult` (power in watts, frequency in MHz, activity in percent, temperatures in °C) → `api.py` wraps the sampler in `Monitor` and maps `SampleResult` to `SystemSnapshot` (including `CoreSample` lists for per-core data) → `tui/widgets.py` feeds `SystemSnapshot` into Textual `Sparkline` charts and `tui/app.py` drives the render loop.
 
 **SoC compatibility**: Explicit M1–M4 recognition (16 profiles). Unknown future chips fall back to tier defaults (base/Pro/Max/Ultra) using the latest known generation's reference values.
 
@@ -81,4 +84,4 @@ Releases are driven by `scripts/tag_release.sh [version]`. CI handles formula sy
 ## Security & Configuration Tips
 - The IOReport backend runs unprivileged.
 - Avoid introducing persistent privileged processes or unsafe temporary-file handling.
-- `powermetrics` (used in some parsing/fallback logic) requires root; be extremely cautious when modifying code that executes system commands with `sudo`.
+- Avoid introducing persistent privileged processes or shell commands that invoke `sudo`.
