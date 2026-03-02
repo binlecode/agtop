@@ -47,9 +47,10 @@ class BrailleChart(Widget):
     }
     """
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, auto_scale: bool = False, **kwargs) -> None:
         super().__init__(**kwargs)
         self._data = []
+        self._auto_scale = auto_scale
 
     @property
     def data(self):
@@ -69,14 +70,30 @@ class BrailleChart(Widget):
         dlen = len(self._data)
         # offset < 0 means the first |offset| columns are left-padded with zero
         offset = dlen - n
+        # Collect visible values for auto-scale
+        if self._auto_scale:
+            visible = []
+            for col in range(width):
+                li = offset + 2 * col
+                ri = li + 1
+                if li >= 0:
+                    visible.append(float(self._data[li]))
+                if ri >= 0:
+                    visible.append(float(self._data[ri]))
+            scale = max(visible) if visible else 1.0
+            scale = scale if scale > 0 else 1.0
+        else:
+            scale = 100.0
         rows = []
         for row in range(height):
             chars = []
             for col in range(width):
                 li = offset + 2 * col
                 ri = li + 1
-                left = min(100.0, max(0.0, float(self._data[li]))) if li >= 0 else 0.0
-                right = min(100.0, max(0.0, float(self._data[ri]))) if ri >= 0 else 0.0
+                lv = float(self._data[li]) if li >= 0 else 0.0
+                rv = float(self._data[ri]) if ri >= 0 else 0.0
+                left = min(100.0, max(0.0, lv / scale * 100.0))
+                right = min(100.0, max(0.0, rv / scale * 100.0))
                 chars.append(_braille_bar(left, right, row, height))
             rows.append("".join(chars))
         return "\n".join(rows)
@@ -156,10 +173,14 @@ class HardwareDashboard(Widget):
         with Horizontal(classes="metric-pair"):
             with Widget(classes="metric-col"):
                 yield Static("CPU Power 0W", id="cpupwr-label", classes="metric-label")
-                yield BrailleChart(id="cpupwr-chart", classes="metric-chart")
+                yield BrailleChart(
+                    auto_scale=True, id="cpupwr-chart", classes="metric-chart"
+                )
             with Widget(classes="metric-col"):
                 yield Static("GPU Power 0W", id="gpupwr-label", classes="metric-label")
-                yield BrailleChart(id="gpupwr-chart", classes="metric-chart")
+                yield BrailleChart(
+                    auto_scale=True, id="gpupwr-chart", classes="metric-chart"
+                )
 
         yield Static(
             "thermal: Nominal  alerts: none", id="status-line", classes="status-line"

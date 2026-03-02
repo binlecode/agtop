@@ -183,7 +183,7 @@ class IOReportSampler:
                 energy_j = _energy_to_joules(item.integer_value, item.unit)
                 if "CPU Energy" in item.channel:
                     cpu_energy_j += energy_j
-                elif "GPU" in item.channel:
+                elif "GPU Energy" in item.channel:
                     gpu_energy_j += energy_j
                 elif "ANE" in item.channel:
                     ane_energy_j += energy_j
