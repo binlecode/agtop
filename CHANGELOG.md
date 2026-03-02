@@ -4,6 +4,11 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.5.1] - 2026-03-02
+
+### Fixed
+- Embedded TUI CSS as `DEFAULT_CSS` in `AgtopApp` instead of a `CSS_PATH` file reference. `styles.tcss` was not included in the wheel, causing a `StylesheetError` crash on `brew install`.
+
 ## [0.5.0] - 2026-03-01
 
 ### Changed

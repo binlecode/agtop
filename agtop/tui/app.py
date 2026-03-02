@@ -60,7 +60,49 @@ def _process_display_name(command, max_len=24):
 
 
 class AgtopApp(App):
-    CSS_PATH = "styles.tcss"
+    DEFAULT_CSS = """
+    AgtopApp {
+        layout: vertical;
+    }
+    HardwareDashboard {
+        height: auto;
+        layout: vertical;
+        border: round $accent;
+        padding: 0 1;
+    }
+    .metric-label {
+        height: 1;
+        color: $text-muted;
+    }
+    .metric-chart {
+        height: 3;
+        margin-bottom: 1;
+    }
+    .metric-pair {
+        height: auto;
+        layout: horizontal;
+        margin-bottom: 1;
+    }
+    .metric-col {
+        width: 1fr;
+        layout: vertical;
+        height: auto;
+    }
+    .metric-col .metric-chart {
+        margin-bottom: 0;
+    }
+    .status-line {
+        height: 1;
+        color: $text-muted;
+    }
+    .core-row {
+        height: auto;
+    }
+    #process-table {
+        height: 1fr;
+        border: round $accent;
+    }
+    """
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("p", "toggle_pause", "Pause"),
