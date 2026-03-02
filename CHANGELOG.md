@@ -4,6 +4,11 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.4.4] - 2026-03-02
+
+### Fixed
+- Fixed GitHub Actions CI failure by correctly marking hardware-dependent E2E tests as macOS local-only.
+
 ## [0.4.3] - 2026-03-01
 
 ### Changed
