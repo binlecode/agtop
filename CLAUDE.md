@@ -2,9 +2,9 @@
 
 This file is the single source of truth for repository guidelines, used by Claude Code and all AI coding agents.
 
-## Project
+## Project Overview
 
-**agtop** — performance monitoring CLI for Apple Silicon Macs. Hard fork of `tlkh/asitop`. Uses IOReport (in-process) for Apple Silicon power/frequency/residency metrics. Combines these with `psutil`, `sysctl`, and `system_profiler` into a real-time terminal dashboard showing CPU/GPU/ANE utilization, per-core frequency, memory/bandwidth, thermal state, and process info.
+**agtop** — Python-based performance monitoring CLI for Apple Silicon Macs (M1/M2/M3/M4 chips). Hard fork of `tlkh/asitop`. Uses IOReport (in-process) for Apple Silicon power/frequency/residency metrics. Combines these with `psutil`, `sysctl`, and `system_profiler` into a real-time terminal dashboard showing CPU/GPU/ANE utilization, per-core frequency, memory/bandwidth, thermal state, and process info.
 
 ## Python Environment (Required)
 - Always use the repository virtual environment at `.venv`.
@@ -17,11 +17,11 @@ This file is the single source of truth for repository guidelines, used by Claud
 ## Build, Test, and Development Commands
 - `.venv/bin/python -m pip install -e ".[dev]"`: install editable + dev deps (ruff).
 - `.venv/bin/python -m agtop.agtop --help`: validate CLI parsing and flags.
-- `agtop --interval 2 --avg 30`: run the tool locally.
+- `sudo .venv/bin/python -m agtop.agtop --interval 2 --avg 30`: run the tool locally (requires sudo for full metrics).
 - `.venv/bin/python -m build`: build source/wheel artifacts.
 - `.venv/bin/pytest -q`: run automated tests.
 
-## Architecture
+## Architecture & Core Components
 
 | Module | Role |
 |--------|------|
@@ -34,6 +34,7 @@ This file is the single source of truth for repository guidelines, used by Claud
 | `agtop/power_scaling.py` | Power chart scaling: `auto` mode (rolling peak x1.25) vs `profile` mode (SoC reference wattage) |
 | `agtop/color_modes.py` | Terminal capability detection (mono/basic/256/truecolor) and percent-to-color-index mapping |
 | `agtop/gradient.py` | Per-cell gradient rendering subclasses for `dashing` gauge/chart/text widgets |
+| `agtop/parsers.py` | Logic for interpreting complex system output into structured dictionaries |
 
 **Data flow**: `ioreport.py` provides ctypes bindings for IOReport snapshots and deltas → `sampler.py` subscribes to Energy Model / CPU Stats / GPU Stats channels, computes deltas between consecutive snapshots, reads SMC die temperatures via `smc.py`, and converts raw items into a `SampleResult` (power in watts, frequency in MHz, activity in percent, temperatures in °C) using DVFS tables read from `ioreg` at startup → `agtop.py` merges `SampleResult` with `psutil` per-core CPU usage, `psutil` RAM/swap metrics, and `psutil` top processes from `utils.py` → renders via `dashing` widgets with optional gradient coloring from `color_modes.py` and `gradient.py`.
 
@@ -80,3 +81,4 @@ Releases are driven by `scripts/tag_release.sh [version]`. CI handles formula sy
 ## Security & Configuration Tips
 - The IOReport backend runs unprivileged.
 - Avoid introducing persistent privileged processes or unsafe temporary-file handling.
+- `powermetrics` (used in some parsing/fallback logic) requires root; be extremely cautious when modifying code that executes system commands with `sudo`.
