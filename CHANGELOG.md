@@ -4,6 +4,16 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.5.3] - 2026-03-02
+
+### Fixed
+- Correct GPU energy channel matching: use `"GPU Energy" in item.channel` instead of `"GPU" in item.channel` to avoid double-counting the mJ summary and nJ precision channels on M4 (and later) chips.
+
+### Changed
+- Power charts (`CPU Power`, `GPU Power`) now use `auto_scale=True` so low idle wattage is visible instead of rounding to zero in the braille bar math.
+- Removed dead `clear_console()` function from `utils.py` (never called).
+- Deleted stale `agtop/tui/styles.tcss` (superseded by `DEFAULT_CSS` embedded in `AgtopApp` since v0.5.1).
+
 ## [0.5.2] - 2026-03-02
 
 ### Fixed

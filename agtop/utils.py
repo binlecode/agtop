@@ -1,13 +1,7 @@
-import os
 import re
 import psutil
 from .native_sys import get_gpu_cores_native, get_sysctl_int, get_sysctl_string
 from .soc_profiles import get_soc_profile
-
-
-def clear_console():
-    command = "clear"
-    os.system(command)
 
 
 def convert_to_GB(value):
