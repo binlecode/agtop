@@ -84,7 +84,7 @@ def create_dashboard_config(args, soc_info_dict):
         alert_package_power_percent=args.alert_package_power_percent,
         alert_swap_rise_gb=args.alert_swap_rise_gb,
         alert_sustain_samples=max(1, int(args.alert_sustain_samples)),
-        process_display_count=8,
+        process_display_count=50,
         subsamples=max(1, int(args.subsamples)),
         process_filter_pattern=process_filter_pattern,
         proc_filter_raw=getattr(args, "proc_filter", ""),

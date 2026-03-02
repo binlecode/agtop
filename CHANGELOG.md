@@ -4,6 +4,19 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.5.2] - 2026-03-02
+
+### Fixed
+- Thermal pressure now reads real macOS state (`NSProcessInfo.thermalState` via ObjC runtime ctypes) instead of always showing "Unknown". Returns Nominal / Fair / Serious / Critical.
+
+### Changed
+- Replaced Textual `Sparkline` with a custom `BrailleChart` widget: auto-scales bar count to terminal width (2 samples per character column), 500-sample rolling history.
+- Added loading splash screen with chip name, core counts, interval, and a braille spinner while the sampler warms up on the first delta.
+- Process table row count now adapts to available table height instead of a fixed limit.
+- Core-row layout now adapts column count to widget width; entries separated by `│` with fixed-width formatting.
+- Reduced chart height from 3 to 2 terminal rows for a more compact layout.
+- Thread count column added to process table.
+
 ## [0.5.1] - 2026-03-02
 
 ### Fixed

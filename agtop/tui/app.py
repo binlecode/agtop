@@ -6,12 +6,14 @@ import threading
 
 from textual.app import App, ComposeResult
 from textual import work
-from textual.widgets import DataTable, Footer, Header, Input
+from textual.widgets import DataTable, Footer, Header, Input, Static
 
 from agtop.api import Monitor
 from agtop.config import create_dashboard_config
 from agtop.tui.widgets import HardwareDashboard, MetricsUpdated
 from agtop.utils import get_ram_metrics_dict, get_soc_info, get_top_processes
+
+_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 SORT_CPU = "cpu"
 SORT_MEMORY = "memory"
@@ -75,8 +77,7 @@ class AgtopApp(App):
         color: $text-muted;
     }
     .metric-chart {
-        height: 3;
-        margin-bottom: 1;
+        height: 2;
     }
     .metric-pair {
         height: auto;
@@ -88,9 +89,6 @@ class AgtopApp(App):
         layout: vertical;
         height: auto;
     }
-    .metric-col .metric-chart {
-        margin-bottom: 0;
-    }
     .status-line {
         height: 1;
         color: $text-muted;
@@ -100,6 +98,12 @@ class AgtopApp(App):
     }
     #process-table {
         height: 1fr;
+        border: round $accent;
+    }
+    #loading-splash {
+        height: 1fr;
+        content-align: center middle;
+        color: $accent;
         border: round $accent;
     }
     """
@@ -113,14 +117,31 @@ class AgtopApp(App):
 
     def __init__(self, args) -> None:
         super().__init__()
-        self._config = create_dashboard_config(args, get_soc_info())
+        soc_info = get_soc_info()
+        self._config = create_dashboard_config(args, soc_info)
+        self._chip_name = soc_info.get("name", "Apple Silicon")
         self._stop_polling = threading.Event()
         self._sort_mode = SORT_CPU
         self._filter_regex = self._config.process_filter_pattern
         self._last_processes = {"cpu": [], "memory": []}
+        self._splash_frame = 0
+        self._sampler_ready = False
+        self._splash_timer = None
+        self._last_sort_mode = None
+
+    def _build_splash(self) -> str:
+        cfg = self._config
+        return (
+            f"agtop\n\n"
+            f"{self._chip_name}\n"
+            f"E-cores: {cfg.e_core_count}   P-cores: {cfg.p_core_count}\n"
+            f"interval: {cfg.sample_interval}s   subsamples: {cfg.subsamples}\n\n"
+            f"{_SPINNER_FRAMES[self._splash_frame]} Initializing sampler…"
+        )
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        yield Static(self._build_splash(), id="loading-splash")
         yield HardwareDashboard(config=self._config, id="hardware-dash")
         yield DataTable(id="process-table", zebra_stripes=True, cursor_type="row")
         filter_input = Input(placeholder="Regex filter...", id="filter-input")
@@ -129,7 +150,9 @@ class AgtopApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#hardware-dash").display = False
         self._refresh_process_table()  # initialises columns without advancing sort
+        self._splash_timer = self.set_interval(0.1, self._tick_splash)
         self.poll_metrics()
 
     @work(thread=True, exclusive=True)
@@ -150,7 +173,16 @@ class AgtopApp(App):
     def on_unmount(self) -> None:
         self._stop_polling.set()
 
+    def _tick_splash(self) -> None:
+        self._splash_frame = (self._splash_frame + 1) % len(_SPINNER_FRAMES)
+        self.query_one("#loading-splash", Static).update(self._build_splash())
+
     def on_metrics_updated(self, message: MetricsUpdated) -> None:
+        if not self._sampler_ready:
+            self._sampler_ready = True
+            self._splash_timer.stop()
+            self.query_one("#loading-splash").display = False
+            self.query_one("#hardware-dash").display = True
         self.query_one("#hardware-dash", HardwareDashboard).update_metrics(message)
         self._last_processes = message.processes
         self._refresh_process_table()
@@ -212,20 +244,27 @@ class AgtopApp(App):
         except Exception:
             return
 
-        # Update columns
-        table.clear(columns=True)
-        cols = ["PID", "Command", "CPU%", "MEM (MB)", "Threads"]
-        if self._sort_mode == SORT_PID:
-            cols[0] = "*PID"
-        elif self._sort_mode == SORT_CPU:
-            cols[2] = "*CPU%"
-        elif self._sort_mode == SORT_MEMORY:
-            cols[3] = "*MEM (MB)"
-        table.add_columns(*cols)
+        # Rebuild columns only when sort mode changes
+        if self._sort_mode != self._last_sort_mode:
+            self._last_sort_mode = self._sort_mode
+            table.clear(columns=True)
+            cols = ["PID", "Command", "CPU%", "MEM (MB)", "Threads"]
+            if self._sort_mode == SORT_PID:
+                cols[0] = "*PID"
+            elif self._sort_mode == SORT_CPU:
+                cols[2] = "*CPU%"
+            elif self._sort_mode == SORT_MEMORY:
+                cols[3] = "*MEM (MB)"
+            table.add_columns(*cols)
+        else:
+            table.clear()
 
-        sorted_procs = sort_processes(
-            self._last_processes, self._sort_mode, self._config.process_display_count
-        )
+        try:
+            # -1 for the header row; fall back to config if not yet laid out
+            limit = max(5, table.content_size.height - 1)
+        except Exception:
+            limit = self._config.process_display_count
+        sorted_procs = sort_processes(self._last_processes, self._sort_mode, limit)
         for proc in sorted_procs:
             table.add_row(
                 str(proc.get("pid", "")),

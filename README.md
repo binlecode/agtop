@@ -92,6 +92,19 @@ At startup, reads `ioreg -a -r -d 1 -n pmgr` to get DVFS frequency tables from t
 
 Reads CPU and GPU die temperatures via IOKit ctypes bindings to the `AppleSMC` kernel service. Discovers temperature sensor keys (Tp*/Te* for CPU, Tg* for GPU) at startup and reads `flt ` (IEEE 754 float) values each sample. Runs unprivileged.
 
+### Thermal pressure (`NSProcessInfo`)
+
+Reads the macOS thermal state via the Objective-C runtime (`libobjc.A.dylib` + `Foundation.framework`) using ctypes. Calls `[NSProcessInfo processInfo].thermalState` each sample. The result is shown in the status line above the per-core history tracks:
+
+| State | Meaning |
+| --- | --- |
+| **Nominal** | Normal operating conditions — no throttling |
+| **Fair** | Mild thermal pressure — light throttling may begin |
+| **Serious** | Significant thermal pressure — noticeable throttling in effect |
+| **Critical** | Severe thermal pressure — aggressive throttling, system is very hot |
+
+No sudo required. Degrades to `Unknown` if the ObjC runtime call fails.
+
 ### System context
 
 - `sysctl`: SoC chip name, total/P/E core counts.
@@ -111,7 +124,7 @@ Reads CPU and GPU die temperatures via IOKit ctypes bindings to the `AppleSMC` k
 | SoC profile | `sysctl` brand → 16 M1–M4 profiles | Tier fallbacks for unknown chips |
 | Top processes | `psutil.process_iter` | Optional `--proc-filter` regex |
 | Bandwidth | IOReport (when available) | N/A if DCS counters not exposed |
-| Thermal pressure | IOReport (when available) | "Unknown" if not exposed |
+| Thermal pressure | `NSProcessInfo.thermalState` via ObjC runtime | Nominal / Fair / Serious / Critical |
 
 ## Architecture
 
@@ -184,7 +197,7 @@ graph TD
 ## Troubleshooting
 
 - **Bandwidth shows N/A**: IOReport does not expose memory bandwidth counters on all SoCs.
-- **Thermal shows "Unknown"**: IOReport does not expose thermal pressure state.
+- **Thermal shows "Unknown"**: ObjC runtime failed to read `NSProcessInfo.thermalState` (unexpected on macOS 12+).
 - **Frequencies show 0 MHz**: DVFS table discovery failed. File an issue with `sysctl -n machdep.cpu.brand_string` output.
 - **Metric differences vs other tools**: expected due to sampling window and source timing differences.
 

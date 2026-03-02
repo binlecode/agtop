@@ -5,7 +5,7 @@ from collections import deque
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Sparkline, Static
+from textual.widgets import Static
 
 from agtop.models import SystemSnapshot
 from agtop.power_scaling import (
@@ -17,6 +17,69 @@ from agtop.power_scaling import (
 
 
 _BLOCK_CHARS = " ▁▂▃▄▅▆▇█"
+
+# Braille dot fill patterns for left and right columns (0–4 dots filled from bottom).
+# Dot layout per braille cell (top→bottom): rows 1,2,3,7 on left; rows 4,5,6,8 on right.
+_LEFT_FILL = [0x00, 0x40, 0x44, 0x46, 0x47]
+_RIGHT_FILL = [0x00, 0x80, 0xA0, 0xB0, 0xB8]
+
+
+def _braille_bar(left: float, right: float, row: int, height: int) -> str:
+    """One braille character for a chart column at terminal row `row`."""
+    total = height * 4
+    base = (height - 1 - row) * 4
+    ld = max(0, min(4, round(left / 100 * total) - base))
+    rd = max(0, min(4, round(right / 100 * total) - base))
+    return chr(0x2800 | _LEFT_FILL[ld] | _RIGHT_FILL[rd])
+
+
+class BrailleChart(Widget):
+    """Braille sparkline with fixed bar width: 2 samples per character column.
+
+    Number of visible bars auto-adjusts to widget width — wider widget shows
+    more history, narrower shows less. Each bar is always exactly half a
+    character column wide, giving consistent appearance regardless of terminal size.
+    """
+
+    DEFAULT_CSS = """
+    BrailleChart {
+        height: 2;
+    }
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._data = []
+
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, values) -> None:
+        self._data = values
+        self.refresh()
+
+    def render(self):
+        width = self.size.width
+        height = self.size.height
+        if width <= 0 or height <= 0:
+            return ""
+        n = width * 2
+        dlen = len(self._data)
+        # offset < 0 means the first |offset| columns are left-padded with zero
+        offset = dlen - n
+        rows = []
+        for row in range(height):
+            chars = []
+            for col in range(width):
+                li = offset + 2 * col
+                ri = li + 1
+                left = min(100.0, max(0.0, float(self._data[li]))) if li >= 0 else 0.0
+                right = min(100.0, max(0.0, float(self._data[ri]))) if ri >= 0 else 0.0
+                chars.append(_braille_bar(left, right, row, height))
+            rows.append("".join(chars))
+        return "\n".join(rows)
 
 
 def _block_spark(history, width=8):
@@ -46,7 +109,7 @@ class HardwareDashboard(Widget):
         self._config = config
         cfg = config
 
-        maxlen = max(2, cfg.avg_window)
+        maxlen = 500
         swap_maxlen = max(2, cfg.alert_sustain_samples + 1)
 
         self._ecpu_hist: deque = deque([0] * maxlen, maxlen=maxlen)
@@ -72,66 +135,31 @@ class HardwareDashboard(Widget):
         cfg = self._config
 
         yield Static("E-CPU 0% @0MHz", id="ecpu-label", classes="metric-label")
-        yield Sparkline(
-            list(self._ecpu_hist),
-            summary_function=max,
-            id="ecpu-chart",
-            classes="metric-chart",
-        )
+        yield BrailleChart(id="ecpu-chart", classes="metric-chart")
 
         yield Static("P-CPU 0% @0MHz", id="pcpu-label", classes="metric-label")
-        yield Sparkline(
-            list(self._pcpu_hist),
-            summary_function=max,
-            id="pcpu-chart",
-            classes="metric-chart",
-        )
+        yield BrailleChart(id="pcpu-chart", classes="metric-chart")
 
         from textual.containers import Horizontal
 
         with Horizontal(classes="metric-pair"):
             with Widget(classes="metric-col"):
                 yield Static("GPU 0% @0MHz", id="gpu-label", classes="metric-label")
-                yield Sparkline(
-                    list(self._gpu_hist),
-                    summary_function=max,
-                    id="gpu-chart",
-                    classes="metric-chart",
-                )
+                yield BrailleChart(id="gpu-chart", classes="metric-chart")
             with Widget(classes="metric-col"):
                 yield Static("ANE 0%", id="ane-label", classes="metric-label")
-                yield Sparkline(
-                    list(self._ane_hist),
-                    summary_function=max,
-                    id="ane-chart",
-                    classes="metric-chart",
-                )
+                yield BrailleChart(id="ane-chart", classes="metric-chart")
 
         yield Static("RAM 0%", id="ram-label", classes="metric-label")
-        yield Sparkline(
-            list(self._ram_hist),
-            summary_function=max,
-            id="ram-chart",
-            classes="metric-chart",
-        )
+        yield BrailleChart(id="ram-chart", classes="metric-chart")
 
         with Horizontal(classes="metric-pair"):
             with Widget(classes="metric-col"):
                 yield Static("CPU Power 0W", id="cpupwr-label", classes="metric-label")
-                yield Sparkline(
-                    list(self._cpupwr_hist),
-                    summary_function=max,
-                    id="cpupwr-chart",
-                    classes="metric-chart",
-                )
+                yield BrailleChart(id="cpupwr-chart", classes="metric-chart")
             with Widget(classes="metric-col"):
                 yield Static("GPU Power 0W", id="gpupwr-label", classes="metric-label")
-                yield Sparkline(
-                    list(self._gpupwr_hist),
-                    summary_function=max,
-                    id="gpupwr-chart",
-                    classes="metric-chart",
-                )
+                yield BrailleChart(id="gpupwr-chart", classes="metric-chart")
 
         yield Static(
             "thermal: Nominal  alerts: none", id="status-line", classes="status-line"
@@ -182,13 +210,13 @@ class HardwareDashboard(Widget):
         self._swap_hist.append(max(0.0, float(ram.get("swap_used_GB", 0.0) or 0.0)))
 
         # Update sparklines
-        self.query_one("#ecpu-chart", Sparkline).data = list(self._ecpu_hist)
-        self.query_one("#pcpu-chart", Sparkline).data = list(self._pcpu_hist)
-        self.query_one("#gpu-chart", Sparkline).data = list(self._gpu_hist)
-        self.query_one("#ane-chart", Sparkline).data = list(self._ane_hist)
-        self.query_one("#ram-chart", Sparkline).data = list(self._ram_hist)
-        self.query_one("#cpupwr-chart", Sparkline).data = list(self._cpupwr_hist)
-        self.query_one("#gpupwr-chart", Sparkline).data = list(self._gpupwr_hist)
+        self.query_one("#ecpu-chart", BrailleChart).data = self._ecpu_hist
+        self.query_one("#pcpu-chart", BrailleChart).data = self._pcpu_hist
+        self.query_one("#gpu-chart", BrailleChart).data = self._gpu_hist
+        self.query_one("#ane-chart", BrailleChart).data = self._ane_hist
+        self.query_one("#ram-chart", BrailleChart).data = self._ram_hist
+        self.query_one("#cpupwr-chart", BrailleChart).data = self._cpupwr_hist
+        self.query_one("#gpupwr-chart", BrailleChart).data = self._gpupwr_hist
 
         # Update labels
         cpu_temp = " ({:.0f}°C)".format(s.cpu_temp_c) if s.cpu_temp_c > 0 else ""
@@ -233,25 +261,44 @@ class HardwareDashboard(Widget):
         # Compute and update status/alerts
         self._compute_alerts(s, ram)
 
+    # Width of one core entry: "{P}{:2d} {:3d}% {8-char spark}" = 17 chars.
+    _CORE_ENTRY_W = 17
+    _CORE_SEP = " │ "  # 3 chars
+
     def _update_core_row(self, widget_id: str, cores: list, prefix: str) -> None:
-        """Update a core-row Static with inline block sparklines, 4 per line."""
+        """Update a core-row Static with adaptive columns separated by │."""
+        widget = self.query_one(widget_id, Static)
         if not cores:
-            self.query_one(widget_id, Static).update("")
+            widget.update("")
             return
-        parts = []
-        for i, core in enumerate(cores):
+
+        # How many complete columns fit without overflow?
+        avail = max(self._CORE_ENTRY_W, widget.size.width)
+        ncols = max(
+            1,
+            (avail + len(self._CORE_SEP)) // (self._CORE_ENTRY_W + len(self._CORE_SEP)),
+        )
+
+        # Update history and build entry strings
+        entries = []
+        for core in cores:
             hist = self._core_hist.setdefault(
                 (prefix, core.index),
                 deque([0] * 8, maxlen=8),
             )
             hist.append(core.active_pct)
             spark = _block_spark(hist, width=8)
-            parts.append(
-                "{}{} {}% {}".format(prefix, core.index + 1, core.active_pct, spark)
+            entries.append(
+                "{}{:2d} {:3d}% {}".format(
+                    prefix, core.index + 1, core.active_pct, spark
+                )
             )
-            if (i + 1) % 4 == 0 and i + 1 < len(cores):
-                parts.append("\n")
-        self.query_one(widget_id, Static).update("  ".join(parts))
+
+        # Arrange into rows of ncols, joined by separator
+        rows = []
+        for row_start in range(0, len(entries), ncols):
+            rows.append(self._CORE_SEP.join(entries[row_start : row_start + ncols]))
+        widget.update("\n".join(rows))
 
     def _compute_alerts(self, s: SystemSnapshot, ram: dict) -> None:
         """Compute alert flags and update the status line."""

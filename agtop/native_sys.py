@@ -24,6 +24,29 @@ _DARWIN = sys.platform == "darwin"
 if _DARWIN:
     _libc = ctypes.cdll.LoadLibrary("/usr/lib/libSystem.B.dylib")
 
+    # ObjC runtime + Foundation (for NSProcessInfo.thermalState)
+    _objc = ctypes.cdll.LoadLibrary("/usr/lib/libobjc.A.dylib")
+    ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/Foundation.framework/Foundation"
+    )
+
+    _objc.objc_getClass.restype = ctypes.c_void_p
+    _objc.objc_getClass.argtypes = [ctypes.c_char_p]
+    _objc.sel_registerName.restype = ctypes.c_void_p
+    _objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+    _send_ptr = ctypes.cast(_objc.objc_msgSend, ctypes.c_void_p).value
+    _msg_send_obj = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(
+        _send_ptr
+    )
+    _msg_send_int = ctypes.CFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p)(
+        _send_ptr
+    )
+
+    _cls_NSProcessInfo = _objc.objc_getClass(b"NSProcessInfo")
+    _sel_processInfo = _objc.sel_registerName(b"processInfo")
+    _sel_thermalState = _objc.sel_registerName(b"thermalState")
+
     _sysctlbyname = _libc.sysctlbyname
     _sysctlbyname.argtypes = [
         ctypes.c_char_p,
@@ -127,6 +150,30 @@ if _DARWIN:
 
     _cf.CFDataGetBytePtr.restype = ctypes.c_size_t
     _cf.CFDataGetBytePtr.argtypes = [ctypes.c_void_p]
+
+
+_THERMAL_STATES = {0: "Nominal", 1: "Fair", 2: "Serious", 3: "Critical"}
+
+
+# ---------------------------------------------------------------------------
+# Thermal pressure (NSProcessInfo.thermalState)
+# ---------------------------------------------------------------------------
+
+
+def get_thermal_pressure() -> str:
+    """Return macOS thermal pressure state via NSProcessInfo.
+
+    Returns one of "Nominal", "Fair", "Serious", "Critical", or "Unknown".
+    No sudo required; reads the same value the OS exposes to all processes.
+    """
+    if not _DARWIN:
+        return "Unknown"
+    try:
+        process_info = _msg_send_obj(_cls_NSProcessInfo, _sel_processInfo)
+        state = _msg_send_int(process_info, _sel_thermalState)
+        return _THERMAL_STATES.get(state, "Unknown")
+    except Exception:
+        return "Unknown"
 
 
 # ---------------------------------------------------------------------------

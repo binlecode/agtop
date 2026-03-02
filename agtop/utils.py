@@ -122,7 +122,7 @@ def get_top_processes(limit=3, proc_filter=None):
 
     entries = []
     for proc in psutil.process_iter(
-        attrs=["pid", "name", "cmdline", "memory_info", "memory_percent"]
+        attrs=["pid", "name", "cmdline", "memory_info", "memory_percent", "num_threads"]
     ):
         try:
             info = proc.info
@@ -142,6 +142,7 @@ def get_top_processes(limit=3, proc_filter=None):
                     "cpu_percent": round(cpu_percent, 1),
                     "rss_mb": round(rss_mb, 1),
                     "memory_percent": round(memory_percent, 1),
+                    "num_threads": int(info.get("num_threads") or 0),
                 }
             )
         except (

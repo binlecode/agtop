@@ -4,6 +4,8 @@ import re
 import time
 from typing import NamedTuple
 
+from .native_sys import get_thermal_pressure
+
 
 class SampleResult(NamedTuple):
     cpu_metrics: dict
@@ -289,7 +291,7 @@ class IOReportSampler:
         return SampleResult(
             cpu_metrics=cpu_metrics,
             gpu_metrics=gpu_metrics,
-            thermal_pressure="Unknown",
+            thermal_pressure=get_thermal_pressure(),
             bandwidth_metrics=bandwidth_metrics,
             timestamp=time.time(),
             cpu_temp_c=cpu_temp_c,
