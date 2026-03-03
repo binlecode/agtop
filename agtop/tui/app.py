@@ -124,6 +124,7 @@ class AgtopApp(App):
         ("q", "quit", "Quit"),
         ("p", "toggle_pause", "Pause"),
         ("s", "cycle_sort", "Sort"),
+        ("t", "toggle_processes", "Processes"),
         ("space", "toggle_dashboard", "Collapse HW"),
         ("/", "toggle_filter", "Filter"),
     ]
@@ -137,6 +138,7 @@ class AgtopApp(App):
         self._sort_mode = SORT_CPU
         self._filter_regex = self._config.process_filter_pattern
         self._last_processes = {"cpu": [], "memory": []}
+        self._show_processes = bool(self._config.show_processes)
         self._splash_frame = 0
         self._sampler_ready = False
         self._splash_timer = None
@@ -165,6 +167,7 @@ class AgtopApp(App):
 
     def on_mount(self) -> None:
         self.query_one("#main-section").display = False
+        self.query_one("#process-table", DataTable).display = self._show_processes
         self._refresh_process_table()  # initialises columns without advancing sort
         self._splash_timer = self.set_interval(0.1, self._tick_splash)
         self.poll_metrics()
@@ -176,10 +179,13 @@ class AgtopApp(App):
             while not self._stop_polling.is_set():
                 snapshot = monitor.get_snapshot()
                 ram = get_ram_metrics_dict()
-                processes = get_top_processes(
-                    limit=self._config.process_display_count,
-                    proc_filter=self._filter_regex,
-                )
+                if self._show_processes:
+                    processes = get_top_processes(
+                        limit=self._config.process_display_count,
+                        proc_filter=self._filter_regex,
+                    )
+                else:
+                    processes = {"cpu": [], "memory": []}
                 self.post_message(MetricsUpdated(snapshot, ram, processes))
         finally:
             monitor.close()
@@ -217,11 +223,20 @@ class AgtopApp(App):
         dash = self.query_one("#hardware-dash", HardwareDashboard)
         dash.display = not dash.display
 
+    def action_toggle_processes(self) -> None:
+        table = self.query_one("#process-table", DataTable)
+        self._show_processes = not self._show_processes
+        table.display = self._show_processes
+        self._refresh_process_table()
+
     def action_toggle_filter(self) -> None:
         inp = self.query_one("#filter-input", Input)
         if inp.display:
             inp.display = False
-            self.set_focus(self.query_one("#process-table", DataTable))
+            if self._show_processes:
+                self.set_focus(self.query_one("#process-table", DataTable))
+            else:
+                self.set_focus(self.query_one("#hardware-dash", HardwareDashboard))
         else:
             inp.display = True
             inp.focus()
@@ -237,7 +252,10 @@ class AgtopApp(App):
             else:
                 self._filter_regex = self._config.process_filter_pattern
             event.input.display = False
-            self.set_focus(self.query_one("#process-table", DataTable))
+            if self._show_processes:
+                self.set_focus(self.query_one("#process-table", DataTable))
+            else:
+                self.set_focus(self.query_one("#hardware-dash", HardwareDashboard))
             # _filter_regex is read by the polling loop on each iteration;
             # no need to restart the worker.
 
@@ -256,6 +274,10 @@ class AgtopApp(App):
         try:
             table = self.query_one("#process-table", DataTable)
         except Exception:
+            return
+
+        if not self._show_processes:
+            table.clear()
             return
 
         # Rebuild columns only when sort mode changes

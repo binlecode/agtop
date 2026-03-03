@@ -36,6 +36,7 @@ class DashboardConfig:
     subsamples: int
 
     process_display_count: int
+    show_processes: bool
     process_filter_pattern: Optional[object]  # compiled regex or None
     proc_filter_raw: str
 
@@ -85,6 +86,7 @@ def create_dashboard_config(args, soc_info_dict):
         alert_swap_rise_gb=args.alert_swap_rise_gb,
         alert_sustain_samples=max(1, int(args.alert_sustain_samples)),
         process_display_count=50,
+        show_processes=bool(getattr(args, "show_processes", False)),
         subsamples=max(1, int(args.subsamples)),
         process_filter_pattern=process_filter_pattern,
         proc_filter_raw=getattr(args, "proc_filter", ""),

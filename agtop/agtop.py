@@ -46,6 +46,12 @@ def build_parser():
         help='Regex filter for process panel command names (example: "python|ollama|vllm|docker|mlx")',
     )
     parser.add_argument(
+        "--show-processes",
+        action="store_true",
+        default=False,
+        help="Show top process panel at startup (default: off)",
+    )
+    parser.add_argument(
         "--alert-bw-sat-percent",
         type=_validate_percent_threshold,
         default=85,

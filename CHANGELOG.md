@@ -4,6 +4,17 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [Unreleased]
+
+## [0.6.0] - 2026-03-03
+
+### Changed
+- Process panel is now excluded by default at startup. Top-process sampling is skipped until the panel is enabled.
+
+### Added
+- New CLI flag `--show-processes` to enable the process panel at launch.
+- New TUI keybinding `t` to toggle the process panel on/off at runtime.
+
 ## [0.5.4] - 2026-03-02
 
 ### Fixed
@@ -144,4 +155,3 @@ For each new release:
 2. Add release date in `YYYY-MM-DD` format.
 3. Keep entries concise and user-impact focused.
 4. Tag and publish release after changelog update.
-

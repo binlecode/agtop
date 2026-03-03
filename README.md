@@ -16,7 +16,7 @@ The original `asitop` shells out to Apple's `powermetrics` CLI, a high-level too
 - **In-process IOReport sampling**: reads Apple Silicon power, frequency, and residency metrics via Python ctypes bindings to `libIOReport.dylib` and CoreFoundation. No subprocesses, no temp files.
 - **Per-core visibility**: per-core panels on by default; toggle with `--no-show_cores` for a cluster-level view.
 - **Diagnosis-oriented alerts**: configurable sustained-sample thresholds for thermal pressure, bandwidth saturation, swap growth, and package power. Active alerts are shown inline in the status line.
-- **Process monitoring**: top CPU/RSS processes panel with optional regex filtering (`--proc-filter` at launch or `/` interactively). Press `s` to cycle sort (CPU% → RSS → PID), `p` to pause, `space` to collapse the hardware panel.
+- **Process monitoring (optional)**: top CPU/RSS processes panel is off by default. Enable at launch with `--show-processes` or press `t` in the TUI. Regex filtering is available via `--proc-filter` or `/` interactively.
 - **Profile-aware power scaling**: `profile` mode (default) scales charts against the SoC's known reference wattage for stable cross-session comparison; `auto` mode scales against rolling peak.
 - **SoC compatibility**: 16 built-in M1–M4 profiles (base, Pro, Max, Ultra). Unknown future chips fall back to tier-based defaults using the latest generation's reference values.
 - **CPU/GPU temperature**: reads die temperatures from the Apple SMC (System Management Controller) via IOKit ctypes. Displayed inline in gauge titles (e.g. "P-CPU Usage: 12% @ 3504 MHz (58°C)"). No sudo required.
@@ -48,11 +48,12 @@ pip install git+https://github.com/binlecode/agtop.git
 ```shell
 agtop                                               # full dashboard with per-core panels, profile power scaling
 agtop --interval 1 --avg 10                        # faster refresh, shorter rolling window
+agtop --show-processes                              # include top process panel at startup
 agtop --proc-filter "python|ollama|vllm|docker|mlx"  # filter process panel at launch
 agtop --no-show_cores                               # cluster-level view without per-core panels
 ```
 
-Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `/` filter processes · `space` toggle hardware panel · `q` quit
+Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `t` toggle process panel · `/` filter processes · `space` toggle hardware panel · `q` quit
 
 ## CLI Reference
 
@@ -62,8 +63,9 @@ Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `/` filter p
 | `--avg` | Rolling average window (seconds) | `30` |
 | `--subsamples` | Internal sampler deltas per interval (≥1) | `1` |
 | `--show_cores` / `--no-show_cores` | Per-core panels | `on` |
+| `--show-processes` | Show top process panel at startup | `off` |
 | `--power-scale profile\|auto` | Power chart scaling | `profile` |
-| `--proc-filter REGEX` | Filter process panel by command name | all |
+| `--proc-filter REGEX` | Filter process panel by command name | all (applies when panel is enabled) |
 | `--alert-bw-sat-percent` | Bandwidth saturation alert threshold | `85` |
 | `--alert-package-power-percent` | Package power alert threshold (profile-relative) | `85` |
 | `--alert-swap-rise-gb` | Swap growth alert threshold (GB) | `0.3` |
