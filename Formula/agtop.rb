@@ -3,8 +3,8 @@ class Agtop < Formula
 
   desc "Performance monitoring CLI tool for Apple Silicon"
   homepage "https://github.com/binlecode/agtop"
-  url "https://github.com/binlecode/agtop/archive/refs/tags/v0.5.4.tar.gz"
-  sha256 "17516b6fb38ea9e371aab9e67c0a41cb48cc36e29433ef6a373ea6048c9663fc"
+  url "https://github.com/binlecode/agtop/archive/refs/tags/v0.6.0.tar.gz"
+  sha256 "161c807d3cee0ca34b186f06e323b84c1ca234aa5620933b0f97b5a93c7ed6cf"
   license "MIT"
 
   bottle do
@@ -58,8 +58,8 @@ class Agtop < Formula
   end
 
   resource "textual" do
-    url "https://files.pythonhosted.org/packages/fb/e4/0f6b6c22a30d2dc2850b4d09c8684742cc4ab79501d4588ea05269c1de3f/textual-8.0.1.tar.gz"
-    sha256 "fe6544e57651a7c2a8249b90ec542b45fa945ce4560e69b0d563fb440e7c4db3"
+    url "https://files.pythonhosted.org/packages/be/08/c6bcb1e3c4c9528ec9049f4ac685afdafc72866664270f0deb416ccbba2a/textual-8.0.2.tar.gz"
+    sha256 "7b342f3ee9a5f2f1bd42d7b598cae00ff1275da68536769510db4b7fe8cabf5d"
   end
 
   resource "typing-extensions" do
