@@ -54,7 +54,7 @@ agtop --no-show_cores                               # cluster-level view without
 agtop --chart-glyph block                           # square block chart glyphs
 ```
 
-Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `g` toggle chart glyph (`dots`/`block`) · `t` toggle process panel · `/` filter processes · `space` toggle hardware panel · `q` quit
+Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `g` toggle chart glyph (`dots`/`block`) · `t` toggle process panel · `v` toggle layout (`horizontal`/`vertical`) · `/` filter processes · `space` toggle hardware panel · `q` quit
 
 ## CLI Reference
 

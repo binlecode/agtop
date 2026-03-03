@@ -6,6 +6,11 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-03
+
+### Added
+- New TUI keybinding `v` toggles the main layout between horizontal (side-by-side) and vertical (stacked) when viewing hardware and processes.
+
 ## [0.7.0] - 2026-03-03
 
 ### Changed

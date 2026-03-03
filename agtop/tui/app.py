@@ -5,6 +5,7 @@ import re
 import threading
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual import work
 from textual.containers import Horizontal
 from textual.widgets import DataTable, Footer, Header, Input, Static
@@ -20,6 +21,8 @@ SORT_CPU = "cpu"
 SORT_MEMORY = "memory"
 SORT_PID = "pid"
 SORT_LABELS = {SORT_CPU: "CPU%", SORT_MEMORY: "RSS", SORT_PID: "PID"}
+LAYOUT_HORIZONTAL = "horizontal"
+LAYOUT_VERTICAL = "vertical"
 
 _SORT_CYCLE = [SORT_CPU, SORT_MEMORY, SORT_PID]
 
@@ -69,6 +72,12 @@ class AgtopApp(App):
     }
     #main-section {
         height: 1fr;
+    }
+    #main-section.layout-horizontal {
+        layout: horizontal;
+    }
+    #main-section.layout-vertical {
+        layout: vertical;
     }
     HardwareDashboard {
         width: 1fr;
@@ -129,6 +138,7 @@ class AgtopApp(App):
         ("s", "cycle_sort", "Sort"),
         ("g", "toggle_chart_glyph", "Glyph"),
         ("t", "toggle_processes", "Processes"),
+        Binding("v", "toggle_layout", "Layout", priority=True),
         ("space", "toggle_dashboard", "Collapse HW"),
         ("/", "toggle_filter", "Filter"),
     ]
@@ -143,6 +153,7 @@ class AgtopApp(App):
         self._filter_regex = self._config.process_filter_pattern
         self._last_processes = {"cpu": [], "memory": []}
         self._show_processes = bool(self._config.show_processes)
+        self._main_layout = LAYOUT_HORIZONTAL
         self._splash_frame = 0
         self._sampler_ready = False
         self._splash_timer = None
@@ -161,7 +172,7 @@ class AgtopApp(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield Static(self._build_splash(), id="loading-splash")
-        with Horizontal(id="main-section"):
+        with Horizontal(id="main-section", classes="layout-horizontal"):
             yield HardwareDashboard(config=self._config, id="hardware-dash")
             yield DataTable(id="process-table", zebra_stripes=True, cursor_type="row")
         filter_input = Input(placeholder="Regex filter...", id="filter-input")
@@ -170,6 +181,7 @@ class AgtopApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self._apply_main_layout()
         self.query_one("#main-section").display = False
         self.query_one("#process-table", DataTable).display = self._show_processes
         self._refresh_process_table()  # initialises columns without advancing sort
@@ -236,6 +248,15 @@ class AgtopApp(App):
         table = self.query_one("#process-table", DataTable)
         self._show_processes = not self._show_processes
         table.display = self._show_processes
+        self._refresh_process_table()
+
+    def action_toggle_layout(self) -> None:
+        self._main_layout = (
+            LAYOUT_VERTICAL
+            if self._main_layout == LAYOUT_HORIZONTAL
+            else LAYOUT_HORIZONTAL
+        )
+        self._apply_main_layout()
         self._refresh_process_table()
 
     def action_toggle_filter(self) -> None:
@@ -318,3 +339,10 @@ class AgtopApp(App):
                 "{:.1f}".format(proc.get("rss_mb", 0.0) or 0.0),
                 str(proc.get("num_threads", "")),
             )
+
+    def _apply_main_layout(self) -> None:
+        main_section = self.query_one("#main-section")
+        main_section.set_class(
+            self._main_layout == LAYOUT_HORIZONTAL, "layout-horizontal"
+        )
+        main_section.set_class(self._main_layout == LAYOUT_VERTICAL, "layout-vertical")
