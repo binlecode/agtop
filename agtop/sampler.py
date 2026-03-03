@@ -172,8 +172,6 @@ class IOReportSampler:
         gpu_freq_mhz = 0
         gpu_active_pct = 0
 
-        p_count = self._core_counts["p_count"]
-
         ecpu_freqs = self._dvfs.get("ecpu", [])
         pcpu_freqs = self._dvfs.get("pcpu", [])
         gpu_freqs = self._dvfs.get("gpu", [])
@@ -242,7 +240,7 @@ class IOReportSampler:
         e_actives = []
         for cluster_idx in sorted(e_core_data):
             freq, active = e_core_data[cluster_idx]
-            sys_idx = p_count + cluster_idx
+            sys_idx = cluster_idx
             cpu_metrics["e_core"].append(sys_idx)
             cpu_metrics["E-Cluster" + str(sys_idx) + "_active"] = active
             cpu_metrics["E-Cluster" + str(sys_idx) + "_freq_Mhz"] = freq

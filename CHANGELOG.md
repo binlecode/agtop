@@ -4,6 +4,16 @@ All notable changes to `binlecode/agtop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
+## [0.5.4] - 2026-03-02
+
+### Fixed
+- E-core cluster indices were offset by `p_count`, causing E-core metrics to be attributed to non-existent cores on chips with more than 4 P-cores.
+
+### Changed
+- `BrailleChart` rewritten: 1 sample per character, filled vertical pole from zero to value, blue→red gradient coloring per row segment. Replaces the old 2-samples-per-char alternating left/right dot design.
+- P-CPU and E-CPU charts increased to height 4 (16 levels); other charts remain height 2 (8 levels).
+- Layout: hardware dashboard and process table now split side-by-side in a horizontal container.
+
 ## [0.5.3] - 2026-03-02
 
 ### Fixed

@@ -6,6 +6,7 @@ import threading
 
 from textual.app import App, ComposeResult
 from textual import work
+from textual.containers import Horizontal
 from textual.widgets import DataTable, Footer, Header, Input, Static
 
 from agtop.api import Monitor
@@ -66,8 +67,13 @@ class AgtopApp(App):
     AgtopApp {
         layout: vertical;
     }
+    #main-section {
+        height: 1fr;
+    }
     HardwareDashboard {
-        height: auto;
+        width: 1fr;
+        height: 1fr;
+        overflow-y: auto;
         layout: vertical;
         border: round $accent;
         padding: 0 1;
@@ -79,24 +85,31 @@ class AgtopApp(App):
     .metric-chart {
         height: 2;
     }
-    .metric-pair {
-        height: auto;
-        layout: horizontal;
-        margin-bottom: 1;
+    #pcpu-chart {
+        height: 4;
     }
-    .metric-col {
-        width: 1fr;
-        layout: vertical;
-        height: auto;
+    #ecpu-chart {
+        height: 4;
     }
     .status-line {
         height: 1;
         color: $text-muted;
     }
-    .core-row {
+    .cpu-summary-row {
+        height: 1;
+        color: $text-muted;
+    }
+    .core-grid {
+        height: auto;
+    }
+    #cpu-section {
+        height: auto;
+    }
+    .cpu-half {
         height: auto;
     }
     #process-table {
+        width: 1fr;
         height: 1fr;
         border: round $accent;
     }
@@ -142,15 +155,16 @@ class AgtopApp(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield Static(self._build_splash(), id="loading-splash")
-        yield HardwareDashboard(config=self._config, id="hardware-dash")
-        yield DataTable(id="process-table", zebra_stripes=True, cursor_type="row")
+        with Horizontal(id="main-section"):
+            yield HardwareDashboard(config=self._config, id="hardware-dash")
+            yield DataTable(id="process-table", zebra_stripes=True, cursor_type="row")
         filter_input = Input(placeholder="Regex filter...", id="filter-input")
         filter_input.display = False
         yield filter_input
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#hardware-dash").display = False
+        self.query_one("#main-section").display = False
         self._refresh_process_table()  # initialises columns without advancing sort
         self._splash_timer = self.set_interval(0.1, self._tick_splash)
         self.poll_metrics()
@@ -182,7 +196,7 @@ class AgtopApp(App):
             self._sampler_ready = True
             self._splash_timer.stop()
             self.query_one("#loading-splash").display = False
-            self.query_one("#hardware-dash").display = True
+            self.query_one("#main-section").display = True
         self.query_one("#hardware-dash", HardwareDashboard).update_metrics(message)
         self._last_processes = message.processes
         self._refresh_process_table()
