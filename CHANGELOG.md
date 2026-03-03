@@ -6,6 +6,13 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-03
+
+### Changed
+- `BrailleChart` vertical-line coloring now uses a single color per sample column, derived from the current reading, instead of row-height gradient segments within a column.
+- `RAM` chart now uses the same vertical scale (`height: 4`) as `P-CPU` and `E-CPU` charts.
+- Charts now support two glyph modes: `dots` (braille) and `block` (square), switchable by CLI (`--chart-glyph`) or at runtime with the `g` key.
+
 ## [0.6.0] - 2026-03-03
 
 ### Changed

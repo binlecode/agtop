@@ -40,6 +40,12 @@ def build_parser():
         help="Power chart scaling mode: profile uses SoC reference, auto uses rolling peak",
     )
     parser.add_argument(
+        "--chart-glyph",
+        choices=["dots", "block"],
+        default="dots",
+        help="Chart glyph style: dots (braille) or block (square)",
+    )
+    parser.add_argument(
         "--proc-filter",
         type=_validate_proc_filter,
         default="",

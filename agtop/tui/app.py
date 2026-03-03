@@ -91,6 +91,9 @@ class AgtopApp(App):
     #ecpu-chart {
         height: 4;
     }
+    #ram-chart {
+        height: 4;
+    }
     .status-line {
         height: 1;
         color: $text-muted;
@@ -124,6 +127,7 @@ class AgtopApp(App):
         ("q", "quit", "Quit"),
         ("p", "toggle_pause", "Pause"),
         ("s", "cycle_sort", "Sort"),
+        ("g", "toggle_chart_glyph", "Glyph"),
         ("t", "toggle_processes", "Processes"),
         ("space", "toggle_dashboard", "Collapse HW"),
         ("/", "toggle_filter", "Filter"),
@@ -222,6 +226,11 @@ class AgtopApp(App):
     def action_toggle_dashboard(self) -> None:
         dash = self.query_one("#hardware-dash", HardwareDashboard)
         dash.display = not dash.display
+
+    def action_toggle_chart_glyph(self) -> None:
+        dash = self.query_one("#hardware-dash", HardwareDashboard)
+        next_mode = "block" if dash.chart_glyph == "dots" else "dots"
+        dash.set_chart_glyph(next_mode)
 
     def action_toggle_processes(self) -> None:
         table = self.query_one("#process-table", DataTable)

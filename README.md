@@ -12,7 +12,7 @@ The original `asitop` shells out to Apple's `powermetrics` CLI, a high-level too
 
 ## Key Features
 
-- **Textual TUI dashboard**: braille `Sparkline` charts for E-CPU, P-CPU, GPU, ANE, RAM, and power — rendered by the [Textual](https://textual.textualize.io/) framework. Resizes cleanly; no raw ANSI escape sequences.
+- **Textual TUI dashboard**: `Sparkline` charts for E-CPU, P-CPU, GPU, ANE, RAM, and power — rendered by the [Textual](https://textual.textualize.io/) framework. Supports `dots` (braille) and `block` glyph styles. Resizes cleanly; no raw ANSI escape sequences.
 - **In-process IOReport sampling**: reads Apple Silicon power, frequency, and residency metrics via Python ctypes bindings to `libIOReport.dylib` and CoreFoundation. No subprocesses, no temp files.
 - **Per-core visibility**: per-core panels on by default; toggle with `--no-show_cores` for a cluster-level view.
 - **Diagnosis-oriented alerts**: configurable sustained-sample thresholds for thermal pressure, bandwidth saturation, swap growth, and package power. Active alerts are shown inline in the status line.
@@ -51,9 +51,10 @@ agtop --interval 1 --avg 10                        # faster refresh, shorter rol
 agtop --show-processes                              # include top process panel at startup
 agtop --proc-filter "python|ollama|vllm|docker|mlx"  # filter process panel at launch
 agtop --no-show_cores                               # cluster-level view without per-core panels
+agtop --chart-glyph block                           # square block chart glyphs
 ```
 
-Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `t` toggle process panel · `/` filter processes · `space` toggle hardware panel · `q` quit
+Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `g` toggle chart glyph (`dots`/`block`) · `t` toggle process panel · `/` filter processes · `space` toggle hardware panel · `q` quit
 
 ## CLI Reference
 
@@ -65,6 +66,7 @@ Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `t` toggle p
 | `--show_cores` / `--no-show_cores` | Per-core panels | `on` |
 | `--show-processes` | Show top process panel at startup | `off` |
 | `--power-scale profile\|auto` | Power chart scaling | `profile` |
+| `--chart-glyph dots\|block` | Chart glyph style | `dots` |
 | `--proc-filter REGEX` | Filter process panel by command name | all (applies when panel is enabled) |
 | `--alert-bw-sat-percent` | Bandwidth saturation alert threshold | `85` |
 | `--alert-package-power-percent` | Package power alert threshold (profile-relative) | `85` |

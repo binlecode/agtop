@@ -26,6 +26,7 @@ class DashboardConfig:
     p_core_count: int
 
     power_scale: str
+    chart_glyph: str
     show_cores: bool
 
     alert_bw_sat_percent: int
@@ -80,6 +81,7 @@ def create_dashboard_config(args, soc_info_dict):
         e_core_count=e_core_count,
         p_core_count=p_core_count,
         power_scale=args.power_scale,
+        chart_glyph=getattr(args, "chart_glyph", "dots"),
         show_cores=args.show_cores,
         alert_bw_sat_percent=args.alert_bw_sat_percent,
         alert_package_power_percent=args.alert_package_power_percent,

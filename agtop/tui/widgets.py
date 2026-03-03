@@ -26,6 +26,9 @@ _HOT_RGB = (240, 70, 64)  # red
 _BRAILLE_FILL_BITS = [0x40, 0x44, 0x46, 0x47]
 _BRAILLE_FULL = 0x47  # all 4 left-column dots
 _BRAILLE_BLANK = "\u2800"
+_BLOCK_FILL_GLYPHS = ["\u2582", "\u2584", "\u2586", "\u2588"]
+_BLOCK_FULL_GLYPH = "\u2588"
+_BLOCK_BLANK = " "
 
 
 def _pct_to_color(pct: float) -> str:
@@ -48,7 +51,7 @@ def _braille_vbar(v: float) -> str:
 
 
 class BrailleChart(Widget):
-    """Braille sparkline: 1 sample per character, 1 dot per character at value height.
+    """Sparkline chart with `dots` (braille) or `block` glyph modes.
 
     Each character is one time sample. The dot position encodes the value:
     4 dot levels per terminal row, so height=2 gives 8 levels, height=4 gives 16.
@@ -60,9 +63,14 @@ class BrailleChart(Widget):
     }
     """
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, glyph_mode: str = "dots", **kwargs) -> None:
         super().__init__(**kwargs)
         self._data = []
+        self._glyph_mode = self._normalize_glyph_mode(glyph_mode)
+
+    @staticmethod
+    def _normalize_glyph_mode(value: str) -> str:
+        return "block" if str(value).strip().lower() == "block" else "dots"
 
     @property
     def data(self):
@@ -73,11 +81,30 @@ class BrailleChart(Widget):
         self._data = values
         self.refresh()
 
+    @property
+    def glyph_mode(self) -> str:
+        return self._glyph_mode
+
+    def set_glyph_mode(self, glyph_mode: str) -> None:
+        normalized = self._normalize_glyph_mode(glyph_mode)
+        if normalized == self._glyph_mode:
+            return
+        self._glyph_mode = normalized
+        self.refresh()
+
     def render(self):
         width = self.size.width
         height = self.size.height
         if width <= 0 or height <= 0:
             return ""
+        if self._glyph_mode == "block":
+            blank_glyph = _BLOCK_BLANK
+            full_glyph = _BLOCK_FULL_GLYPH
+            partial_glyphs = _BLOCK_FILL_GLYPHS
+        else:
+            blank_glyph = _BRAILLE_BLANK
+            full_glyph = chr(0x2800 | _BRAILLE_FULL)
+            partial_glyphs = [chr(0x2800 | bits) for bits in _BRAILLE_FILL_BITS]
         n = width  # 1 sample per character
         dlen = len(self._data)
         offset = dlen - n
@@ -87,28 +114,23 @@ class BrailleChart(Widget):
             for col in range(width):
                 i = offset + col
                 v = min(100.0, max(0.0, float(self._data[i]) if i >= 0 else 0.0))
+                line_color = _pct_to_color(v)
                 level = max(0, min(total, round(v / 100 * total)))
                 if v > 0 and level == 0:
                     level = 1
                 if level > 0:
                     dot_row = height - 1 - (level - 1) // 4
                     if row > dot_row:
-                        # below the peak row: fully filled segment, color by its own height
-                        row_pct = ((height - 1 - row) * 4 + 2) / total * 100
-                        out.append(
-                            chr(0x2800 | _BRAILLE_FULL), style=_pct_to_color(row_pct)
-                        )
+                        # below the peak row: fully filled segment
+                        out.append(full_glyph, style=line_color)
                     elif row == dot_row:
-                        # peak row: partial fill, color by the actual value
+                        # peak row: partial fill
                         pos = (level - 1) % 4  # 0 = bottom dot, 3 = top dot
-                        out.append(
-                            chr(0x2800 | _BRAILLE_FILL_BITS[pos]),
-                            style=_pct_to_color(v),
-                        )
+                        out.append(partial_glyphs[pos], style=line_color)
                     else:
-                        out.append(_BRAILLE_BLANK)
+                        out.append(blank_glyph)
                 else:
-                    out.append(_BRAILLE_BLANK)
+                    out.append(blank_glyph)
             if row < height - 1:
                 out.append("\n")
         return out
@@ -141,6 +163,7 @@ class HardwareDashboard(Widget):
         super().__init__(**kwargs)
         self._config = config
         cfg = config
+        self._chart_glyph = getattr(cfg, "chart_glyph", "dots")
 
         maxlen = 500
         swap_maxlen = max(2, cfg.alert_sustain_samples + 1)
@@ -174,7 +197,11 @@ class HardwareDashboard(Widget):
                     id="pcpu-summary-row",
                     classes="cpu-summary-row",
                 )
-                yield BrailleChart(id="pcpu-chart", classes="metric-chart")
+                yield BrailleChart(
+                    glyph_mode=self._chart_glyph,
+                    id="pcpu-chart",
+                    classes="metric-chart",
+                )
                 if cfg.show_cores:
                     yield Static("", id="pcores-grid", classes="core-grid")
             with Vertical(classes="cpu-half"):
@@ -183,28 +210,51 @@ class HardwareDashboard(Widget):
                     id="ecpu-summary-row",
                     classes="cpu-summary-row",
                 )
-                yield BrailleChart(id="ecpu-chart", classes="metric-chart")
+                yield BrailleChart(
+                    glyph_mode=self._chart_glyph,
+                    id="ecpu-chart",
+                    classes="metric-chart",
+                )
                 if cfg.show_cores:
                     yield Static("", id="ecores-grid", classes="core-grid")
 
         yield Static("GPU 0% @0MHz", id="gpu-label", classes="metric-label")
-        yield BrailleChart(id="gpu-chart", classes="metric-chart")
+        yield BrailleChart(
+            glyph_mode=self._chart_glyph, id="gpu-chart", classes="metric-chart"
+        )
 
         yield Static("ANE 0%", id="ane-label", classes="metric-label")
-        yield BrailleChart(id="ane-chart", classes="metric-chart")
+        yield BrailleChart(
+            glyph_mode=self._chart_glyph, id="ane-chart", classes="metric-chart"
+        )
 
         yield Static("RAM 0%", id="ram-label", classes="metric-label")
-        yield BrailleChart(id="ram-chart", classes="metric-chart")
+        yield BrailleChart(
+            glyph_mode=self._chart_glyph, id="ram-chart", classes="metric-chart"
+        )
 
         yield Static("CPU Power 0W", id="cpupwr-label", classes="metric-label")
-        yield BrailleChart(id="cpupwr-chart", classes="metric-chart")
+        yield BrailleChart(
+            glyph_mode=self._chart_glyph, id="cpupwr-chart", classes="metric-chart"
+        )
 
         yield Static("GPU Power 0W", id="gpupwr-label", classes="metric-label")
-        yield BrailleChart(id="gpupwr-chart", classes="metric-chart")
+        yield BrailleChart(
+            glyph_mode=self._chart_glyph, id="gpupwr-chart", classes="metric-chart"
+        )
 
         yield Static(
             "thermal: Nominal  alerts: none", id="status-line", classes="status-line"
         )
+
+    @property
+    def chart_glyph(self) -> str:
+        return self._chart_glyph
+
+    def set_chart_glyph(self, glyph_mode: str) -> None:
+        self._chart_glyph = BrailleChart._normalize_glyph_mode(glyph_mode)
+        for chart in self.query(BrailleChart):
+            chart.set_glyph_mode(self._chart_glyph)
 
     def update_metrics(self, message: MetricsUpdated) -> None:
         """Update all dashboard widgets from new metrics. Called by AgtopApp."""

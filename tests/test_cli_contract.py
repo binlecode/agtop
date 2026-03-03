@@ -22,6 +22,7 @@ def test_cli_help_runs_and_exposes_show_cores_as_flag():
     assert "--alert-swap-rise-gb ALERT_SWAP_RISE_GB" in result.stdout
     assert "--alert-sustain-samples ALERT_SUSTAIN_SAMPLES" in result.stdout
     assert "--subsamples SUBSAMPLES" in result.stdout
+    assert "--chart-glyph {dots,block}" in result.stdout
 
 
 def test_cli_rejects_legacy_show_cores_value_form():
@@ -55,6 +56,16 @@ def test_cli_show_processes_default_is_off():
 def test_cli_show_processes_flag_turns_on_panel():
     args = build_parser().parse_args(["--show-processes"])
     assert args.show_processes is True
+
+
+def test_cli_chart_glyph_default_is_dots():
+    args = build_parser().parse_args([])
+    assert args.chart_glyph == "dots"
+
+
+def test_cli_chart_glyph_accepts_block():
+    args = build_parser().parse_args(["--chart-glyph", "block"])
+    assert args.chart_glyph == "block"
 
 
 def test_cli_rejects_invalid_proc_filter_regex():
