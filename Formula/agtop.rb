@@ -3,8 +3,8 @@ class Agtop < Formula
 
   desc "Performance monitoring CLI tool for Apple Silicon"
   homepage "https://github.com/binlecode/agtop"
-  url "https://github.com/binlecode/agtop/archive/refs/tags/v0.8.0.tar.gz"
-  sha256 "66d20951241e47d3d9fff42031d67dd6ef6034e278f0a79d5b59468f90e9fa01"
+  url "https://github.com/binlecode/agtop/archive/refs/tags/v0.8.1.tar.gz"
+  sha256 "36f6b1c071631e8ebb0f39292d743cefae98ff0fcb997b76578e900f0686ac31"
   license "MIT"
 
   bottle do
