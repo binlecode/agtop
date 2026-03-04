@@ -1,8 +1,15 @@
+from types import SimpleNamespace
+
 from rich.console import Console
 from rich.text import Text
 from textual.geometry import Size
 
-from agtop.tui.widgets import BrailleChart, _pct_to_color
+from agtop.tui.widgets import (
+    BrailleChart,
+    HardwareDashboard,
+    _inline_spark,
+    _pct_to_color,
+)
 
 _BRAILLE_BLANK = "\u2800"
 _BLOCK_BLANK = " "
@@ -83,3 +90,36 @@ def test_block_mode_uses_block_glyphs_with_uniform_color() -> None:
     assert len(styles) == 4
     assert len(set(styles)) == 1
     assert styles[0] == _pct_to_color(value)
+
+
+def test_inline_spark_shares_glyph_logic_across_modes() -> None:
+    history = [0.0, 25.0, 50.0, 75.0, 100.0]
+    dots = _inline_spark(history=history, width_chars=5, glyph_mode="dots")
+    block = _inline_spark(history=history, width_chars=5, glyph_mode="block")
+
+    assert len(dots) == 5
+    assert dots[0] == _BRAILLE_BLANK
+    assert dots[-1] != _BRAILLE_BLANK
+
+    assert block == " \u2582\u2584\u2586\u2588"
+    assert dots != block
+
+
+def test_per_core_entry_uses_chart_glyph_mode() -> None:
+    cfg = SimpleNamespace(alert_sustain_samples=3, chart_glyph="dots")
+    dash = HardwareDashboard(config=cfg)
+    core = SimpleNamespace(index=0, active_pct=75)
+
+    dots_entry = dash._format_core_entry(
+        prefix="P", core=core, col_width=20, append_sample=True
+    )
+    hist = dash._core_hist[("P", 0)]
+    hist_len_before = len(hist)
+    dash._chart_glyph = "block"
+    block_entry = dash._format_core_entry(
+        prefix="P", core=core, col_width=20, append_sample=False
+    )
+
+    assert dots_entry != block_entry
+    assert len(hist) == hist_len_before
+    assert "\u2586" in block_entry

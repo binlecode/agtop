@@ -40,14 +40,45 @@ def _pct_to_color(pct: float) -> str:
     return "rgb({},{},{})".format(r, g, b)
 
 
-def _braille_vbar(v: float) -> str:
-    """Map 0–100 % to a filled vertical pole (4 levels, bottom to top)."""
-    n = max(0, min(4, round(v / 100 * 4)))
-    if n == 0 and v > 0:
-        n = 1
-    if n == 0:
-        return _BRAILLE_BLANK
-    return chr(0x2800 | _BRAILLE_FILL_BITS[n - 1])
+def _normalize_chart_glyph_mode(value: str) -> str:
+    return "block" if str(value).strip().lower() == "block" else "dots"
+
+
+def _glyph_set_for_mode(mode: str) -> tuple[str, str, list[str]]:
+    normalized = _normalize_chart_glyph_mode(mode)
+    if normalized == "block":
+        return (_BLOCK_BLANK, _BLOCK_FULL_GLYPH, _BLOCK_FILL_GLYPHS)
+    return (
+        _BRAILLE_BLANK,
+        chr(0x2800 | _BRAILLE_FULL),
+        [chr(0x2800 | bits) for bits in _BRAILLE_FILL_BITS],
+    )
+
+
+def _clamped_value_and_level(value: float, total_levels: int) -> tuple[float, int]:
+    v = min(100.0, max(0.0, float(value)))
+    level = max(0, min(total_levels, round(v / 100 * total_levels)))
+    if v > 0 and level == 0:
+        level = 1
+    return (v, level)
+
+
+def _value_to_cell_glyph(value: float, glyph_mode: str) -> str:
+    blank_glyph, _, partial_glyphs = _glyph_set_for_mode(glyph_mode)
+    _, level = _clamped_value_and_level(value, total_levels=4)
+    if level <= 0:
+        return blank_glyph
+    return partial_glyphs[level - 1]
+
+
+def _inline_spark(history, width_chars: int = 8, glyph_mode: str = "dots") -> str:
+    """Inline sparkline with shared glyph logic used by BrailleChart."""
+    if width_chars <= 0:
+        return ""
+    n = width_chars
+    vals = list(history)[-n:]
+    vals = [0.0] * (n - len(vals)) + vals
+    return "".join(_value_to_cell_glyph(v, glyph_mode) for v in vals)
 
 
 class BrailleChart(Widget):
@@ -66,11 +97,11 @@ class BrailleChart(Widget):
     def __init__(self, glyph_mode: str = "dots", **kwargs) -> None:
         super().__init__(**kwargs)
         self._data = []
-        self._glyph_mode = self._normalize_glyph_mode(glyph_mode)
+        self._glyph_mode = _normalize_chart_glyph_mode(glyph_mode)
 
     @staticmethod
     def _normalize_glyph_mode(value: str) -> str:
-        return "block" if str(value).strip().lower() == "block" else "dots"
+        return _normalize_chart_glyph_mode(value)
 
     @property
     def data(self):
@@ -86,7 +117,7 @@ class BrailleChart(Widget):
         return self._glyph_mode
 
     def set_glyph_mode(self, glyph_mode: str) -> None:
-        normalized = self._normalize_glyph_mode(glyph_mode)
+        normalized = _normalize_chart_glyph_mode(glyph_mode)
         if normalized == self._glyph_mode:
             return
         self._glyph_mode = normalized
@@ -97,14 +128,7 @@ class BrailleChart(Widget):
         height = self.size.height
         if width <= 0 or height <= 0:
             return ""
-        if self._glyph_mode == "block":
-            blank_glyph = _BLOCK_BLANK
-            full_glyph = _BLOCK_FULL_GLYPH
-            partial_glyphs = _BLOCK_FILL_GLYPHS
-        else:
-            blank_glyph = _BRAILLE_BLANK
-            full_glyph = chr(0x2800 | _BRAILLE_FULL)
-            partial_glyphs = [chr(0x2800 | bits) for bits in _BRAILLE_FILL_BITS]
+        blank_glyph, full_glyph, partial_glyphs = _glyph_set_for_mode(self._glyph_mode)
         n = width  # 1 sample per character
         dlen = len(self._data)
         offset = dlen - n
@@ -113,11 +137,9 @@ class BrailleChart(Widget):
         for row in range(height):
             for col in range(width):
                 i = offset + col
-                v = min(100.0, max(0.0, float(self._data[i]) if i >= 0 else 0.0))
+                raw_v = float(self._data[i]) if i >= 0 else 0.0
+                v, level = _clamped_value_and_level(raw_v, total_levels=total)
                 line_color = _pct_to_color(v)
-                level = max(0, min(total, round(v / 100 * total)))
-                if v > 0 and level == 0:
-                    level = 1
                 if level > 0:
                     dot_row = height - 1 - (level - 1) // 4
                     if row > dot_row:
@@ -137,13 +159,8 @@ class BrailleChart(Widget):
 
 
 def _braille_spark(history, width_chars: int = 8) -> str:
-    """Inline braille sparkline, 1 sample per character, 8 dot levels."""
-    if width_chars <= 0:
-        return ""
-    n = width_chars
-    vals = list(history)[-n:]
-    vals = [0.0] * (n - len(vals)) + [min(100.0, max(0.0, float(v))) for v in vals]
-    return "".join(_braille_vbar(v) for v in vals)
+    """Inline braille sparkline, 1 sample per character, 4 levels per cell."""
+    return _inline_spark(history=history, width_chars=width_chars, glyph_mode="dots")
 
 
 class MetricsUpdated(Message):
@@ -186,6 +203,8 @@ class HardwareDashboard(Widget):
 
         # Per-core history (dict: index -> deque)
         self._core_hist: dict = {}
+        self._last_p_cores: list = []
+        self._last_e_cores: list = []
 
     def compose(self) -> ComposeResult:
         cfg = self._config
@@ -252,9 +271,16 @@ class HardwareDashboard(Widget):
         return self._chart_glyph
 
     def set_chart_glyph(self, glyph_mode: str) -> None:
-        self._chart_glyph = BrailleChart._normalize_glyph_mode(glyph_mode)
+        self._chart_glyph = _normalize_chart_glyph_mode(glyph_mode)
         for chart in self.query(BrailleChart):
             chart.set_glyph_mode(self._chart_glyph)
+        if getattr(self._config, "show_cores", False):
+            self._update_core_two_col(
+                "#pcores-grid", self._last_p_cores, "P", append_sample=False
+            )
+            self._update_core_two_col(
+                "#ecores-grid", self._last_e_cores, "E", append_sample=False
+            )
 
     def update_metrics(self, message: MetricsUpdated) -> None:
         """Update all dashboard widgets from new metrics. Called by AgtopApp."""
@@ -358,8 +384,14 @@ class HardwareDashboard(Widget):
 
         # Update per-core rows
         if cfg.show_cores:
-            self._update_core_two_col("#pcores-grid", s.p_cores, "P")
-            self._update_core_two_col("#ecores-grid", s.e_cores, "E")
+            self._last_p_cores = list(s.p_cores)
+            self._last_e_cores = list(s.e_cores)
+            self._update_core_two_col(
+                "#pcores-grid", self._last_p_cores, "P", append_sample=True
+            )
+            self._update_core_two_col(
+                "#ecores-grid", self._last_e_cores, "E", append_sample=True
+            )
 
         # Compute and update status/alerts
         self._compute_alerts(s, ram)
@@ -382,7 +414,9 @@ class HardwareDashboard(Widget):
         line = "{} {:3d}% @{}MHz{}".format(label, util_pct, freq_mhz, cpu_temp)
         widget.update(line[:avail].ljust(avail))
 
-    def _format_core_entry(self, prefix: str, core, col_width: int) -> str:
+    def _format_core_entry(
+        self, prefix: str, core, col_width: int, append_sample: bool = True
+    ) -> str:
         """Format one core row, adapting spark width to the column."""
         if col_width <= 0:
             return ""
@@ -393,16 +427,22 @@ class HardwareDashboard(Widget):
                 maxlen=self._CORE_HIST_MAXLEN,
             ),
         )
-        hist.append(core.active_pct)
+        if append_sample:
+            hist.append(core.active_pct)
         base = "{}{:02d} {:3d}%".format(prefix, core.index, core.active_pct)
         if col_width <= len(base):
             return base[:col_width].ljust(col_width)
         max_spark_w = col_width - len(base) - 1
         spark_w = max(1, max_spark_w)
-        entry = "{} {}".format(base, _braille_spark(hist, width_chars=spark_w))
+        spark = _inline_spark(
+            history=hist, width_chars=spark_w, glyph_mode=self._chart_glyph
+        )
+        entry = "{} {}".format(base, spark)
         return entry[:col_width].ljust(col_width)
 
-    def _update_core_two_col(self, widget_id: str, cores: list, prefix: str) -> None:
+    def _update_core_two_col(
+        self, widget_id: str, cores: list, prefix: str, append_sample: bool = True
+    ) -> None:
         """Render one cluster's cores as two vertical columns with one divider."""
         widget = self.query_one(widget_id, Static)
         if not cores:
@@ -415,9 +455,13 @@ class HardwareDashboard(Widget):
 
         rows = []
         for i in range(0, len(cores), 2):
-            left = self._format_core_entry(prefix, cores[i], left_w)
+            left = self._format_core_entry(
+                prefix, cores[i], left_w, append_sample=append_sample
+            )
             right = (
-                self._format_core_entry(prefix, cores[i + 1], right_w)
+                self._format_core_entry(
+                    prefix, cores[i + 1], right_w, append_sample=append_sample
+                )
                 if i + 1 < len(cores)
                 else "".ljust(right_w)
             )

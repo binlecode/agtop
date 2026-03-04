@@ -6,6 +6,11 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-03-03
+
+### Changed
+- Per-core inline spark rendering now uses the same shared chart glyph utility path as `BrailleChart`, so `dots`/`block` mode behavior is consistent and duplicate glyph logic is removed.
+
 ## [0.8.0] - 2026-03-03
 
 ### Added
