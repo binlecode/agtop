@@ -8,11 +8,11 @@ class Agtop < Formula
   license "MIT"
 
   bottle do
-    root_url "https://github.com/binlecode/agtop/releases/download/v0.8.0"
-    rebuild 15
-    sha256 cellar: :any_skip_relocation, arm64_tahoe:   "78b085868e597d66e4e2df524d174ad49004c421aad0f4ea7b73708dbf1d3b75"
-    sha256 cellar: :any_skip_relocation, arm64_sequoia: "88acb5592c9b2ac891e24f973a2664cb20ba66819e85cc32144048a9e1cdfdd4"
-    sha256 cellar: :any_skip_relocation, arm64_sonoma:  "2197a3c6e1879b9d80ef81839457eada8ecee487c6c12b774a53d70b33804fce"
+    root_url "https://github.com/binlecode/agtop/releases/download/v0.8.1"
+    rebuild 16
+    sha256 cellar: :any_skip_relocation, arm64_tahoe:   "6efe7a21d27e47e409dda3592ef20bcbc1f304d18d72a9f773fc9cb97b4edaa5"
+    sha256 cellar: :any_skip_relocation, arm64_sequoia: "750532480b30197a315b20e5b00904cad0e01090a22436d5c57abde3c7ada2d6"
+    sha256 cellar: :any_skip_relocation, arm64_sonoma:  "cfc6af4e252bab17e951272413a48b58354bf88b48be49e99f5e588446445baf"
   end
 
   depends_on "python@3.13"
