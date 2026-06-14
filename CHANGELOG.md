@@ -6,6 +6,12 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-06-14
+
+### Changed
+- Reorganized SDLC documentation (architecture reviews, TUI research, and operations guidelines) into a dedicated `docs/` folder.
+- Added `tmp/` folder to `.gitignore` to keep scratch and workspace files untracked.
+
 ## [0.8.1] - 2026-03-03
 
 ### Changed
