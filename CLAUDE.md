@@ -45,7 +45,15 @@ This file is the single source of truth for repository guidelines, used by Claud
 
 ## Release Process
 
-Releases are driven by `scripts/tag_release.sh [version]`. CI handles formula sync — never manually edit `Formula/agtop.rb` during releases. See `GUIDE-release-operations.md` for the full runbook.
+Releases are driven by `scripts/tag_release.sh [version]`. CI handles formula sync — never manually edit `Formula/agtop.rb` during releases. See `docs/GUIDE-cicd-release.md` for the full runbook.
+
+## SDLC & Architectural Documentation
+
+The `docs/` directory contains essential system reviews, research, operations guides, and task lists:
+- `docs/REVIEW-architecture-comparison.md`: Performance and architectural comparison between `agtop` (Python) and `mactop` (Go).
+- `docs/REVIEW-tui-frameworks.md`: Analysis of modern Python TUI frameworks and selection of Textual.
+- `docs/TODO-native-polling.md`: Detailed implementation plan for migrating to native macOS APIs (replacing `psutil`).
+- `docs/GUIDE-cicd-release.md`: CI/CD bottling and tap release operational runbook.
 
 ## Coding Style & Naming Conventions
 - Follow existing Python style: 4-space indentation, snake_case for functions/variables, short focused modules.

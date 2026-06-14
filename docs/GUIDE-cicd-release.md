@@ -95,6 +95,17 @@ brew info binlecode/agtop/agtop
 - Force-push `main` during release windows.
 - Disable resource refresh except for emergency reruns.
 
+## Homebrew Core Submission Guide
+
+To make `agtop` natively and automatically trusted by everyone's Homebrew installation without them needing to run local trust commands, it can be submitted to Homebrew Core:
+
+1. **Popularity Requirements**: Ensure the repository meets Homebrew Core's popularity requirements (usually 75+ GitHub stars and 30+ watchers).
+2. **Formula Audit**: Prepare the formula for Homebrew's strict linting by running:
+   ```bash
+   brew audit --new-formula agtop
+   ```
+3. **Open a Pull Request**: Submit a PR to the [homebrew-core](https://github.com/Homebrew/homebrew-core) repository. Once merged, `agtop` becomes an official formula and is implicitly trusted globally.
+
 ## Failure Playbooks
 
 ### `tag_release.sh` fails on `git pull --ff-only`

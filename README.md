@@ -30,6 +30,13 @@ brew tap --custom-remote binlecode/agtop https://github.com/binlecode/agtop.git
 brew install binlecode/agtop/agtop
 ```
 
+To tell Homebrew to trust your tap or specific formula:
+
+- Trust the specific formula only (Recommended):
+  ```shell
+  brew trust --formula binlecode/agtop/agtop
+  ```
+
 Upgrade / uninstall:
 
 ```shell

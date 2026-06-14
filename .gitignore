@@ -135,3 +135,6 @@ dmypy.json
 .gemini/
 .DS_Store
 ref_mactop/
+
+# Temporary scratch and workspace files
+tmp/
