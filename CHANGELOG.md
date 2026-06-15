@@ -6,6 +6,11 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-06-14
+
+### Changed
+- Simplified Homebrew tap by removing pre-compiled binary bottling and moving to a pure, high-efficiency native source-build distribution model.
+
 ## [0.8.6] - 2026-06-14
 
 ### Changed
