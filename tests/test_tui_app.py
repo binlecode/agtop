@@ -20,8 +20,8 @@ def test_status_bar_exposes_only_supported_actions():
     app = AgtopApp(build_parser().parse_args([]))
     keys = set(app._bindings.key_to_bindings.keys())
 
-    # Kept utilities.
-    assert {"q", "p", "s", "g", "t", "slash"} <= keys
+    # Kept utilities, including the help overlay.
+    assert {"q", "p", "s", "g", "t", "slash", "question_mark"} <= keys
 
     # Removed utilities: layout toggle and dashboard-collapse no longer exist.
     assert "v" not in keys
@@ -29,3 +29,19 @@ def test_status_bar_exposes_only_supported_actions():
 
     # The framework command palette is disabled (no ^p in the status bar).
     assert app.ENABLE_COMMAND_PALETTE is False
+
+
+def test_help_overlay_documents_keys_metrics_and_alert_tokens():
+    from agtop.tui.app import HELP_TEXT
+
+    # Every keybinding action is described in the overlay.
+    for action in ("Quit", "Pause", "Filter", "help"):
+        assert action in HELP_TEXT
+
+    # The previously-undocumented alert tokens are now explained in-app.
+    for token in ("THERMAL", "BW>", "PKG>", "SWAP+"):
+        assert token in HELP_TEXT
+
+    # The new cur/avg/max chart context is explained too.
+    assert "avg" in HELP_TEXT
+    assert "max" in HELP_TEXT

@@ -59,9 +59,11 @@ agtop --show-processes                              # include top process panel 
 agtop --proc-filter "python|ollama|vllm|docker|mlx"  # filter process panel at launch
 agtop --no-show_cores                               # cluster-level view without per-core panels
 agtop --chart-glyph block                           # square block chart glyphs
+agtop --json                                        # stream NDJSON metrics to stdout (no TUI)
+agtop --serve 9095                                  # serve Prometheus metrics at :9095/metrics (no TUI)
 ```
 
-Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `g` toggle chart glyph (`dots`/`block`) · `t` toggle process panel · `v` toggle layout (`horizontal`/`vertical`) · `/` filter processes · `space` toggle hardware panel · `q` quit
+Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `g` toggle chart glyph (`dots`/`block`) · `t` toggle process panel · `/` filter processes · `?` help overlay · `q` quit
 
 ## CLI Reference
 
@@ -79,6 +81,31 @@ Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `g` toggle c
 | `--alert-package-power-percent` | Package power alert threshold (profile-relative) | `85` |
 | `--alert-swap-rise-gb` | Swap growth alert threshold (GB) | `0.3` |
 | `--alert-sustain-samples` | Consecutive samples for sustained alerts | `3` |
+| `--json` | Stream metrics as NDJSON to stdout instead of the TUI | `off` |
+| `--serve PORT` | Serve Prometheus metrics on `http://0.0.0.0:PORT/metrics` instead of the TUI | `off` |
+
+## Metrics Export
+
+Beyond the interactive dashboard, agtop can act as an observability source. Both
+modes reuse the same unprivileged IOReport backend and exit on `Ctrl-C`.
+
+- **NDJSON stream** (`--json`): emits one compact JSON snapshot per `--interval`
+  to stdout — every `SystemSnapshot` field, including per-core lists. Pipe it to
+  `jq`, a log shipper, or a file:
+
+  ```shell
+  agtop --json --interval 1 | jq '{cpu: .cpu_watts, pkg: .package_watts}'
+  ```
+
+- **Prometheus endpoint** (`--serve PORT`): exposes gauges at `/metrics`
+  (`agtop_cpu_power_watts`, `agtop_pcpu_utilization_percent`, per-core
+  `agtop_core_utilization_percent{cluster,core}`, …). A background sampler keeps
+  the latest reading warm so scrapes return immediately:
+
+  ```shell
+  agtop --serve 9095
+  curl -s localhost:9095/metrics
+  ```
 
 ## How It Works
 

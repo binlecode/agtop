@@ -6,7 +6,8 @@ import threading
 
 from textual.app import App, ComposeResult
 from textual import work
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
 from textual.widgets import DataTable, Footer, Header, Input, Static
 
 from agtop import __version__
@@ -61,6 +62,57 @@ def _process_display_name(command, max_len=24):
     executable = command.split(" ", 1)[0]
     executable_name = os.path.basename(executable) or executable
     return _shorten_process_command(executable_name, max_len=max_len)
+
+
+HELP_TEXT = """\
+[b]agtop — keybindings[/b]
+
+  q          Quit
+  p          Pause / resume sampling
+  s          Cycle process sort (CPU% → RSS → PID)
+  g          Toggle chart glyph (braille dots / blocks)
+  t          Toggle the process table
+  /          Filter processes by regex
+  ?          Show / hide this help
+  esc        Close this help
+
+[b]Metric labels[/b]
+
+  P-CPU / E-CPU   Performance / Efficiency core cluster: util% @freq, die °C
+  GPU             GPU util% @freq, die °C
+  ANE             Apple Neural Engine util% (estimated) and power
+  RAM             Used / total memory (and swap when active)
+  CPU/GPU Power   Live package-rail power draw in watts
+
+  avg · max       Rolling average (over the --avg window) and session peak,
+                  shown next to each live reading.
+
+[b]Alert tokens[/b] (status line)
+
+  THERMAL    Thermal pressure above Nominal (Fair / Serious / Critical)
+  BW>N%      Memory bandwidth sustained above N% of SoC capacity
+  PKG>N%     Package power sustained above N% of the SoC reference
+  SWAP+N.NG  Swap grew by N.N GB over the sustain window
+
+Alerts fire only after the threshold holds for --alert-sustain-samples frames.
+"""
+
+
+class HelpScreen(ModalScreen):
+    """Modal overlay documenting keybindings, metrics, and alert tokens."""
+
+    BINDINGS = [
+        ("escape", "close", "Close"),
+        ("question_mark", "close", "Close"),
+        ("q", "close", "Close"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="help-dialog"):
+            yield Static(HELP_TEXT, id="help-body")
+
+    def action_close(self) -> None:
+        self.dismiss()
 
 
 class AgtopApp(App):
@@ -124,6 +176,23 @@ class AgtopApp(App):
         color: $accent;
         border: round $accent;
     }
+    HelpScreen {
+        align: center middle;
+        background: $background 60%;
+    }
+    #help-dialog {
+        width: auto;
+        max-width: 90%;
+        height: auto;
+        max-height: 90%;
+        padding: 1 2;
+        border: round $accent;
+        background: $surface;
+    }
+    #help-body {
+        width: auto;
+        height: auto;
+    }
     """
     BINDINGS = [
         ("q", "quit", "Quit"),
@@ -132,6 +201,7 @@ class AgtopApp(App):
         ("g", "toggle_chart_glyph", "Glyph"),
         ("t", "toggle_processes", "Processes"),
         ("/", "toggle_filter", "Filter"),
+        ("question_mark", "show_help", "Help"),
     ]
 
     def __init__(self, args) -> None:
@@ -225,6 +295,12 @@ class AgtopApp(App):
         idx = (_SORT_CYCLE.index(self._sort_mode) + 1) % len(_SORT_CYCLE)
         self._sort_mode = _SORT_CYCLE[idx]
         self._refresh_process_table()
+
+    def action_show_help(self) -> None:
+        if isinstance(self.screen, HelpScreen):
+            self.pop_screen()
+        else:
+            self.push_screen(HelpScreen())
 
     def action_toggle_chart_glyph(self) -> None:
         dash = self.query_one("#hardware-dash", HardwareDashboard)

@@ -193,6 +193,16 @@ class HardwareDashboard(Widget):
         self._cpupwr_hist: deque = deque([0] * maxlen, maxlen=maxlen)
         self._gpupwr_hist: deque = deque([0] * maxlen, maxlen=maxlen)
 
+        # Native-unit histories for the cur/avg/max label context (watts).
+        # The *pwr* deques above hold chart percents; these hold real watts so
+        # the avg/max shown next to "CPU Power 12.3W" are in watts, not percent.
+        self._cpu_w_hist: deque = deque([0] * maxlen, maxlen=maxlen)
+        self._gpu_w_hist: deque = deque([0] * maxlen, maxlen=maxlen)
+
+        # Count of real samples appended; histories are zero-padded for chart
+        # right-alignment, so avg/max must ignore the leading padding.
+        self._sample_count: int = 0
+
         self._swap_hist: deque = deque([], maxlen=swap_maxlen)
 
         self._cpu_peak_w: float = 0.0
@@ -299,6 +309,9 @@ class HardwareDashboard(Widget):
         self._gpu_hist.append(gpu)
         self._ane_hist.append(ane_pct)
         self._ram_hist.append(ram_pct)
+        self._cpu_w_hist.append(s.cpu_watts)
+        self._gpu_w_hist.append(s.gpu_watts)
+        self._sample_count += 1
 
         # Power percents
         self._cpu_peak_w = max(self._cpu_peak_w, s.cpu_watts)
@@ -348,6 +361,7 @@ class HardwareDashboard(Widget):
             pcpu,
             s.pcpu_freq_mhz,
             cpu_temp,
+            self._pct_stats_suffix(self._pcpu_hist),
         )
         self._update_cluster_summary_row(
             "#ecpu-summary-row",
@@ -355,12 +369,17 @@ class HardwareDashboard(Widget):
             ecpu,
             s.ecpu_freq_mhz,
             cpu_temp,
+            self._pct_stats_suffix(self._ecpu_hist),
         )
         self.query_one("#gpu-label", Static).update(
-            "GPU {}% @{}MHz{}".format(gpu, s.gpu_freq_mhz, gpu_temp)
+            "GPU {}% @{}MHz{}{}".format(
+                gpu, s.gpu_freq_mhz, gpu_temp, self._pct_stats_suffix(self._gpu_hist)
+            )
         )
         self.query_one("#ane-label", Static).update(
-            "ANE {}% ({:.1f}W)".format(ane_pct, s.ane_watts)
+            "ANE {}% ({:.1f}W){}".format(
+                ane_pct, s.ane_watts, self._pct_stats_suffix(self._ane_hist)
+            )
         )
 
         used_gb = ram.get("used_GB", 0.0)
@@ -373,13 +392,18 @@ class HardwareDashboard(Widget):
             )
         else:
             ram_label = "RAM {}/{}GB".format(used_gb, total_gb)
+        ram_label += self._pct_stats_suffix(self._ram_hist)
         self.query_one("#ram-label", Static).update(ram_label)
 
         self.query_one("#cpupwr-label", Static).update(
-            "CPU Power {:.2f}W".format(s.cpu_watts)
+            "CPU Power {:.2f}W{}".format(
+                s.cpu_watts, self._watt_stats_suffix(self._cpu_w_hist)
+            )
         )
         self.query_one("#gpupwr-label", Static).update(
-            "GPU Power {:.2f}W".format(s.gpu_watts)
+            "GPU Power {:.2f}W{}".format(
+                s.gpu_watts, self._watt_stats_suffix(self._gpu_w_hist)
+            )
         )
 
         # Update per-core rows
@@ -400,6 +424,36 @@ class HardwareDashboard(Widget):
     _CORE_HIST_MAXLEN = 500
     _CORE_MIN_SPARK_CHARS = 3
 
+    def _avg_max(self, hist) -> tuple[float, float]:
+        """Rolling average (over avg_window) and session max for a history deque.
+
+        Histories are zero-padded to a fixed length for chart right-alignment, so
+        only the last `_sample_count` entries are real readings. Avg is taken over
+        the configured `avg_window`; max is the peak across all real samples.
+        """
+        count = self._sample_count
+        if count <= 0:
+            return (0.0, 0.0)
+        vals = list(hist)
+        real_n = min(count, len(vals))
+        if real_n <= 0:
+            return (0.0, 0.0)
+        avg_window = max(1, int(getattr(self._config, "avg_window", real_n)))
+        avg_n = min(real_n, avg_window)
+        avg_vals = vals[-avg_n:]
+        peak_vals = vals[-real_n:]
+        return (sum(avg_vals) / len(avg_vals), max(peak_vals))
+
+    def _pct_stats_suffix(self, hist) -> str:
+        """`  avg N · max N` context string for a percent-valued history."""
+        avg, mx = self._avg_max(hist)
+        return "  avg {:.0f} · max {:.0f}".format(avg, mx)
+
+    def _watt_stats_suffix(self, hist) -> str:
+        """`  avg N.N · max N.N` context string for a watt-valued history."""
+        avg, mx = self._avg_max(hist)
+        return "  avg {:.1f} · max {:.1f}".format(avg, mx)
+
     def _update_cluster_summary_row(
         self,
         widget_id: str,
@@ -407,11 +461,14 @@ class HardwareDashboard(Widget):
         util_pct: int,
         freq_mhz: int,
         cpu_temp: str,
+        stats_suffix: str = "",
     ) -> None:
         """Render one full-width cluster summary line."""
         widget = self.query_one(widget_id, Static)
         avail = max(widget.size.width, 1)
-        line = "{} {:3d}% @{}MHz{}".format(label, util_pct, freq_mhz, cpu_temp)
+        line = "{} {:3d}% @{}MHz{}{}".format(
+            label, util_pct, freq_mhz, cpu_temp, stats_suffix
+        )
         widget.update(line[:avail].ljust(avail))
 
     def _format_core_entry(

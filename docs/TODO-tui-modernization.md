@@ -25,24 +25,36 @@ closing that gap.
 
 ## Tier 1 — high value, on-scope, building blocks already exist
 
-- [ ] **Chart context: current → cur/avg/max.**
+**Status: shipped (2026-06-28).** All three items implemented and covered by
+functional tests (`tests/test_dashboard_stats.py`, `tests/test_export.py`,
+`tests/test_tui_app.py`, `tests/test_cli_contract.py`).
+
+- [x] **Chart context: current → cur/avg/max.**
   Every frontier monitor shows avg + max alongside the live value; agtop labels show
   only the instantaneous number. The dashboard already retains 500-sample deques per
   metric, so avg/max are essentially free.
   - Files: `agtop/tui/widgets.py` (metric labels + cluster summary rows).
   - Example: `GPU 47% @1296MHz  avg 31 · max 88`.
+  - Done: avg over the `--avg` window, max as session peak (zero-padding excluded).
+    Percent metrics show `avg N · max N`; power labels show watts. Per-cluster
+    summary rows, GPU, ANE, RAM, and CPU/GPU power labels all carry the context.
 
-- [ ] **Help / legend overlay (`?`).**
+- [x] **Help / legend overlay (`?`).**
   btop / bottom / htop all have one; agtop has only the footer. Add a modal listing
   keybindings **and** what each metric and alert token means (`BW>`, `PKG>`, `SWAP+`
   are currently undocumented in-app).
   - Files: `agtop/tui/app.py` (binding + modal screen), new `tui/styles` rule.
+  - Done: `HelpScreen(ModalScreen)` bound to `?` (toggle) / `esc` / `q`, documenting
+    keys, metric labels, and every alert token.
 
-- [ ] **Metrics export: `--json` and a Prometheus `serve` endpoint.**
+- [x] **Metrics export: `--json` and a Prometheus `serve` endpoint.**
   macmon's 2026 headline feature and the clearest niche gap. `SystemSnapshot` is
   already a dataclass, so `dataclasses.asdict` + a stdlib HTTP handler yields JSON and
   `/metrics`. Turns agtop from a viewer into an observability source.
   - Files: `agtop/agtop.py` (subcommands/flags), new `agtop/export.py`, reuse `api.py`.
+  - Done: `--json` streams NDJSON; `--serve PORT` runs a stdlib `ThreadingHTTPServer`
+    exposing `/metrics` (scalar + per-core labelled gauges) with a warm background
+    sampler. Both routed from `main()` ahead of the TUI.
 
 ---
 

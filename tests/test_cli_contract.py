@@ -68,6 +68,47 @@ def test_cli_chart_glyph_accepts_block():
     assert args.chart_glyph == "block"
 
 
+def test_cli_help_exposes_export_flags():
+    result = subprocess.run(
+        [sys.executable, "-m", "agtop.agtop", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--json" in result.stdout
+    assert "--serve PORT" in result.stdout
+
+
+def test_cli_export_flags_have_inactive_defaults():
+    args = build_parser().parse_args([])
+    assert args.json is False
+    assert args.serve is None
+
+
+def test_cli_json_flag_sets_true():
+    args = build_parser().parse_args(["--json"])
+    assert args.json is True
+
+
+def test_cli_serve_accepts_valid_port():
+    args = build_parser().parse_args(["--serve", "9095"])
+    assert args.serve == 9095
+
+
+def test_cli_rejects_serve_port_out_of_range():
+    result = subprocess.run(
+        [sys.executable, "-m", "agtop.agtop", "--serve", "70000"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "port must be in the range 1-65535" in result.stderr
+
+
 def test_cli_rejects_invalid_proc_filter_regex():
     result = subprocess.run(
         [sys.executable, "-m", "agtop.agtop", "--proc-filter", "["],

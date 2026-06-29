@@ -80,6 +80,19 @@ def build_parser():
         default=3,
         help="Consecutive samples required for sustained alerts",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Stream metrics as NDJSON to stdout instead of launching the TUI",
+    )
+    parser.add_argument(
+        "--serve",
+        type=_validate_port,
+        default=None,
+        metavar="PORT",
+        help="Serve Prometheus metrics on http://0.0.0.0:PORT/metrics (no TUI)",
+    )
     return parser
 
 
@@ -129,6 +142,16 @@ def _validate_sustain_samples(value):
     return samples
 
 
+def _validate_port(value):
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError("port must be an integer") from error
+    if port < 1 or port > 65535:
+        raise argparse.ArgumentTypeError("port must be in the range 1-65535")
+    return port
+
+
 def _validate_subsamples(value):
     try:
         subsamples = int(value)
@@ -146,9 +169,27 @@ def _run_dashboard(args, runtime_state):
     app.run()
 
 
+def _run_export(args):
+    """Route to a non-TUI export backend. Returns an exit code."""
+    from agtop import export
+
+    interval_s = max(1, int(args.interval))
+    subsamples = max(1, int(args.subsamples))
+    try:
+        if args.serve is not None:
+            export.serve_prometheus(args.serve, interval_s, subsamples)
+        else:
+            export.run_json_stream(interval_s, subsamples)
+        return 0
+    except KeyboardInterrupt:
+        return 130
+
+
 def main(args=None):
     if args is None:
         args = build_parser().parse_args()
+    if getattr(args, "json", False) or getattr(args, "serve", None) is not None:
+        return _run_export(args)
     runtime_state = {"monitor": None, "cursor_hidden": False}
     try:
         _run_dashboard(args, runtime_state)
