@@ -6,6 +6,11 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-06-29
+
+### Changed
+- The cur/avg/max chart context now appends the unit to each stat (`avg 31% · max 88%`, `avg 9.1W · max 18.7W`). A bare number was ambiguous next to a headline carrying a different unit — most notably the RAM row, whose headline is in GB while its avg/max are percent.
+
 ## [0.9.0] - 2026-06-28
 
 ### Added
