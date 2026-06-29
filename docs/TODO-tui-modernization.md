@@ -34,9 +34,10 @@ functional tests (`tests/test_dashboard_stats.py`, `tests/test_export.py`,
   only the instantaneous number. The dashboard already retains 500-sample deques per
   metric, so avg/max are essentially free.
   - Files: `agtop/tui/widgets.py` (metric labels + cluster summary rows).
-  - Example: `GPU 47% @1296MHz  avg 31 · max 88`.
+  - Example: `GPU 47% @1296MHz  avg 31% · max 88%`.
   - Done: avg over the `--avg` window, max as session peak (zero-padding excluded).
-    Percent metrics show `avg N · max N`; power labels show watts. Per-cluster
+    Stats carry their unit (`avg N% · max N%`; power labels show `W`) so they are
+    unambiguous next to a headline in a different unit (MHz / GB / W). Per-cluster
     summary rows, GPU, ANE, RAM, and CPU/GPU power labels all carry the context.
 
 - [x] **Help / legend overlay (`?`).**

@@ -61,6 +61,7 @@ def test_percent_and_watt_suffix_formatting():
     hist = _padded_hist([10.0, 20.0, 90.0])
     dash._sample_count = 3
 
-    # avg = 40, peak = 90
-    assert dash._pct_stats_suffix(hist) == "  avg 40 · max 90"
-    assert dash._watt_stats_suffix(hist) == "  avg 40.0 · max 90.0"
+    # avg = 40, peak = 90 — the unit is appended so the stats are unambiguous
+    # next to a headline carrying a different unit (MHz / GB / W).
+    assert dash._pct_stats_suffix(hist) == "  avg 40% · max 90%"
+    assert dash._watt_stats_suffix(hist) == "  avg 40.0W · max 90.0W"

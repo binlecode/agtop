@@ -445,14 +445,19 @@ class HardwareDashboard(Widget):
         return (sum(avg_vals) / len(avg_vals), max(peak_vals))
 
     def _pct_stats_suffix(self, hist) -> str:
-        """`  avg N · max N` context string for a percent-valued history."""
+        """`  avg N% · max N%` context string for a percent-valued history.
+
+        The unit is appended because the headline reading often carries a
+        different unit (MHz, GB, W), so a bare number would be ambiguous — or,
+        for the RAM row, read as GB instead of percent.
+        """
         avg, mx = self._avg_max(hist)
-        return "  avg {:.0f} · max {:.0f}".format(avg, mx)
+        return "  avg {:.0f}% · max {:.0f}%".format(avg, mx)
 
     def _watt_stats_suffix(self, hist) -> str:
-        """`  avg N.N · max N.N` context string for a watt-valued history."""
+        """`  avg N.NW · max N.NW` context string for a watt-valued history."""
         avg, mx = self._avg_max(hist)
-        return "  avg {:.1f} · max {:.1f}".format(avg, mx)
+        return "  avg {:.1f}W · max {:.1f}W".format(avg, mx)
 
     def _update_cluster_summary_row(
         self,
