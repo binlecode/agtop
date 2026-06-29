@@ -6,6 +6,11 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.8.10] - 2026-06-29
+
+### Changed
+- Simplified the status bar: removed the rarely-used layout toggle (`v`) and dashboard-collapse (`space`) bindings and disabled the framework command palette (`^p`), leaving a focused set: `q` `p` `s` `g` `t` `/`.
+
 ## [0.8.9] - 2026-06-28
 
 ### Fixed
