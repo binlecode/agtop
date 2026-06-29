@@ -67,10 +67,15 @@ The `docs/` directory contains essential system reviews, research, operations gu
 - Run `.venv/bin/pytest -q` for all code changes.
 - Run a single test file: `.venv/bin/pytest tests/test_cli_contract.py -q`
 - Run a single test function: `.venv/bin/pytest tests/test_cli_contract.py::test_name -q`
-- Functional tests only: validate behavior through public/runtime entrypoints (for example CLI invocation, real file I/O paths, and end-to-end parse flows).
-- Do not use mocks, fakes, monkeypatching, or fixture-based synthetic harnesses for new tests.
-- Do not add unit tests that assert internal implementation details, helper math constants, or private function behavior in isolation.
-- Do not add tests only to increase coverage numbers; each test must validate a production-relevant failure mode, regression risk, or external contract.
+- **Functional tests only (enforced).** Every test MUST validate behavior through a public or runtime entrypoint, and MUST exercise a production-relevant failure mode, regression risk, or external contract. This rule binds to *all* tests, not just new ones: when touching the suite, delete or rewrite any existing test that violates it rather than leaving it in place.
+- **Reject a test (it is structural — do not add it; remove it if present) when it:**
+  - calls an underscore-prefixed (private) function or method as the unit under test (e.g. `_avg_max`, `_inline_spark`, `_format_core_entry`);
+  - reads or writes private attributes to arrange or assert state (e.g. `dash._sample_count = 5`, `dash._core_hist`, `dash._chart_glyph`);
+  - asserts internal implementation details, helper math constants, or a private function's output in isolation;
+  - uses a mock, fake, monkeypatch, or a synthetic subclass/harness that overrides real behavior to fake layout, I/O, or data;
+  - exists only to raise coverage.
+- **Accept a test (it is functional) when it drives a public surface:** CLI invocation (`subprocess` / `build_parser().parse_args`), the public API (`Monitor` / `Profiler`), the real config merge (`create_dashboard_config`), documented public module functions (e.g. `power_to_percent`, `get_soc_profile`), real export/format contracts (NDJSON / Prometheus), real hardware/file I/O paths, or a real widget rendered through its public path (`BrailleChart.render()` via the `data` setter, or a `HardwareDashboard` mounted with Textual `App.run_test()` and fed real `SystemSnapshot`s through `update_metrics`).
+- A minimal Textual host `App` used solely to mount a real widget is allowed (it is a mount point, not a fake); faking the data or the logic under test is not.
 - Minimum checks before opening a PR:
   - `.venv/bin/python -m agtop.agtop --help`
   - `.venv/bin/pytest -q`
