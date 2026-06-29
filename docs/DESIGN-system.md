@@ -194,7 +194,8 @@ The user interface is powered by Textual. It is structured into a dynamic multi-
 │ E-CPU  4% @1200MHz (42°C) avg 6% max 22%  │  2041  ollama     12.1  8400  18  │
 │ ⠋⠙⠹⠸⠼⠴⠦ (Braille util chart)             │  502   WindowSrv   5.2  350   3   │
 │ GPU 5% @900MHz  avg 8% · max 47%          │  ...                              │
-│ ANE 0% (0.0W) · RAM 18/32GB · Power…      │                                  │
+│ ANE 0% (0.0W) · RAM 18/32GB                │                                  │
+│ Mem BW 120 GB/s · CPU/GPU/Package Power…  │                                  │
 │ span 2m08s  ·  thermal: Nominal  alerts: none                                 │
 └──────────────────────────────────────┴───────────────────────────────────────┘
 ```
@@ -220,10 +221,12 @@ The `BrailleChart` widget is designed to render charts efficiently inside Termin
 - **Time-window labeling**: because one column is one sample, the visible span scales silently with terminal width. The status line leads with a `span <Ns/m/h>` token computed as chart width \u00D7 `--interval` (`_format_window_span` / `_chart_window_label`); it degrades to no token before layout, so the per-frame path never raises.
 
 ### 5.3 Metric Label Context (cur / avg / max)
-Each live reading carries rolling context, matching frontier monitors (btop / bottom / macmon). The dashboard retains 500-sample deques per metric; histories are zero-padded for chart right-alignment, so avg/max ignore the leading padding (`_avg_max` reads only the last `_sample_count` real samples). Avg is taken over the `--avg` window; max is the session peak. Every stat carries its unit (`avg N% \u00B7 max N%`, watt labels show `W`) so it stays unambiguous beside a headline in a different unit (MHz / GB / W). Applied to per-cluster CPU summary rows, GPU, ANE, RAM, and CPU/GPU power labels.
+Each live reading carries rolling context, matching frontier monitors (btop / bottom / macmon). The dashboard retains 500-sample deques per metric; histories are zero-padded for chart right-alignment, so avg/max ignore the leading padding (`_avg_max` reads only the last `_sample_count` real samples). Avg is taken over the `--avg` window; max is the session peak. Every stat carries its unit (`avg N% \u00B7 max N%`, watt labels show `W`, bandwidth shows `GB/s`) so it stays unambiguous beside a headline in a different unit (MHz / GB / W / GB/s). Applied to per-cluster CPU summary rows, GPU, ANE, RAM, memory-bandwidth, and CPU/GPU/package power labels.
+
+The dashboard also surfaces two SoC-level headline metrics whose data already flowed through `SystemSnapshot` but was previously only consumed by alerts: **Mem BW** (unified-memory bandwidth in GB/s, the headline bottleneck for LLM inference) and **Package Power** (total SoC draw = CPU + GPU + ANE + other rails). Their chart percents reuse the same normalisation as the `BW>` / `PKG>` alerts (bandwidth vs summed CPU+GPU channel capacity; package vs `package_ref_w`). The Mem BW row is hidden when `SystemSnapshot.bandwidth_available` is false (no DCS channel on the platform).
 
 ### 5.4 Help Overlay (`HelpScreen`)
-A `ModalScreen` bound to `?` (toggle), `esc`, and `q` documents the keybindings, every metric label, and \u2014 critically \u2014 the otherwise-undocumented status-line tokens (`span`, `THERMAL`, `BW>`, `PKG>`, `SWAP+`) and the color-degradation / `NO_COLOR` behavior.
+A `ModalScreen` bound to `?` (toggle), `esc`, and `q` documents the keybindings, every metric label, and \u2014 critically \u2014 the otherwise-undocumented status-line tokens (`span`, `energy`, `THERMAL`, `BW>`, `PKG>`, `SWAP+`) and the color-degradation / `NO_COLOR` behavior. The `energy` token is the cumulative session energy (\u222b package power dt since launch, displayed in mWh/Wh), the live-TUI counterpart to `Profiler.total_package_joules`.
 
 ### 5.5 Alert Counters & Threshold Validation
 To alert users of resource bottlenecks, the `HardwareDashboard` monitors and tracks resource usage:

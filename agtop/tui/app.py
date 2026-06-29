@@ -82,7 +82,9 @@ HELP_TEXT = """\
   GPU             GPU util% @freq, die °C
   ANE             Apple Neural Engine util% (estimated) and power
   RAM             Used / total memory (and swap when active)
+  Mem BW          Unified-memory bandwidth in GB/s (hidden if unavailable)
   CPU/GPU Power   Live package-rail power draw in watts
+  Package Power   Total SoC power draw in watts (CPU + GPU + ANE + other rails)
 
   avg · max       Rolling average (over the --avg window) and session peak,
                   shown next to each live reading.
@@ -91,6 +93,8 @@ HELP_TEXT = """\
 
   span Ns    Visible chart time window (one sample per column × --interval);
              it scales with terminal width, so widen the window to see further back.
+  energy     Cumulative session energy (∫ package power dt since launch), in
+             mWh / Wh — the "what did this run cost" figure.
   THERMAL    Thermal pressure above Nominal (Fair / Serious / Critical)
   BW>N%      Memory bandwidth sustained above N% of SoC capacity
   PKG>N%     Package power sustained above N% of the SoC reference

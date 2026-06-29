@@ -295,12 +295,17 @@ class HardwareDashboard(Widget):
         self._ram_hist: deque = deque([0] * maxlen, maxlen=maxlen)
         self._cpupwr_hist: deque = deque([0] * maxlen, maxlen=maxlen)
         self._gpupwr_hist: deque = deque([0] * maxlen, maxlen=maxlen)
+        self._pkgpwr_hist: deque = deque([0] * maxlen, maxlen=maxlen)
+        self._bw_hist: deque = deque([0] * maxlen, maxlen=maxlen)
 
-        # Native-unit histories for the cur/avg/max label context (watts).
-        # The *pwr* deques above hold chart percents; these hold real watts so
-        # the avg/max shown next to "CPU Power 12.3W" are in watts, not percent.
+        # Native-unit histories for the cur/avg/max label context (watts / GB/s).
+        # The *pwr* / *bw* deques above hold chart percents; these hold real
+        # units so the avg/max shown next to "CPU Power 12.3W" or "Mem BW
+        # 120 GB/s" are in watts / GB/s, not percent.
         self._cpu_w_hist: deque = deque([0] * maxlen, maxlen=maxlen)
         self._gpu_w_hist: deque = deque([0] * maxlen, maxlen=maxlen)
+        self._pkg_w_hist: deque = deque([0] * maxlen, maxlen=maxlen)
+        self._bw_gbps_hist: deque = deque([0] * maxlen, maxlen=maxlen)
 
         # Count of real samples appended; histories are zero-padded for chart
         # right-alignment, so avg/max must ignore the leading padding.
@@ -313,6 +318,11 @@ class HardwareDashboard(Widget):
 
         self._high_bw_counter: int = 0
         self._high_pkg_counter: int = 0
+
+        # Cumulative session energy (joules), integrated as package_watts ×
+        # interval each frame — the "what did this run cost" readout, mirroring
+        # Profiler.total_package_joules for the live TUI.
+        self._session_joules: float = 0.0
 
         # Per-core history (dict: index -> deque)
         self._core_hist: dict = {}
@@ -365,6 +375,13 @@ class HardwareDashboard(Widget):
             glyph_mode=self._chart_glyph, id="ram-chart", classes="metric-chart"
         )
 
+        # Memory bandwidth: shown only when the sampler exposes a DCS channel
+        # (gated per-snapshot in update_metrics via SystemSnapshot.bandwidth_available).
+        yield Static("Mem BW 0 GB/s", id="bw-label", classes="metric-label")
+        yield BrailleChart(
+            glyph_mode=self._chart_glyph, id="bw-chart", classes="metric-chart"
+        )
+
         yield Static("CPU Power 0W", id="cpupwr-label", classes="metric-label")
         yield BrailleChart(
             glyph_mode=self._chart_glyph, id="cpupwr-chart", classes="metric-chart"
@@ -373,6 +390,11 @@ class HardwareDashboard(Widget):
         yield Static("GPU Power 0W", id="gpupwr-label", classes="metric-label")
         yield BrailleChart(
             glyph_mode=self._chart_glyph, id="gpupwr-chart", classes="metric-chart"
+        )
+
+        yield Static("Package Power 0W", id="pkgpwr-label", classes="metric-label")
+        yield BrailleChart(
+            glyph_mode=self._chart_glyph, id="pkgpwr-chart", classes="metric-chart"
         )
 
         yield Static(
@@ -440,6 +462,30 @@ class HardwareDashboard(Widget):
         self._cpupwr_hist.append(cpu_pwr_pct)
         self._gpupwr_hist.append(gpu_pwr_pct)
 
+        # Package power chart percent (vs SoC reference rail), mirroring the
+        # PKG alert normalisation in _compute_alerts.
+        pkg_pwr_pct = clamp_percent(s.package_watts / max(cfg.package_ref_w, 1.0) * 100)
+        if s.package_watts > 0 and pkg_pwr_pct == 0:
+            pkg_pwr_pct = 1
+        self._pkgpwr_hist.append(pkg_pwr_pct)
+        self._pkg_w_hist.append(s.package_watts)
+        self._session_joules += max(0.0, s.package_watts) * max(
+            1, int(getattr(cfg, "sample_interval", 1))
+        )
+
+        # Memory bandwidth chart percent (vs summed CPU+GPU channel capacity),
+        # mirroring the BW alert normalisation in _compute_alerts.
+        total_bw_ref = max(cfg.max_cpu_bw + cfg.max_gpu_bw, 1.0)
+        bw_pct = (
+            clamp_percent(s.bandwidth_gbps / total_bw_ref * 100)
+            if s.bandwidth_available
+            else 0
+        )
+        if s.bandwidth_available and s.bandwidth_gbps > 0 and bw_pct == 0:
+            bw_pct = 1
+        self._bw_hist.append(bw_pct)
+        self._bw_gbps_hist.append(s.bandwidth_gbps if s.bandwidth_available else 0.0)
+
         self._swap_hist.append(max(0.0, float(ram.get("swap_used_GB", 0.0) or 0.0)))
 
         # Update charts
@@ -449,8 +495,10 @@ class HardwareDashboard(Widget):
             ("#gpu-chart", self._gpu_hist),
             ("#ane-chart", self._ane_hist),
             ("#ram-chart", self._ram_hist),
+            ("#bw-chart", self._bw_hist),
             ("#cpupwr-chart", self._cpupwr_hist),
             ("#gpupwr-chart", self._gpupwr_hist),
+            ("#pkgpwr-chart", self._pkgpwr_hist),
         )
         for widget_id, data in chart_data:
             self.query_one(widget_id, BrailleChart).data = data
@@ -508,6 +556,26 @@ class HardwareDashboard(Widget):
                 s.gpu_watts, self._watt_stats_suffix(self._gpu_w_hist)
             )
         )
+        self.query_one("#pkgpwr-label", Static).update(
+            "Package Power {:.2f}W{}".format(
+                s.package_watts, self._watt_stats_suffix(self._pkg_w_hist)
+            )
+        )
+
+        # Memory bandwidth: hide the row entirely when the platform exposes no
+        # DCS channel; otherwise show GB/s with rolling context. Availability is
+        # effectively constant per session, so toggle display only on change.
+        bw_label = self.query_one("#bw-label", Static)
+        bw_chart = self.query_one("#bw-chart", BrailleChart)
+        if bw_chart.display != s.bandwidth_available:
+            bw_label.display = s.bandwidth_available
+            bw_chart.display = s.bandwidth_available
+        if s.bandwidth_available:
+            bw_label.update(
+                "Mem BW {:.1f} GB/s{}".format(
+                    s.bandwidth_gbps, self._gbps_stats_suffix(self._bw_gbps_hist)
+                )
+            )
 
         # Update per-core rows
         if cfg.show_cores:
@@ -561,6 +629,11 @@ class HardwareDashboard(Widget):
         """`  avg N.NW · max N.NW` context string for a watt-valued history."""
         avg, mx = self._avg_max(hist)
         return "  avg {:.1f}W · max {:.1f}W".format(avg, mx)
+
+    def _gbps_stats_suffix(self, hist) -> str:
+        """`  avg N.N · max N.N GB/s` context string for a bandwidth history."""
+        avg, mx = self._avg_max(hist)
+        return "  avg {:.1f} · max {:.1f} GB/s".format(avg, mx)
 
     def _update_cluster_summary_row(
         self,
@@ -694,9 +767,20 @@ class HardwareDashboard(Widget):
         alerts_str = ", ".join(active_alerts) if active_alerts else "none"
 
         status = "thermal: {}  alerts: {}".format(s.thermal_state, alerts_str)
+        meta = []
         if span_label:
-            status = "span {}  ·  {}".format(span_label, status)
+            meta.append("span {}".format(span_label))
+        meta.append("energy {}".format(self._format_session_energy()))
+        if meta:
+            status = "{}  ·  {}".format("  ·  ".join(meta), status)
         self.query_one("#status-line", Static).update(status)
+
+    def _format_session_energy(self) -> str:
+        """Cumulative session energy as `N.NWh` (or `N mWh` while still small)."""
+        wh = self._session_joules / 3600.0
+        if wh < 0.1:
+            return "{:.0f}mWh".format(wh * 1000)
+        return "{:.2f}Wh".format(wh)
 
     def _chart_window_label(self) -> str:
         """Visible time span of the charts, derived from a representative chart.
