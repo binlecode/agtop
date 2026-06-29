@@ -6,6 +6,16 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-28
+
+### Added
+- **Chart context (cur/avg/max):** every metric label now shows a rolling average (over the `--avg` window) and the session peak alongside the live reading — e.g. `GPU 47% @1296MHz  avg 31 · max 88`. Percent metrics report `avg/max` in percent; power labels report watts. Covers the P/E-cluster summary rows and the GPU, ANE, RAM, and CPU/GPU power labels.
+- **Help overlay (`?`):** a modal listing keybindings, metric-label meanings, and every status-line alert token (`THERMAL`, `BW>`, `PKG>`, `SWAP+`). Toggle with `?`, dismiss with `esc`/`q`.
+- **Metrics export:** new `agtop/export.py` with two non-TUI backends. `--json` streams one NDJSON snapshot per interval to stdout (all `SystemSnapshot` fields, including per-core lists). `--serve PORT` runs a stdlib HTTP server exposing Prometheus gauges at `/metrics` (scalar gauges plus per-core `agtop_core_utilization_percent{cluster,core}`), kept warm by a background sampler so scrapes return immediately.
+
+### Fixed
+- Corrected the README interactive-keys reference, which still advertised the removed `v` (layout) and `space` (panel-collapse) bindings.
+
 ## [0.8.10] - 2026-06-29
 
 ### Changed
