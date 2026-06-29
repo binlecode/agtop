@@ -87,14 +87,17 @@ HELP_TEXT = """\
   avg · max       Rolling average (over the --avg window) and session peak,
                   shown next to each live reading.
 
-[b]Alert tokens[/b] (status line)
+[b]Status line[/b]
 
+  span Ns    Visible chart time window (one sample per column × --interval);
+             it scales with terminal width, so widen the window to see further back.
   THERMAL    Thermal pressure above Nominal (Fair / Serious / Critical)
   BW>N%      Memory bandwidth sustained above N% of SoC capacity
   PKG>N%     Package power sustained above N% of the SoC reference
   SWAP+N.NG  Swap grew by N.N GB over the sustain window
 
 Alerts fire only after the threshold holds for --alert-sustain-samples frames.
+Chart colors degrade to 256/16-color terminals and honor NO_COLOR.
 """
 
 

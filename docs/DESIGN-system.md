@@ -186,46 +186,56 @@ The user interface is powered by Textual. It is structured into a dynamic multi-
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  agtop  [CPU Brand]         E-cores: X  P-cores: Y         [HH:MM:SS]        │
+│  agtop  v0.9.x · [CPU Brand]    E-cores: X  P-cores: Y        [HH:MM:SS]     │
 ├──────────────────────────────────────┬───────────────────────────────────────┤
-│                                      │                                       │
-│ E-CPU  [===  4.2%  @1200MHz] (42°C)   │   PID    Command     CPU%  MEM   THD  │
-│ ⠋⠙⠹⠸⠼⠴⠦ (Braille util chart)        │   ──────────────────────────────────   │
-│ Cores:  0: 12% @1G  1: 10% @1G       │   1025   python      45.0  120    4   │
-│                                      │   2041   ollama      12.1  8400  18   │
-│ P-CPU  [===== 24.5% @3200MHz] (48°C) │   502    WindowServ   5.2  350    3   │
-│ ⠋⠙⠹⠸⠼⠴⠦ (Braille util chart)        │   ...                                 │
-│                                      │                                       │
-│ GPU    [== 5.0% @900MHz]             │                                       │
-│                                      │                                       │
+│ P-CPU 24% @3200MHz (48°C) avg 19% max 61% │  PID   Command    CPU%  MEM  THD  │
+│ ⠋⠙⠹⠸⠼⠴⠦ (Braille util chart)             │  ──────────────────────────────   │
+│ P00 12% ⠴⠦ │ P01 10% ⠴⠂                   │  1025  python     45.0  120   4   │
+│ E-CPU  4% @1200MHz (42°C) avg 6% max 22%  │  2041  ollama     12.1  8400  18  │
+│ ⠋⠙⠹⠸⠼⠴⠦ (Braille util chart)             │  502   WindowSrv   5.2  350   3   │
+│ GPU 5% @900MHz  avg 8% · max 47%          │  ...                              │
+│ ANE 0% (0.0W) · RAM 18/32GB · Power…      │                                  │
+│ span 2m08s  ·  thermal: Nominal  alerts: none                                 │
 └──────────────────────────────────────┴───────────────────────────────────────┘
 ```
 
 ### 5.1 Textual Application State (`app.py`)
 `AgtopApp` handles TUI setup and maintains keybindings:
 - `q`: Quit.
-- `p`: Pauses sampling thread.
-- `s`: Cycle process sorting column (`CPU%`, `RSS`, `PID`).
+- `p`: Pause / resume the sampling thread.
+- `s`: Cycle process sorting column (`CPU%` \u2192 `RSS` \u2192 `PID`).
 - `g`: Toggle charts between Braille dots and block glyphs.
-- `t`: Show/hide top processes table.
-- `v`: Toggle Layout between Horizontal (split screen) and Vertical (stacked panels).
-- `space`: Collapse/Expand hardware dashboard widget.
-- `/`: Open process regex filter bar.
+- `t`: Show/hide the top processes table.
+- `/`: Open the process regex filter bar.
+- `?`: Show/hide the help overlay (`esc` / `q` also close it).
 
-The application initiates a background thread via textual `@work(thread=True)` to run the polling loop, delivering parsed snapshots to the main thread via a custom event, `MetricsUpdated`.
+The application initiates a background thread via textual `@work(thread=True, exclusive=True)` to run the polling loop, delivering parsed snapshots to the main thread via a custom event, `MetricsUpdated`. A spinner splash covers the first sampler warm-up; the dashboard swaps in once the first snapshot arrives. The framework command palette is disabled (`ENABLE_COMMAND_PALETTE = False`).
 
 ### 5.2 Custom Sparklines (`BrailleChart`)
 The `BrailleChart` widget is designed to render charts efficiently inside Terminal constraints.
-- Custom Rich formatting leverages Unicode **Braille patterns** (`\u2800` through `\u28FF`) or **Block elements** (`\u2582` through `\u2588`).
+- Custom Rich formatting leverages Unicode **Braille patterns** (`\u2800` through `\u28FF`) or **Block elements** (`\u2582` through `\u2588`). One character is one time sample.
 - **Braille Grid Scaling**: Each console row character contains a 2-column, 4-row dot matrix. A `height=2` chart provides $8$ discrete vertical steps per horizontal column, whereas a `height=4` chart provides $16$ steps.
-- **Dynamic Heatmapping**: Every vertical column's element is styled dynamically using a sliding RGB linear interpolation gradient mapping low utilization (Blue: `rgb(66, 135, 245)`) to extreme utilization (Red: `rgb(240, 70, 64)`).
+- **Dynamic Heatmapping**: Every vertical column's element is styled along a sliding linear gradient mapping low utilization (Blue: `rgb(66, 135, 245)`) to extreme utilization (Red: `rgb(240, 70, 64)`).
+- **Color tier degradation** (`resolve_color_mode` / `_pct_to_color`): the gradient adapts to terminal capability rather than always emitting truecolor. `resolve_color_mode()` honors `NO_COLOR` (https://no-color.org) unconditionally, then prefers the Textual console's detected `color_system`, falling back to `COLORTERM` / `TERM` inspection. The resolved tier maps each value to: `rgb()` (truecolor), the nearest 256-color cube index `color(N)` (256), a named blue\u2192green\u2192yellow\u2192red severity ramp (16), or no style at all (`none` \u2014 `NO_COLOR` / dumb terminals). The tier is resolved once at widget mount and threaded through rendering; `render()` is a thin wrapper over `_render_text(width, height)` so the colored output is exercisable without a live terminal.
+- **Time-window labeling**: because one column is one sample, the visible span scales silently with terminal width. The status line leads with a `span <Ns/m/h>` token computed as chart width \u00D7 `--interval` (`_format_window_span` / `_chart_window_label`); it degrades to no token before layout, so the per-frame path never raises.
 
-### 5.3 Alert Counters & Threshold Validation
+### 5.3 Metric Label Context (cur / avg / max)
+Each live reading carries rolling context, matching frontier monitors (btop / bottom / macmon). The dashboard retains 500-sample deques per metric; histories are zero-padded for chart right-alignment, so avg/max ignore the leading padding (`_avg_max` reads only the last `_sample_count` real samples). Avg is taken over the `--avg` window; max is the session peak. Every stat carries its unit (`avg N% \u00B7 max N%`, watt labels show `W`) so it stays unambiguous beside a headline in a different unit (MHz / GB / W). Applied to per-cluster CPU summary rows, GPU, ANE, RAM, and CPU/GPU power labels.
+
+### 5.4 Help Overlay (`HelpScreen`)
+A `ModalScreen` bound to `?` (toggle), `esc`, and `q` documents the keybindings, every metric label, and \u2014 critically \u2014 the otherwise-undocumented status-line tokens (`span`, `THERMAL`, `BW>`, `PKG>`, `SWAP+`) and the color-degradation / `NO_COLOR` behavior.
+
+### 5.5 Alert Counters & Threshold Validation
 To alert users of resource bottlenecks, the `HardwareDashboard` monitors and tracks resource usage:
 - **Bandwidth Saturation**: Triggers when Memory bandwidth exceeds a configured percentage of the SoC's reference limit (defaults to `85%`).
 - **Power Peak Alert**: Triggers when Package Watts exceeds a configured percentage of the SoC's reference limit (defaults to `85%`).
 - **Swap Rise**: Triggers when Swap space usage increases by a configured limit (defaults to `0.3 GB`).
 - **Alert Sliding Window**: To prevent intermittent spikes from causing noisy notifications, alerts are validated using a sliding window. The metric must exceed the threshold for a sustained count of sequential intervals (defaults to `3` samples) before updating the status line.
+
+### 5.6 Headless Export Modes (`export.py`)
+The same `Monitor` sampling layer feeds two non-TUI output modes, routed from `main()` ahead of the TUI, turning agtop from a viewer into an observability source:
+- `--json`: streams metrics as NDJSON to stdout (`dataclasses.asdict` over `SystemSnapshot`), one line per sample.
+- `--serve PORT`: runs a stdlib `ThreadingHTTPServer` exposing Prometheus `/metrics` (scalar plus per-core labelled gauges), backed by a warm background sampler.
 
 ---
 

@@ -6,6 +6,15 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-06-29
+
+### Added
+- **Color tier degradation + `NO_COLOR`:** chart colors no longer always emit truecolor `rgb()`. `resolve_color_mode()` honors `NO_COLOR` (https://no-color.org) unconditionally, then prefers the terminal's detected color system, falling back to `COLORTERM`/`TERM`. The blue→red gradient degrades to a 256-color cube index, a named 16-color severity ramp, or no style at all on dumb terminals — fixing broken output on limited/`NO_COLOR` terminals.
+- **Chart time-window label:** charts plot one sample per column, so the visible span scaled silently with terminal width. The status line now leads with a `span <Ns/m/h>` token (chart width × `--interval`), documented in the `?` help overlay.
+
+### Changed
+- Consolidated all TUI design and implementation details into `docs/DESIGN-system.md` (Section 5) and removed the completed `docs/TODO-tui-modernization.md`. Section 5 was also brought current (removed stale `v`/`space` keys, added `?` help, color tiers, and headless export modes).
+
 ## [0.9.1] - 2026-06-29
 
 ### Changed

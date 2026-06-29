@@ -45,3 +45,7 @@ def test_help_overlay_documents_keys_metrics_and_alert_tokens():
     # The new cur/avg/max chart context is explained too.
     assert "avg" in HELP_TEXT
     assert "max" in HELP_TEXT
+
+    # The chart time-window token and color-degradation behavior are documented.
+    assert "span" in HELP_TEXT
+    assert "NO_COLOR" in HELP_TEXT

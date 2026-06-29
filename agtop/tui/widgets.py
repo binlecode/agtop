@@ -1,5 +1,6 @@
 """Textual widgets for the agtop hardware dashboard."""
 
+import os
 from collections import deque
 
 from rich.text import Text
@@ -21,6 +22,24 @@ from agtop.power_scaling import (
 _COOL_RGB = (66, 135, 245)  # blue
 _HOT_RGB = (240, 70, 64)  # red
 
+# Color tiers, coolest-to-hottest, used when the terminal cannot render the
+# truecolor gradient. The 16-color tier is a conventional severity ramp (the
+# blue->red interpolation has no faithful 16-color analogue), keyed by percent.
+_ANSI16_SEVERITY = (
+    (25.0, "blue"),
+    (50.0, "green"),
+    (75.0, "yellow"),
+)
+_ANSI16_HOT = "red"
+
+# Maps a Rich/Textual console.color_system to our internal tier names.
+_COLOR_SYSTEM_TO_MODE = {
+    "truecolor": "truecolor",
+    "256": "256",
+    "standard": "16",
+    "windows": "16",
+}
+
 # Cumulative braille fill bits for a left-column vertical pole, indexed 0 (bottom
 # dot only) to 3 (all 4 dots filled): dots 7 / 7+3 / 7+3+2 / 7+3+2+1.
 _BRAILLE_FILL_BITS = [0x40, 0x44, 0x46, 0x47]
@@ -31,13 +50,76 @@ _BLOCK_FULL_GLYPH = "\u2588"
 _BLOCK_BLANK = " "
 
 
-def _pct_to_color(pct: float) -> str:
-    """Map 0-100 percentage to a blue->red RGB color."""
+def _pct_to_rgb(pct: float) -> tuple[int, int, int]:
+    """Interpolate 0-100 percent along the blue->red gradient to an RGB triple."""
     p = min(100.0, max(0.0, float(pct))) / 100.0
     r = round(_COOL_RGB[0] + (_HOT_RGB[0] - _COOL_RGB[0]) * p)
     g = round(_COOL_RGB[1] + (_HOT_RGB[1] - _COOL_RGB[1]) * p)
     b = round(_COOL_RGB[2] + (_HOT_RGB[2] - _COOL_RGB[2]) * p)
+    return (r, g, b)
+
+
+def resolve_color_mode(console=None, env=None) -> str:
+    """Resolve the active color tier: 'none' | '16' | '256' | 'truecolor'.
+
+    NO_COLOR (https://no-color.org) wins unconditionally. Otherwise the
+    terminal's detected color system is preferred (when a Rich/Textual console
+    is supplied), falling back to COLORTERM / TERM inspection so the function is
+    still meaningful before the app is mounted (e.g. in tests).
+    """
+    env = os.environ if env is None else env
+    if env.get("NO_COLOR", "") != "":
+        return "none"
+    if console is not None:
+        system = getattr(console, "color_system", None)
+        if system in _COLOR_SYSTEM_TO_MODE:
+            return _COLOR_SYSTEM_TO_MODE[system]
+        if system is None:
+            return "none"
+    if env.get("COLORTERM", "").lower() in ("truecolor", "24bit"):
+        return "truecolor"
+    term = env.get("TERM", "")
+    if term in ("", "dumb"):
+        return "none"
+    if "truecolor" in term:
+        return "truecolor"
+    if "256color" in term or "256" in term:
+        return "256"
+    return "16"
+
+
+def _pct_to_color(pct: float, mode: str = "truecolor") -> str:
+    """Map 0-100 percent to a Rich style string for the given color tier.
+
+    Degrades the blue->red truecolor gradient across terminal capabilities:
+    truecolor -> `rgb()`, 256-color -> nearest `color()` cube index, 16-color ->
+    a named severity ramp, and `none` -> no style (NO_COLOR / dumb terminals).
+    """
+    if mode == "none":
+        return ""
+    if mode == "16":
+        p = min(100.0, max(0.0, float(pct)))
+        for threshold, name in _ANSI16_SEVERITY:
+            if p < threshold:
+                return name
+        return _ANSI16_HOT
+    r, g, b = _pct_to_rgb(pct)
+    if mode == "256":
+        idx = 16 + 36 * round(r / 255 * 5) + 6 * round(g / 255 * 5) + round(b / 255 * 5)
+        return "color({})".format(idx)
     return "rgb({},{},{})".format(r, g, b)
+
+
+def _format_window_span(seconds: float) -> str:
+    """Format a chart's visible time span (e.g. `45s`, `2m08s`, `1h05m`)."""
+    seconds = int(max(0, seconds))
+    if seconds < 60:
+        return "{}s".format(seconds)
+    minutes, secs = divmod(seconds, 60)
+    if minutes < 60:
+        return "{}m{:02d}s".format(minutes, secs) if secs else "{}m".format(minutes)
+    hours, minutes = divmod(minutes, 60)
+    return "{}h{:02d}m".format(hours, minutes) if minutes else "{}h".format(hours)
 
 
 def _normalize_chart_glyph_mode(value: str) -> str:
@@ -94,10 +176,24 @@ class BrailleChart(Widget):
     }
     """
 
-    def __init__(self, glyph_mode: str = "dots", **kwargs) -> None:
+    def __init__(
+        self, glyph_mode: str = "dots", color_mode: str = None, **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self._data = []
         self._glyph_mode = _normalize_chart_glyph_mode(glyph_mode)
+        # None => resolve lazily from the running app's console (and NO_COLOR)
+        # once mounted; falls back to environment detection before then.
+        self._color_mode = color_mode
+
+    def on_mount(self) -> None:
+        if self._color_mode is None:
+            self._color_mode = resolve_color_mode(getattr(self.app, "console", None))
+
+    def _active_color_mode(self) -> str:
+        if self._color_mode is not None:
+            return self._color_mode
+        return resolve_color_mode()
 
     @staticmethod
     def _normalize_glyph_mode(value: str) -> str:
@@ -124,10 +220,17 @@ class BrailleChart(Widget):
         self.refresh()
 
     def render(self):
-        width = self.size.width
-        height = self.size.height
+        return self._render_text(self.size.width, self.size.height)
+
+    def _render_text(self, width: int, height: int):
+        """Render the chart into a Rich `Text` for the given cell dimensions.
+
+        Split out from `render()` so the colored output can be exercised without
+        a live terminal layout; `render()` is a thin wrapper over it.
+        """
         if width <= 0 or height <= 0:
             return ""
+        color_mode = self._active_color_mode()
         blank_glyph, full_glyph, partial_glyphs = _glyph_set_for_mode(self._glyph_mode)
         n = width  # 1 sample per character
         dlen = len(self._data)
@@ -139,7 +242,7 @@ class BrailleChart(Widget):
                 i = offset + col
                 raw_v = float(self._data[i]) if i >= 0 else 0.0
                 v, level = _clamped_value_and_level(raw_v, total_levels=total)
-                line_color = _pct_to_color(v)
+                line_color = _pct_to_color(v, color_mode)
                 if level > 0:
                     dot_row = height - 1 - (level - 1) // 4
                     if row > dot_row:
@@ -572,6 +675,10 @@ class HardwareDashboard(Widget):
             and swap_rise >= cfg.alert_swap_rise_gb
         )
 
+        # Chart time window: charts plot one sample per character, so the
+        # visible span scales silently with terminal width. Surface it.
+        span_label = self._chart_window_label()
+
         # Thermal
         thermal_alert = s.thermal_state not in ("Nominal", "Unknown")
 
@@ -586,6 +693,23 @@ class HardwareDashboard(Widget):
             active_alerts.append("PKG>{}%".format(cfg.alert_package_power_percent))
         alerts_str = ", ".join(active_alerts) if active_alerts else "none"
 
-        self.query_one("#status-line", Static).update(
-            "thermal: {}  alerts: {}".format(s.thermal_state, alerts_str)
-        )
+        status = "thermal: {}  alerts: {}".format(s.thermal_state, alerts_str)
+        if span_label:
+            status = "span {}  ·  {}".format(span_label, status)
+        self.query_one("#status-line", Static).update(status)
+
+    def _chart_window_label(self) -> str:
+        """Visible time span of the charts, derived from a representative chart.
+
+        All charts share one width and the sampling interval, so a single span
+        token (placed on the status line) describes the whole grid. Returns ""
+        before layout, when the chart width is not yet known.
+        """
+        try:
+            width = self.query_one("#gpu-chart", BrailleChart).size.width
+        except Exception:
+            return ""
+        if width <= 0:
+            return ""
+        interval = max(1, int(getattr(self._config, "sample_interval", 1)))
+        return _format_window_span(width * interval)
