@@ -16,8 +16,17 @@ _BLOCK_BLANK = " "
 
 
 class _FixedSizeBrailleChart(BrailleChart):
-    def __init__(self, width: int, height: int, glyph_mode: str = "dots") -> None:
-        super().__init__(glyph_mode=glyph_mode)
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        glyph_mode: str = "dots",
+        color_mode: str = "truecolor",
+    ) -> None:
+        # Pin the color tier so the rendered styles are deterministic regardless
+        # of the terminal the suite runs under (CI has no TERM, which otherwise
+        # resolves to the "none" tier and drops all color).
+        super().__init__(glyph_mode=glyph_mode, color_mode=color_mode)
         self._fixed_size = Size(width, height)
 
     @property
