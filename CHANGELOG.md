@@ -6,6 +6,11 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.8.9] - 2026-06-28
+
+### Fixed
+- The opening splash banner and the dashboard header now display the running version (e.g. `agtop v0.8.9`), sourced from a single `agtop.__version__`.
+
 ## [0.8.8] - 2026-06-28
 
 ### Fixed
