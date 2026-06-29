@@ -140,6 +140,22 @@ def test_cli_rejects_invalid_subsamples_value():
     assert "subsamples must be >= 1" in result.stderr
 
 
+def test_cli_version_reports_package_version():
+    from agtop import __version__
+
+    result = subprocess.run(
+        [sys.executable, "-m", "agtop.agtop", "--version"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    # argparse prints --version to stdout; it must carry the real package version.
+    assert __version__ in result.stdout
+    assert __version__ != "dev"
+
+
 def test_module_import_is_safe_with_unrelated_argv():
     script = (
         "import sys; "

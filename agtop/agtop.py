@@ -1,17 +1,16 @@
 import argparse
-import importlib.metadata
 import re
+
+from agtop import __version__
 
 
 def build_parser():
-    try:
-        _ver = importlib.metadata.version("agtop")
-    except importlib.metadata.PackageNotFoundError:
-        _ver = "dev"
     parser = argparse.ArgumentParser(
         description="agtop: Performance monitoring CLI tool for Apple Silicon"
     )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {_ver}")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
     parser.add_argument(
         "--interval",
         type=int,

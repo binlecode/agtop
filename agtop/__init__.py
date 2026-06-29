@@ -1,4 +1,18 @@
+import importlib.metadata
+
 from .api import AsyncMonitor, Monitor, Profiler
 from .models import CoreSample, SystemSnapshot
 
-__all__ = ["Monitor", "Profiler", "AsyncMonitor", "SystemSnapshot", "CoreSample"]
+try:
+    __version__ = importlib.metadata.version("agtop")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "dev"
+
+__all__ = [
+    "Monitor",
+    "Profiler",
+    "AsyncMonitor",
+    "SystemSnapshot",
+    "CoreSample",
+    "__version__",
+]

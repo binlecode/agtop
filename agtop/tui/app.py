@@ -10,6 +10,7 @@ from textual import work
 from textual.containers import Horizontal
 from textual.widgets import DataTable, Footer, Header, Input, Static
 
+from agtop import __version__
 from agtop.api import Monitor
 from agtop.config import create_dashboard_config
 from agtop.tui.widgets import HardwareDashboard, MetricsUpdated
@@ -148,6 +149,8 @@ class AgtopApp(App):
         soc_info = get_soc_info()
         self._config = create_dashboard_config(args, soc_info)
         self._chip_name = soc_info.get("name", "Apple Silicon")
+        self.title = "agtop"
+        self.sub_title = f"v{__version__} · {self._chip_name}"
         self._stop_polling = threading.Event()
         self._sort_mode = SORT_CPU
         self._filter_regex = self._config.process_filter_pattern
@@ -162,7 +165,7 @@ class AgtopApp(App):
     def _build_splash(self) -> str:
         cfg = self._config
         return (
-            f"agtop\n\n"
+            f"agtop v{__version__}\n\n"
             f"{self._chip_name}\n"
             f"E-cores: {cfg.e_core_count}   P-cores: {cfg.p_core_count}\n"
             f"interval: {cfg.sample_interval}s   subsamples: {cfg.subsamples}\n\n"

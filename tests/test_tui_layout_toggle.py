@@ -2,10 +2,20 @@ import asyncio
 
 import pytest
 
+from agtop import __version__
 from agtop.agtop import build_parser
 from agtop.tui.app import AgtopApp
 
 pytestmark = pytest.mark.local
+
+
+def test_opening_banner_and_header_show_version():
+    app = AgtopApp(build_parser().parse_args([]))
+
+    # The opening splash banner and the persistent header sub-title must both
+    # surface the running version (regression: banner showed no version).
+    assert __version__ in app._build_splash()
+    assert __version__ in (app.sub_title or "")
 
 
 def test_v_key_toggles_main_section_layout_classes():
