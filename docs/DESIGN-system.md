@@ -158,6 +158,15 @@ In `agtop/sampler.py`, CPU statistics are fetched via channel loops looking for 
 
 In contrast, the GPU stats channel only exposes a single unified channel named **`GPUPH`** (GPU Performance Handler) inside `GPU Performance States`. Because Apple Silicon's GPU acts as a monolithic co-processor governed under a unified dynamic voltage/clock domain, macOS does not record or publish individual ALUs/cores metrics inside `libIOReport`. Therefore, only global GPU utilization and average frequencies can be derived.
 
+### 3.5 Metric Coverage: Aggregation Limits and Deliberate Non-Goals
+
+These boundaries are intentional and recorded here so they are not mistaken for oversights or re-litigated. agtop's sampling layer deliberately captures only what the IOReport-first, unprivileged, SoC-power thesis can support cleanly:
+
+- **Memory bandwidth is exposed as a single aggregate.** `SystemSnapshot.bandwidth_gbps` is the total (read + write) across channels, which is what the Mem BW readout and `BW>` alert consume (see §5.3). A per-channel breakdown (CPU / GPU / media / DCS) is feasible in principle but would require the sampler to surface per-channel figures rather than the aggregate — deferred as a sampler change, not a presentation gap.
+- **Network / disk I/O is a non-goal.** Present in `psutil`-based tools (mactop / btop) but orthogonal to the IOReport-first SoC-power focus; adding it would reintroduce the `psutil` dependency surface agtop is moving away from.
+- **Per-process GPU / ANE / energy attribution is not available.** macOS does not expose this to unprivileged processes, and no direct peer (asitop / macmon) does either. Per-process CPU/RSS/threads come from the native process enumeration in §2.3; power/GPU/ANE remain system-wide only.
+- **GPU per-core metrics** are a hardware limitation, not a scope choice — see §3.4.
+
 ---
 
 ## 4. System Management Controller Interface (`smc.py`)
