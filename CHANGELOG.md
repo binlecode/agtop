@@ -6,6 +6,16 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-06-29
+
+### Added
+- **Memory-bandwidth chart + readout:** the unified-memory bandwidth sampled in `SystemSnapshot.bandwidth_gbps` (previously consumed only by the `BW>` alert) now has its own `Mem BW N GB/s` label and chart with rolling `avg/max` context — the headline saturation metric for LLM inference. The row hides itself on platforms that expose no bandwidth channel (`bandwidth_available` false), so no phantom `0 GB/s` is shown.
+- **Package-power headline:** a `Package Power` label + chart for the total-SoC draw (CPU + GPU + ANE + other rails), alongside the existing CPU/GPU power charts. The figure already drove the `PKG>` alert but was never surfaced.
+- **Session energy total:** the status line now carries an `energy` token — cumulative session energy integrated as ∫ package power dt since launch (rendered in mWh/Wh) — the live-TUI counterpart to `Profiler.total_package_joules`.
+
+### Changed
+- Test suite is now functional-only (enforced in `CLAUDE.md`): removed structural tests that asserted private helpers/internal state in isolation (`test_dashboard_stats.py`, two private-function tests in `test_braille_chart_render.py`); added `test_dashboard_metrics.py`, which mounts the real `HardwareDashboard` via Textual `App.run_test()` and drives the public `update_metrics` path with real `SystemSnapshot`s.
+
 ## [0.9.2] - 2026-06-29
 
 ### Added
