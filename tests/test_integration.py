@@ -1,25 +1,24 @@
 import pytest
 
-from agtop.api import Monitor
+from agtop import Monitor, SystemSnapshot
 
 pytestmark = pytest.mark.local
 
 
-def test_full_update_cycle_with_real_data():
-    # 2. Initialize real sampler and fetch data
-    monitor = Monitor(1.0, subsamples=1)
-    try:
-        # Get real sample
+def test_monitor_subsamples_mode_produces_snapshot():
+    # subsamples > 1 selects the sampler that manages its own sleep timing,
+    # a distinct runtime path from the default single-sample Monitor used in
+    # test_api.  get_snapshot() must not double-sleep and must still return a
+    # well-formed snapshot built from the aggregated subsamples.
+    with Monitor(interval_s=1, subsamples=3) as monitor:
+        assert monitor.manages_timing is True
+
         snapshot = monitor.get_snapshot()
 
-        assert snapshot is not None, "Sampler failed to produce real data"
-
-        # State should be updated with actual real numbers
-        assert snapshot.ecpu_util_pct >= 0
-        assert snapshot.pcpu_util_pct >= 0
-        assert snapshot.gpu_util_pct >= 0
-        assert snapshot.ram_used_gb >= 0
-        assert snapshot.cpu_watts >= 0.0
-
-    finally:
-        monitor.close()
+    assert isinstance(snapshot, SystemSnapshot)
+    assert snapshot.cpu_watts >= 0.0
+    assert snapshot.package_watts >= 0.0
+    assert 0 <= snapshot.ecpu_util_pct <= 100
+    assert 0 <= snapshot.pcpu_util_pct <= 100
+    assert snapshot.ram_used_gb > 0
+    assert snapshot.timestamp > 0

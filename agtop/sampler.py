@@ -4,7 +4,7 @@ import re
 import time
 from typing import NamedTuple
 
-from .native_sys import get_thermal_pressure
+from .native_sys import get_dvfs_tables_native, get_thermal_pressure
 
 
 class SampleResult(NamedTuple):
@@ -36,7 +36,7 @@ class IOReportSampler:
         self._prev_sample = None
         self._prev_time = None
         self._core_counts = _get_core_counts()
-        self._dvfs = _read_dvfs_tables()
+        self._dvfs = get_dvfs_tables_native()
         self._smc = SMCReader()
 
     def sample(self):
@@ -462,14 +462,3 @@ def _resolve_state_freq(name, freq_table):
         return 0
 
     return None
-
-
-def _read_dvfs_tables():
-    """Read DVFS frequency tables from IOKit pmgr device.
-
-    Returns dict with keys 'ecpu', 'pcpu', 'gpu', each a list of
-    MHz values in ascending frequency order (indexed by V-state or P-state).
-    """
-    from .native_sys import get_dvfs_tables_native
-
-    return get_dvfs_tables_native()

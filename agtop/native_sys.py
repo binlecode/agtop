@@ -371,7 +371,9 @@ def get_dvfs_tables_native() -> dict:
 def _classify_dvfs_tables(tables: dict) -> dict:
     """Classify raw voltage-states tables into ecpu/pcpu/gpu buckets.
 
-    Replicates the classification logic from sampler.py:_read_dvfs_tables().
+    Heuristics: the P-core table has the highest max frequency and the most
+    entries; the E-core table is small (5-12 entries); the GPU table has
+    10-20 entries. Returns {'ecpu': [...], 'pcpu': [...], 'gpu': [...]}.
     """
     ecpu = []
     pcpu = []
@@ -463,51 +465,6 @@ class VMStatistics64(ctypes.Structure):
         ("external_page_count", ctypes.c_uint32),
         ("internal_page_count", ctypes.c_uint32),
         ("total_uncompressed_pages_in_compressor", ctypes.c_uint64),
-    ]
-
-
-class ProcBSDInfo(ctypes.Structure):
-    _fields_ = [
-        ("pbi_flags", ctypes.c_uint32),
-        ("pbi_status", ctypes.c_uint32),
-        ("pbi_xstatus", ctypes.c_uint32),
-        ("pbi_pid", ctypes.c_uint32),
-        ("pbi_ppid", ctypes.c_uint32),
-        ("pbi_uid", ctypes.c_uint32),
-        ("pbi_gid", ctypes.c_uint32),
-        ("pbi_ruid", ctypes.c_uint32),
-        ("pbi_rgid", ctypes.c_uint32),
-        ("pbi_svuid", ctypes.c_uint32),
-        ("pbi_svgid", ctypes.c_uint32),
-        ("pbi_rfu1", ctypes.c_uint32),
-        ("pbi_comm", ctypes.c_char * 16),
-        ("pbi_name", ctypes.c_char * 32),
-        ("pbi_nfiles", ctypes.c_uint32),
-        ("pbi_pgid", ctypes.c_uint32),
-        ("pbi_pjobc", ctypes.c_uint32),
-        ("pbi_ucred_usecount", ctypes.c_uint32),
-        ("pbi_start_sec", ctypes.c_uint32),
-        ("pbi_start_usec", ctypes.c_uint32),
-    ]
-
-
-class ProcTaskInfo(ctypes.Structure):
-    _fields_ = [
-        ("pti_virtual_size", ctypes.c_uint64),
-        ("pti_resident_size", ctypes.c_uint64),
-        ("pti_total_user", ctypes.c_uint64),
-        ("pti_total_system", ctypes.c_uint64),
-        ("pti_threads_user", ctypes.c_uint64),
-        ("pti_threads_system", ctypes.c_uint64),
-        ("pti_policy", ctypes.c_int32),
-        ("pti_threads_count", ctypes.c_int32),
-    ]
-
-
-class ProcTaskAllInfo(ctypes.Structure):
-    _fields_ = [
-        ("pbsd", ProcBSDInfo),
-        ("ptinfo", ProcTaskInfo),
     ]
 
 
@@ -639,7 +596,14 @@ def get_native_processes() -> list:
             if ret >= 232:
                 raw = bytes(buf[:ret])
 
-                # Unpack name from legacy proc_bsdinfo offsets:
+                # The offsets below are the byte layout of struct
+                # proc_taskallinfo (proc_bsdinfo + proc_taskinfo) as returned by
+                # proc_pidinfo(PROC_PIDTASKALLINFO), verified on macOS
+                # Sonoma/Sequoia (arm64). They are version-sensitive: a future
+                # change to the kernel struct layout would shift these and must
+                # be re-verified rather than assumed.
+                #
+                # Unpack name from the proc_bsdinfo region:
                 # - comm is at offset 48 (16 bytes)
                 # - name is at offset 64 (32 bytes)
                 name = (

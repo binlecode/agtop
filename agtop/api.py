@@ -82,6 +82,10 @@ class Monitor:
             time.sleep(self._interval_s)
         sample = self._sampler.sample()
         while sample is None:
+            # A None sample means the delta interval was non-positive; sleep
+            # briefly so the re-sample sees a meaningful elapsed time (avoids a
+            # frame with an inflated interval/elapsed power scale).
+            time.sleep(0.01)
             sample = self._sampler.sample()
         ram = get_ram_metrics_dict()
         return _sample_to_snapshot(sample, ram, self._interval_s)
