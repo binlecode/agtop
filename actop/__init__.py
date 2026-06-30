@@ -4,7 +4,7 @@ from .api import AsyncMonitor, Monitor, Profiler
 from .models import CoreSample, SystemSnapshot
 
 try:
-    __version__ = importlib.metadata.version("agtop")
+    __version__ = importlib.metadata.version("actop")
 except importlib.metadata.PackageNotFoundError:
     __version__ = "dev"
 

@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from agtop.sampler import SampleResult, create_sampler
+from actop.sampler import SampleResult, create_sampler
 
 pytestmark = pytest.mark.local
 
@@ -54,7 +54,7 @@ def test_sampler_sample_returns_valid_metrics():
         bw = result.bandwidth_metrics
         ts = result.timestamp
 
-        # CPU metrics contract — keys consumed by agtop.py
+        # CPU metrics contract — keys consumed by actop.py
         assert isinstance(cpu, dict)
         for key in [
             "E-Cluster_active",
@@ -116,7 +116,7 @@ def test_sampler_resident_memory_stays_flat_over_many_cycles():
     Python's GC and are reclaimed only by the explicit ``cf_release`` calls in
     ``IOReportSampler._sample_once`` and ``IOReportSubscription.delta``. A
     dropped release leaks an entire CFDict (tens of KB) per cycle — silent in
-    every functional test, but unbounded growth in agtop's long-running
+    every functional test, but unbounded growth in actop's long-running
     monitor use case.
 
     Drives the real sampler (no sleep on the ``subsamples<=1`` path). Each

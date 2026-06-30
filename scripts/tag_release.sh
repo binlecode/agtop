@@ -21,7 +21,7 @@ Behavior:
   - Creates and pushes tag vX.Y.Z
 
 This tag push triggers .github/workflows/release-formula.yml.
-Formula synchronization is CI-driven; do not manually commit Formula/agtop.rb for releases.
+Formula synchronization is CI-driven; do not manually commit Formula/actop.rb for releases.
 EOF
 }
 

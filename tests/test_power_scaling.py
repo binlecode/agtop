@@ -8,7 +8,7 @@ verify the mode semantics and the clamping contract that keeps the gauge in
 Pure arithmetic, no I/O — runs on every platform.
 """
 
-from agtop.power_scaling import power_to_percent
+from actop.power_scaling import power_to_percent
 
 
 def test_profile_mode_scales_against_reference_ignoring_peak():

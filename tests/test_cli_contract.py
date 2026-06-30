@@ -1,12 +1,12 @@
 import subprocess
 import sys
 
-from agtop.agtop import build_parser
+from actop.actop import build_parser
 
 
 def test_cli_help_runs_and_exposes_show_cores_as_flag():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--help"],
+        [sys.executable, "-m", "actop.actop", "--help"],
         capture_output=True,
         text=True,
         check=False,
@@ -27,7 +27,7 @@ def test_cli_help_runs_and_exposes_show_cores_as_flag():
 
 def test_cli_rejects_legacy_show_cores_value_form():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--show_cores", "true"],
+        [sys.executable, "-m", "actop.actop", "--show_cores", "true"],
         capture_output=True,
         text=True,
         check=False,
@@ -39,7 +39,7 @@ def test_cli_rejects_legacy_show_cores_value_form():
 
 def test_cli_accepts_show_processes_flag():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--show-processes", "--help"],
+        [sys.executable, "-m", "actop.actop", "--show-processes", "--help"],
         capture_output=True,
         text=True,
         check=False,
@@ -70,7 +70,7 @@ def test_cli_chart_glyph_accepts_block():
 
 def test_cli_help_exposes_export_flags():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--help"],
+        [sys.executable, "-m", "actop.actop", "--help"],
         capture_output=True,
         text=True,
         check=False,
@@ -99,7 +99,7 @@ def test_cli_serve_accepts_valid_port():
 
 def test_cli_rejects_serve_port_out_of_range():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--serve", "70000"],
+        [sys.executable, "-m", "actop.actop", "--serve", "70000"],
         capture_output=True,
         text=True,
         check=False,
@@ -111,7 +111,7 @@ def test_cli_rejects_serve_port_out_of_range():
 
 def test_cli_rejects_invalid_proc_filter_regex():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--proc-filter", "["],
+        [sys.executable, "-m", "actop.actop", "--proc-filter", "["],
         capture_output=True,
         text=True,
         check=False,
@@ -123,7 +123,7 @@ def test_cli_rejects_invalid_proc_filter_regex():
 
 def test_cli_rejects_invalid_alert_bw_threshold():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--alert-bw-sat-percent", "101"],
+        [sys.executable, "-m", "actop.actop", "--alert-bw-sat-percent", "101"],
         capture_output=True,
         text=True,
         check=False,
@@ -135,7 +135,7 @@ def test_cli_rejects_invalid_alert_bw_threshold():
 
 def test_cli_rejects_invalid_alert_swap_rise_value():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--alert-swap-rise-gb", "-0.1"],
+        [sys.executable, "-m", "actop.actop", "--alert-swap-rise-gb", "-0.1"],
         capture_output=True,
         text=True,
         check=False,
@@ -147,7 +147,7 @@ def test_cli_rejects_invalid_alert_swap_rise_value():
 
 def test_cli_rejects_invalid_alert_sustain_samples():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--alert-sustain-samples", "0"],
+        [sys.executable, "-m", "actop.actop", "--alert-sustain-samples", "0"],
         capture_output=True,
         text=True,
         check=False,
@@ -159,7 +159,7 @@ def test_cli_rejects_invalid_alert_sustain_samples():
 
 def test_cli_rejects_removed_max_count_flag():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--max_count", "10"],
+        [sys.executable, "-m", "actop.actop", "--max_count", "10"],
         capture_output=True,
         text=True,
         check=False,
@@ -171,7 +171,7 @@ def test_cli_rejects_removed_max_count_flag():
 
 def test_cli_rejects_invalid_subsamples_value():
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--subsamples", "0"],
+        [sys.executable, "-m", "actop.actop", "--subsamples", "0"],
         capture_output=True,
         text=True,
         check=False,
@@ -182,10 +182,10 @@ def test_cli_rejects_invalid_subsamples_value():
 
 
 def test_cli_version_reports_package_version():
-    from agtop import __version__
+    from actop import __version__
 
     result = subprocess.run(
-        [sys.executable, "-m", "agtop.agtop", "--version"],
+        [sys.executable, "-m", "actop.actop", "--version"],
         capture_output=True,
         text=True,
         check=False,
@@ -201,7 +201,7 @@ def test_module_import_is_safe_with_unrelated_argv():
     script = (
         "import sys; "
         "sys.argv=['prog', '--not-a-real-flag']; "
-        "import agtop.agtop; "
+        "import actop.actop; "
         "print('import-ok')"
     )
     result = subprocess.run(

@@ -1,10 +1,15 @@
 # Changelog
 
-All notable changes to `binlecode/agtop` should be documented in this file.
+All notable changes to `binlecode/actop` should be documented in this file.
 
 This project follows a Keep a Changelog-style format and uses version tags for releases.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-06-30
+
+### Changed
+- **Renamed `agtop` → `actop`** ("Apple **C**hip top"). The previous name read as "Apple **G**PU top" and undersold a whole-chip monitor (CPU/GPU/ANE/memory/power/thermal); the rename also unblocks PyPI distribution (`pip install actop`), since the `agtop` name was unavailable. This is a clean break with **no backward-compatible `agtop` command, module, or formula** — the command, Python package, import path, Homebrew formula, and Prometheus metric prefix (`agtop_*` → `actop_*`) are now all `actop`. Existing Homebrew users: `brew uninstall agtop && brew untap binlecode/agtop`, then `brew tap binlecode/actop && brew install actop`.
 
 ## [0.9.7] - 2026-06-30
 

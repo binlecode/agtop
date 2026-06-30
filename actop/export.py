@@ -1,6 +1,6 @@
 """Metrics export backends: NDJSON stream and a Prometheus `/metrics` endpoint.
 
-These turn agtop from an interactive viewer into an observability source. Both
+These turn actop from an interactive viewer into an observability source. Both
 backends reuse the public `Monitor` API; the formatting functions operate on a
 plain `SystemSnapshot` and import nothing platform-specific, so they are testable
 off Apple-Silicon hardware. `Monitor` is imported lazily inside the run loops so
@@ -13,7 +13,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from agtop.models import SystemSnapshot
+from actop.models import SystemSnapshot
 
 # Scalar SystemSnapshot fields exported as Prometheus gauges: (field, suffix).
 # Per-core lists are exported separately as labelled gauges.
@@ -50,24 +50,24 @@ def snapshot_to_prometheus(snapshot: SystemSnapshot) -> str:
     """Render a snapshot in Prometheus text exposition format (version 0.0.4)."""
     lines: list[str] = []
     for field, suffix in _PROM_GAUGES:
-        name = "agtop_" + suffix
+        name = "actop_" + suffix
         value = float(getattr(snapshot, field))
         lines.append("# TYPE {} gauge".format(name))
         lines.append("{} {}".format(name, _fmt_number(value)))
 
     # Per-core utilization/frequency as labelled gauges.
-    lines.append("# TYPE agtop_core_utilization_percent gauge")
-    lines.append("# TYPE agtop_core_frequency_mhz gauge")
+    lines.append("# TYPE actop_core_utilization_percent gauge")
+    lines.append("# TYPE actop_core_frequency_mhz gauge")
     for cluster, cores in (("E", snapshot.e_cores), ("P", snapshot.p_cores)):
         for core in cores:
             labels = 'cluster="{}",core="{}"'.format(cluster, core.index)
             lines.append(
-                "agtop_core_utilization_percent{{{}}} {}".format(
+                "actop_core_utilization_percent{{{}}} {}".format(
                     labels, _fmt_number(float(core.active_pct))
                 )
             )
             lines.append(
-                "agtop_core_frequency_mhz{{{}}} {}".format(
+                "actop_core_frequency_mhz{{{}}} {}".format(
                     labels, _fmt_number(float(core.freq_mhz))
                 )
             )
@@ -89,7 +89,7 @@ def run_json_stream(
     `max_samples` > 0 stops after that many records (used by tests); 0 streams
     indefinitely. Returns the number of records emitted.
     """
-    from agtop.api import Monitor
+    from actop.api import Monitor
 
     stream = out if out is not None else sys.stdout
     monitor = Monitor(interval_s, subsamples)
@@ -140,7 +140,7 @@ def serve_prometheus(
     A background thread keeps the latest snapshot warm so scrapes return
     immediately instead of blocking for a full sample interval.
     """
-    from agtop.api import Monitor
+    from actop.api import Monitor
 
     monitor = Monitor(interval_s, subsamples)
     state = {"snapshot": None}
@@ -163,7 +163,7 @@ def serve_prometheus(
     handler = _make_prometheus_handler(_read_latest)
     server = ThreadingHTTPServer((host, port), handler)
     print(
-        "agtop: serving Prometheus metrics on http://{}:{}/metrics".format(host, port),
+        "actop: serving Prometheus metrics on http://{}:{}/metrics".format(host, port),
         file=sys.stderr,
         flush=True,
     )

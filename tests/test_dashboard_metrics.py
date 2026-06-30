@@ -17,9 +17,9 @@ import re
 from textual.app import App, ComposeResult
 from textual.widgets import Static
 
-from agtop.config import DashboardConfig
-from agtop.models import SystemSnapshot
-from agtop.tui.widgets import BrailleChart, HardwareDashboard, MetricsUpdated
+from actop.config import DashboardConfig
+from actop.models import SystemSnapshot
+from actop.tui.widgets import BrailleChart, HardwareDashboard, MetricsUpdated
 
 
 def _config() -> DashboardConfig:

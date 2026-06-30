@@ -1,4 +1,4 @@
-"""Public Python API for agtop hardware profiling."""
+"""Public Python API for actop hardware profiling."""
 
 import dataclasses
 import threading
@@ -183,7 +183,7 @@ class Profiler:
         try:
             import pandas as pd
         except ImportError:
-            raise ImportError("pandas is required: pip install agtop[pandas]")
+            raise ImportError("pandas is required: pip install actop[pandas]")
         with self._lock:
             samples = list(self._samples)
         df = pd.DataFrame([dataclasses.asdict(s) for s in samples])

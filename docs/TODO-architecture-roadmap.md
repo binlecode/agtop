@@ -1,6 +1,6 @@
 # TODO — Architecture and Distribution Roadmap (2026+)
 
-Roadmap for hardening `agtop`'s core. We stay scoped to one thesis — **a fast, unprivileged, resource-efficient Apple Silicon telemetry monitor** — and reject feature creep into ML/APM frameworks.
+Roadmap for hardening `actop`'s core. We stay scoped to one thesis — **a fast, unprivileged, resource-efficient Apple Silicon telemetry monitor** — and reject feature creep into ML/APM frameworks.
 
 ---
 
@@ -34,7 +34,7 @@ objective — new metrics earn their place only if they stay within it.
 
 ### Analysis: `uv tool install` (A) vs. stand-alone binary (B)
 
-Both items target the same gap — letting users run `agtop` without managing a Python install — but sit at very different points on the effort/reward curve.
+Both items target the same gap — letting users run `actop` without managing a Python install — but sit at very different points on the effort/reward curve.
 
 **Option A — Recommend `uv tool install`**
 

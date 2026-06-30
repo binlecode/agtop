@@ -14,7 +14,7 @@ import platform
 
 import pytest
 
-from agtop.native_sys import (
+from actop.native_sys import (
     get_dvfs_tables_native,
     get_native_processes,
     get_thermal_pressure,

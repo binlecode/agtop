@@ -230,7 +230,7 @@ class IOReportSampler:
 
         # Scale energy to match parsers.py convention:
         # parsers.py returns cpu_W = energy_mJ / 1000 = energy_J
-        # agtop.py does cpu_power_W = cpu_W / sample_interval
+        # actop.py does cpu_power_W = cpu_W / sample_interval
         # Scale so that dividing by sample_interval gives correct watts.
         scale = self._interval / elapsed_s if elapsed_s > 0 else 1.0
         cpu_e = cpu_energy_j * scale

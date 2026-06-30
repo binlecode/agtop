@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.text import Text
 from textual.app import App, ComposeResult
 
-from agtop.tui.widgets import BrailleChart
+from actop.tui.widgets import BrailleChart
 
 _BRAILLE_BLANK = "⠀"
 _BLOCK_BLANK = " "

@@ -1,12 +1,12 @@
 import argparse
 import re
 
-from agtop import __version__
+from actop import __version__
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="agtop: Performance monitoring CLI tool for Apple Silicon"
+        description="actop: Performance monitoring CLI tool for Apple Silicon"
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -163,15 +163,15 @@ def _validate_subsamples(value):
 
 
 def _run_dashboard(args, runtime_state):
-    from agtop.tui.app import AgtopApp
+    from actop.tui.app import ActopApp
 
-    app = AgtopApp(args)
+    app = ActopApp(args)
     app.run()
 
 
 def _run_export(args):
     """Route to a non-TUI export backend. Returns an exit code."""
-    from agtop import export
+    from actop import export
 
     interval_s = max(1, int(args.interval))
     subsamples = max(1, int(args.subsamples))

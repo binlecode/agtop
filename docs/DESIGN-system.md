@@ -1,12 +1,12 @@
-# `agtop` System Detailed Design
+# `actop` System Detailed Design
 
-This document provides a highly detailed system design and implementation reference for `agtop` (Apple Silicon Top), a terminal-based system monitoring tool. It is written to be strictly grounded in the project's source code and native macOS integration patterns.
+This document provides a highly detailed system design and implementation reference for `actop` (Apple Silicon Top), a terminal-based system monitoring tool. It is written to be strictly grounded in the project's source code and native macOS integration patterns.
 
 ---
 
 ## 1. System Overview
 
-`agtop` is a performance monitoring application for Apple Silicon platforms (macOS) designed to be **sub-millisecond fast, dependency-free, and subprocess-free**. Unlike traditional tools that rely on launching CLI commands (such as `powermetrics` or `ioreg`) or invoking high-overhead Python libraries like `psutil`, `agtop` interfaces directly with the macOS kernel, CoreFoundation, and low-level system frameworks using pure-Python `ctypes` bindings.
+`actop` is a performance monitoring application for Apple Silicon platforms (macOS) designed to be **sub-millisecond fast, dependency-free, and subprocess-free**. Unlike traditional tools that rely on launching CLI commands (such as `powermetrics` or `ioreg`) or invoking high-overhead Python libraries like `psutil`, `actop` interfaces directly with the macOS kernel, CoreFoundation, and low-level system frameworks using pure-Python `ctypes` bindings.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -44,7 +44,7 @@ This document provides a highly detailed system design and implementation refere
 
 ## 2. Low-Level Native Bindings (`native_sys.py`)
 
-The file `agtop/native_sys.py` serves as the foundation for direct macOS kernel interop. It loads `libSystem.B.dylib`, `libobjc.A.dylib`, `IOKit.framework`, and `CoreFoundation.framework` as singletons.
+The file `actop/native_sys.py` serves as the foundation for direct macOS kernel interop. It loads `libSystem.B.dylib`, `libobjc.A.dylib`, `IOKit.framework`, and `CoreFoundation.framework` as singletons.
 
 ### 2.1 Virtual Memory & Mach Page Calculations
 RAM metrics bypass the standard Unix `sysctl` interface when calculating "Used RAM", mimicking macOS's Activity Monitor.
@@ -84,7 +84,7 @@ To avoid process execution, swap statistics read the binary structure directly f
   ```
 
 ### 2.3 Process Enumeration & Traversal
-Instead of traversing `/proc` (which doesn't exist on macOS) or spawning `ps`, `agtop` queries BSD task information:
+Instead of traversing `/proc` (which doesn't exist on macOS) or spawning `ps`, `actop` queries BSD task information:
 1. Calls `proc_listpids(type=1, typeinfo=0, buffer, buffersize)` (from libSystem) to fetch the array of active process IDs.
 2. For each PID, calls `proc_pidinfo(pid, flavor=2, arg=0, buffer, buffersize)` which corresponds to `PROC_PIDTASKALLINFO`. This fills a `ProcTaskAllInfo` structure combining BSD information (`ProcBSDInfo`) and Mach task information (`ProcTaskInfo`):
    - **Name Extraction**: Unpacked from `pbi_name` (32 bytes) or fallback `pbi_comm` (16 bytes).
@@ -93,7 +93,7 @@ Instead of traversing `/proc` (which doesn't exist on macOS) or spawning `ps`, `
    - **Threads Count**: Unpacked from `pti_threads_count` at offset 220.
 
 ### 2.4 Command Line Parsing (`KERN_PROCARGS2`)
-Command names are often truncated in process listings. `agtop` resolves exact command-lines via sysctl:
+Command names are often truncated in process listings. `actop` resolves exact command-lines via sysctl:
 1. Calls `sysctl` with the 3-integer Management Information Base (MIB): `[CTL_KERN (1), KERN_PROCARGS2 (49), pid]`.
 2. The buffer contains:
    - An integer `argc` representing the argument count.
@@ -120,7 +120,7 @@ The macOS system thermal pressure state is queried cleanly via the Objective-C r
 
 ## 3. Telemetry Sampling Layer (`sampler.py` & `ioreport.py`)
 
-`agtop` uses macOS private frameworks to fetch active frequency scaling and residency cycles.
+`actop` uses macOS private frameworks to fetch active frequency scaling and residency cycles.
 
 ### 3.1 `libIOReport` Channel Management
 The `ioreport.py` module defines direct ctypes structures for accessing the private `libIOReport.dylib`. It creates subscriptions to low-level hardware performance channels:
@@ -137,7 +137,7 @@ _ior.IOReportCreateSamplesDelta(prev_sample, current_sample, ...)
 ```
 
 ### 3.2 Dynamic DVFS Parsing & Classification
-On startup, `agtop` accesses the IORegistry device tree node `"AppleARMIODevice"` to find the `"pmgr"` device. It reads the `"voltage-states"` property, which contains direct binary arrays mapping frequency states (Hz) to voltage steps:
+On startup, `actop` accesses the IORegistry device tree node `"AppleARMIODevice"` to find the `"pmgr"` device. It reads the `"voltage-states"` property, which contains direct binary arrays mapping frequency states (Hz) to voltage steps:
 - Unpacks frequency steps using struct format `<II` (4-byte frequency, 4-byte voltage).
 - Divides by $1,000,000$ to get MHz tables.
 - **Classification Engine**:
@@ -154,16 +154,16 @@ State residencies represent the cumulative nanoseconds the processor spent in va
   $$\text{Active Percentage} = \frac{\text{Active Duration}_{\text{ns}}}{\text{Total Duration}_{\text{ns}}} \times 100$$
 
 ### 3.4 Why GPU Lacks Per-Core Metrics
-In `agtop/sampler.py`, CPU statistics are fetched via channel loops looking for individual core labels (e.g., `ECPU000` or `PCPU130`), allowing per-core breakdowns. 
+In `actop/sampler.py`, CPU statistics are fetched via channel loops looking for individual core labels (e.g., `ECPU000` or `PCPU130`), allowing per-core breakdowns. 
 
 In contrast, the GPU stats channel only exposes a single unified channel named **`GPUPH`** (GPU Performance Handler) inside `GPU Performance States`. Because Apple Silicon's GPU acts as a monolithic co-processor governed under a unified dynamic voltage/clock domain, macOS does not record or publish individual ALUs/cores metrics inside `libIOReport`. Therefore, only global GPU utilization and average frequencies can be derived.
 
 ### 3.5 Metric Coverage: Aggregation Limits and Deliberate Non-Goals
 
-These boundaries are intentional and recorded here so they are not mistaken for oversights or re-litigated. agtop's sampling layer deliberately captures only what the IOReport-first, unprivileged, SoC-power thesis can support cleanly:
+These boundaries are intentional and recorded here so they are not mistaken for oversights or re-litigated. actop's sampling layer deliberately captures only what the IOReport-first, unprivileged, SoC-power thesis can support cleanly:
 
 - **Memory bandwidth is exposed as a single aggregate.** `SystemSnapshot.bandwidth_gbps` is the total (read + write) across channels, which is what the Mem BW readout and `BW>` alert consume (see §5.3). A per-channel breakdown (CPU / GPU / media / DCS) is feasible in principle but would require the sampler to surface per-channel figures rather than the aggregate — deferred as a sampler change, not a presentation gap.
-- **Network / disk I/O is a non-goal.** Present in `psutil`-based tools (mactop / btop) but orthogonal to the IOReport-first SoC-power focus; adding it would reintroduce the `psutil` dependency surface agtop is moving away from.
+- **Network / disk I/O is a non-goal.** Present in `psutil`-based tools (mactop / btop) but orthogonal to the IOReport-first SoC-power focus; adding it would reintroduce the `psutil` dependency surface actop is moving away from.
 - **Per-process GPU / ANE / energy attribution is not available.** macOS does not expose this to unprivileged processes, and no direct peer (asitop / macmon) does either. Per-process CPU/RSS/threads come from the native process enumeration in §2.3; power/GPU/ANE remain system-wide only.
 - **GPU per-core metrics** are a hardware limitation, not a scope choice — see §3.4.
 
@@ -171,7 +171,7 @@ These boundaries are intentional and recorded here so they are not mistaken for 
 
 ## 4. System Management Controller Interface (`smc.py`)
 
-To read on-die temperature values, `agtop` queries the macOS kernel SMC.
+To read on-die temperature values, `actop` queries the macOS kernel SMC.
 
 ### 4.1 IOKit Key Management
 1. The tool searches IORegistry matching the `"AppleSMC"` service using IOKit.
@@ -179,7 +179,7 @@ To read on-die temperature values, `agtop` queries the macOS kernel SMC.
 3. Commands and requests are sent using `IOConnectCallStructMethod` on connection port `2` (the designated port for SMC keys).
 
 ### 4.2 Key Discovery & classification
-SMC uses 4-character tags to track system components. `agtop` executes a fast key discovery sweep on startup:
+SMC uses 4-character tags to track system components. `actop` executes a fast key discovery sweep on startup:
 - Retrieves the count of all system keys (from the `"#KEY"` registry identifier).
 - Iterates through the indices, checking the data type. Keys holding temperature values are marked with the SMC type `"flt "` (4-byte IEEE 754 float).
 - **Sensor classification**:
@@ -195,7 +195,7 @@ The user interface is powered by Textual. It is structured into a dynamic multi-
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  agtop  v0.9.x · [CPU Brand]    E-cores: X  P-cores: Y        [HH:MM:SS]     │
+│  actop  v0.9.x · [CPU Brand]    E-cores: X  P-cores: Y        [HH:MM:SS]     │
 ├──────────────────────────────────────┬───────────────────────────────────────┤
 │ P-CPU 24% @3200MHz (48°C) avg 19% max 61% │  PID   Command    CPU%  MEM  THD  │
 │ ⠋⠙⠹⠸⠼⠴⠦ (Braille util chart)             │  ──────────────────────────────   │
@@ -210,7 +210,7 @@ The user interface is powered by Textual. It is structured into a dynamic multi-
 ```
 
 ### 5.1 Textual Application State (`app.py`)
-`AgtopApp` handles TUI setup and maintains keybindings:
+`ActopApp` handles TUI setup and maintains keybindings:
 - `q`: Quit.
 - `p`: Pause / resume the sampling thread.
 - `s`: Cycle process sorting column (`CPU%` \u2192 `RSS` \u2192 `PID`).
@@ -245,7 +245,7 @@ To alert users of resource bottlenecks, the `HardwareDashboard` monitors and tra
 - **Alert Sliding Window**: To prevent intermittent spikes from causing noisy notifications, alerts are validated using a sliding window. The metric must exceed the threshold for a sustained count of sequential intervals (defaults to `3` samples) before updating the status line.
 
 ### 5.6 Headless Export Modes (`export.py`)
-The same `Monitor` sampling layer feeds two non-TUI output modes, routed from `main()` ahead of the TUI, turning agtop from a viewer into an observability source:
+The same `Monitor` sampling layer feeds two non-TUI output modes, routed from `main()` ahead of the TUI, turning actop from a viewer into an observability source:
 - `--json`: streams metrics as NDJSON to stdout (`dataclasses.asdict` over `SystemSnapshot`), one line per sample.
 - `--serve PORT`: runs a stdlib `ThreadingHTTPServer` exposing Prometheus `/metrics` (scalar plus per-core labelled gauges), backed by a warm background sampler.
 

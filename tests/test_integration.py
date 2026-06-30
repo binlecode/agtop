@@ -1,6 +1,6 @@
 import pytest
 
-from agtop import Monitor, SystemSnapshot
+from actop import Monitor, SystemSnapshot
 
 pytestmark = pytest.mark.local
 

@@ -92,27 +92,27 @@ jobs:
             git fetch origin main
             git checkout -B main origin/main
 
-            sed -E -i '' "s|^  url \".*\"$|  url \"${URL}\"|" Formula/agtop.rb
-            sed -E -i '' "s|^  sha256 \".*\"$|  sha256 \"${SHA256}\"|" Formula/agtop.rb
+            sed -E -i '' "s|^  url \".*\"$|  url \"${URL}\"|" Formula/actop.rb
+            sed -E -i '' "s|^  sha256 \".*\"$|  sha256 \"${SHA256}\"|" Formula/actop.rb
 
             if [ "${REFRESH_RESOURCES}" = "true" ]; then
-              TEMP_TAP="local/agtop-ci"
+              TEMP_TAP="local/actop-ci"
               brew tap-new "${TEMP_TAP}" >/dev/null 2>&1 || true
               TAP_REPO="$(brew --repository "${TEMP_TAP}")"
-              cp Formula/agtop.rb "${TAP_REPO}/Formula/agtop.rb"
-              brew update-python-resources "${TEMP_TAP}/agtop"
-              cp "${TAP_REPO}/Formula/agtop.rb" Formula/agtop.rb
+              cp Formula/actop.rb "${TAP_REPO}/Formula/actop.rb"
+              brew update-python-resources "${TEMP_TAP}/actop"
+              cp "${TAP_REPO}/Formula/actop.rb" Formula/actop.rb
             else
               echo "Skipping Python resource refresh (workflow_dispatch refresh_resources=false)."
             fi
 
-            if git diff --quiet -- Formula/agtop.rb; then
+            if git diff --quiet -- Formula/actop.rb; then
               echo "Formula already up to date for ${TAG_NAME}."
               exit 0
             fi
 
-            git add Formula/agtop.rb
-            git commit -m "Formula/agtop: sync ${TAG_NAME} [skip ci]"
+            git add Formula/actop.rb
+            git commit -m "Formula/actop: sync ${TAG_NAME} [skip ci]"
 
             if git push origin HEAD:refs/heads/main; then
               echo "Formula sync pushed successfully."
