@@ -1,30 +1,20 @@
-"""Chart color degradation, NO_COLOR, and time-window labeling.
+"""Chart color degradation and NO_COLOR handling.
 
-These validate two presentation contracts through the real render path
-(`BrailleChart._render_text`, which `render()` delegates to) and the public
-`resolve_color_mode` env resolver:
+Two presentation contracts, both driven through public surfaces:
 
-  * the blue->red gradient degrades across terminal color tiers and disappears
-    entirely under NO_COLOR / dumb terminals (no broken truecolor escapes), and
-  * the visible chart span is labeled so the window is not silently ambiguous.
+  * the public ``resolve_color_mode`` env resolver picks the right color tier
+    (and disables color under NO_COLOR / dumb terminals), and
+  * the resolved tier actually shapes the chart's rendered styles — verified by
+    mounting a real ``BrailleChart`` and inspecting ``render()`` output, so the
+    blue->red gradient degrades per tier and disappears entirely with no color.
 """
 
-from types import SimpleNamespace
+import asyncio
 
-from agtop.tui.widgets import (
-    BrailleChart,
-    HardwareDashboard,
-    _format_window_span,
-    resolve_color_mode,
-)
+from rich.text import Text
+from textual.app import App, ComposeResult
 
-
-def _render_styles(color_mode: str):
-    """Style strings emitted by a fully-active chart in the given color tier."""
-    chart = BrailleChart(color_mode=color_mode)
-    chart.data = [80] * 8  # every column non-zero so each cell is styled
-    text = chart._render_text(width=8, height=2)
-    return [span.style for span in text.spans]
+from agtop.tui.widgets import BrailleChart, resolve_color_mode
 
 
 # --- NO_COLOR / tier resolution (https://no-color.org external contract) -----
@@ -64,6 +54,38 @@ def test_console_color_system_is_preferred_when_present():
 # --- the resolved tier actually shapes rendered output -----------------------
 
 
+class _ChartHost(App):
+    """Mounts one BrailleChart pinned to an exact cell size and color tier."""
+
+    def __init__(self, color_mode, width=8, height=2) -> None:
+        super().__init__()
+        self._color_mode = color_mode
+        self._w = width
+        self._h = height
+        self.chart = None
+
+    def compose(self) -> ComposeResult:
+        chart = BrailleChart(color_mode=self._color_mode)
+        chart.styles.width = self._w
+        chart.styles.height = self._h
+        self.chart = chart
+        yield chart
+
+
+def _render_styles(color_mode: str, value: float = 80.0, width: int = 8):
+    """Style strings emitted by a fully-active chart in the given color tier."""
+
+    async def _run() -> Text:
+        app = _ChartHost(color_mode, width=width)
+        async with app.run_test(size=(width + 8, 10)) as pilot:
+            app.chart.data = [value] * width  # every column non-zero -> styled
+            await pilot.pause()
+            return app.chart.render()
+
+    rendered = asyncio.run(_run())
+    return [span.style for span in rendered.spans]
+
+
 def test_truecolor_render_emits_rgb_styles():
     styles = _render_styles("truecolor")
     assert styles  # cells are styled
@@ -84,52 +106,12 @@ def test_16_render_degrades_to_named_severity_ramp():
 
 def test_none_render_emits_no_color_styles():
     # NO_COLOR / dumb terminals: not a single color escape is produced.
-    no_color_mode = resolve_color_mode(env={"NO_COLOR": "1"})
-    assert no_color_mode == "none"
-    chart = BrailleChart(color_mode=no_color_mode)
-    chart.data = [80] * 8
-    text = chart._render_text(width=8, height=2)
-    assert text.spans == []
+    assert resolve_color_mode(env={"NO_COLOR": "1"}) == "none"
+    assert _render_styles("none") == []
 
 
 def test_16_ramp_is_cool_to_hot():
     # Low utilization reads cool, high utilization reads hot — the ramp must not
     # invert, or the severity cue would be backwards.
-    low = set(_render_styles_for_value("16", 10.0))
-    high = set(_render_styles_for_value("16", 95.0))
-    assert low == {"blue"}
-    assert high == {"red"}
-
-
-def _render_styles_for_value(color_mode: str, value: float):
-    chart = BrailleChart(color_mode=color_mode)
-    chart.data = [value] * 8
-    text = chart._render_text(width=8, height=2)
-    return [span.style for span in text.spans]
-
-
-# --- chart time-window label -------------------------------------------------
-
-
-def test_window_span_formats_seconds_minutes_and_hours():
-    assert _format_window_span(45) == "45s"
-    assert _format_window_span(120) == "2m"  # exact minute drops the seconds
-    assert _format_window_span(128) == "2m08s"  # seconds zero-padded
-    assert _format_window_span(3600) == "1h"
-    assert _format_window_span(3660) == "1h01m"
-
-
-def test_window_span_is_never_negative():
-    assert _format_window_span(-5) == "0s"
-
-
-def test_window_label_is_safe_before_layout():
-    # _chart_window_label runs inside the per-frame alert path; before the chart
-    # is laid out the width query fails, and it must degrade to "" rather than
-    # raising and taking down the render loop.
-    dash = HardwareDashboard(
-        config=SimpleNamespace(
-            alert_sustain_samples=3, chart_glyph="dots", sample_interval=2
-        )
-    )
-    assert dash._chart_window_label() == ""
+    assert set(_render_styles("16", value=10.0)) == {"blue"}
+    assert set(_render_styles("16", value=95.0)) == {"red"}

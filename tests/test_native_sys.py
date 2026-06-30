@@ -10,6 +10,7 @@ Requires macOS with Apple Silicon (marked local).
 """
 
 import os
+import platform
 
 import pytest
 
@@ -25,6 +26,11 @@ _THERMAL_STATES = {"Nominal", "Fair", "Serious", "Critical", "Unknown"}
 
 
 def test_native_processes_offsets_decode_sane_values():
+    # The proc_taskallinfo offsets are verified on macOS Sonoma/Sequoia arm64.
+    # Surfacing the running version makes a struct-layout drift on a newer
+    # macOS read as a version-coverage gap rather than a bare assertion error.
+    macos = platform.mac_ver()[0] or "unknown"
+
     procs = get_native_processes()
 
     assert isinstance(procs, list)
@@ -39,11 +45,19 @@ def test_native_processes_offsets_decode_sane_values():
 
     # If the offsets had drifted, rss/threads would be zero or absurd across the
     # board.  Real systems always have many resident, multi-threaded processes.
-    assert sum(1 for p in procs if p["rss_bytes"] > 0) >= 5
-    assert sum(1 for p in procs if p["num_threads"] >= 1) >= 5
+    rss_ok = sum(1 for p in procs if p["rss_bytes"] > 0)
+    threads_ok = sum(1 for p in procs if p["num_threads"] >= 1)
+    assert rss_ok >= 5, (
+        f"offset drift on macOS {macos}: only {rss_ok} procs report non-zero RSS"
+    )
+    assert threads_ok >= 5, (
+        f"offset drift on macOS {macos}: only {threads_ok} procs report >=1 thread"
+    )
     # RSS must stay within a sane ceiling (1 TB) — a misaligned uint64 read
     # would produce values far larger than any real process.
-    assert all(p["rss_bytes"] < 1 << 40 for p in procs)
+    assert all(p["rss_bytes"] < 1 << 40 for p in procs), (
+        f"offset drift on macOS {macos}: a process reports RSS above the 1 TB ceiling"
+    )
 
 
 def test_native_processes_include_current_process():

@@ -574,6 +574,17 @@ def get_process_cmdline(pid: int) -> str:
         return ""
 
 
+# proc_taskallinfo byte layout (proc_bsdinfo + proc_taskinfo), arm64.
+# Verified on macOS Sonoma (14) / Sequoia (15). Version-sensitive: a kernel
+# struct change shifts these and must be re-verified, not assumed.
+_PROC_PIDTASKALLINFO = 2
+_PTAI_SIZE = 232  # sizeof(struct proc_taskallinfo)
+_OFF_COMM = 48  # char p_comm[16]  (fallback name)
+_OFF_NAME = 64  # char proc_name[32]
+_OFF_PROC_METRICS = 136  # uint64 x4: vms, rss, user_time, sys_time
+_OFF_THREADS = 220  # uint32 pti_threadnum
+
+
 def get_native_processes() -> list:
     """Return list of native processes with basic metrics."""
     if not _DARWIN:
@@ -592,44 +603,31 @@ def get_native_processes() -> list:
         entries = []
         buf = ctypes.create_string_buffer(512)
         for pid in pids:
-            ret = _proc_pidinfo(pid, 2, 0, buf, 512)  # 2 = PROC_PIDTASKALLINFO
-            if ret >= 232:
+            ret = _proc_pidinfo(pid, _PROC_PIDTASKALLINFO, 0, buf, 512)
+            if ret >= _PTAI_SIZE:
                 raw = bytes(buf[:ret])
 
-                # The offsets below are the byte layout of struct
-                # proc_taskallinfo (proc_bsdinfo + proc_taskinfo) as returned by
-                # proc_pidinfo(PROC_PIDTASKALLINFO), verified on macOS
-                # Sonoma/Sequoia (arm64). They are version-sensitive: a future
-                # change to the kernel struct layout would shift these and must
-                # be re-verified rather than assumed.
-                #
-                # Unpack name from the proc_bsdinfo region:
-                # - comm is at offset 48 (16 bytes)
-                # - name is at offset 64 (32 bytes)
+                # Prefer proc_name (offset 64, 32 bytes); fall back to the
+                # shorter p_comm (offset 48, 16 bytes) when it is empty. See
+                # the _OFF_* / _PTAI_SIZE constants for the full struct layout.
                 name = (
-                    raw[64:96]
+                    raw[_OFF_NAME : _OFF_NAME + 32]
                     .split(b"\x00")[0]
                     .decode("utf-8", errors="ignore")
                     .strip()
                 )
                 if not name:
                     name = (
-                        raw[48:64]
+                        raw[_OFF_COMM:_OFF_NAME]
                         .split(b"\x00")[0]
                         .decode("utf-8", errors="ignore")
                         .strip()
                     )
 
-                # Unpack metrics using verified macOS Sequoia/Sonoma offsets:
-                # offset 136: vms (uint64)
-                # offset 144: rss (uint64)
-                # offset 152: user_time (uint64)
-                # offset 160: system_time (uint64)
-                # offset 220: threads_count (uint32)
                 vms_bytes, rss_bytes, user_ns, sys_ns = struct.unpack_from(
-                    "<QQQQ", raw, 136
+                    "<QQQQ", raw, _OFF_PROC_METRICS
                 )
-                (threads_count,) = struct.unpack_from("<I", raw, 220)
+                (threads_count,) = struct.unpack_from("<I", raw, _OFF_THREADS)
 
                 entries.append(
                     {

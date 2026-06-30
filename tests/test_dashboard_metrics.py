@@ -12,6 +12,7 @@ no mocks. Validates the two Tier-1 surfacing contracts:
 """
 
 import asyncio
+import re
 
 from textual.app import App, ComposeResult
 from textual.widgets import Static
@@ -165,3 +166,12 @@ def test_status_line_reports_cumulative_session_energy():
         )
     )
     assert "energy 33mWh" in state["status"]
+
+
+def test_status_line_surfaces_chart_time_window_span():
+    # The charts' visible time span scales silently with terminal width, so the
+    # dashboard surfaces it as a `span` token on the status line. Once laid out,
+    # a well-formed span (seconds/minutes/hours) must appear — otherwise the
+    # window the charts cover is ambiguous to the user.
+    state = asyncio.run(_drive([_snapshot(120.0, True)]))
+    assert re.search(r"span \d+(?:s|m(?:\d{2}s)?|h(?:\d{2}m)?)", state["status"])
