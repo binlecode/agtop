@@ -6,6 +6,11 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-06-29
+
+### Added
+- **Persistent core-topology header:** the Textual header sub-title now always shows the SoC core layout (e.g. `Apple M4 Max · 4E+12P+40GPU`), not just on the init splash — restoring the at-a-glance topology (including GPU core count) that the pre-Textual layout had. The `+NGPU` segment is omitted when the GPU core count is unavailable (unknown/future SoCs).
+
 ## [0.9.4] - 2026-06-29
 
 ### Added
