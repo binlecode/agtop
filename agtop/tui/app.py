@@ -217,7 +217,11 @@ class AgtopApp(App):
         self._config = create_dashboard_config(args, soc_info)
         self._chip_name = soc_info.get("name", "Apple Silicon")
         self.title = "agtop"
-        self.sub_title = f"v{__version__} · {self._chip_name}"
+        g = int(soc_info.get("gpu_core_count", 0) or 0)
+        topo = f"{self._config.e_core_count}E+{self._config.p_core_count}P"
+        if g:
+            topo += f"+{g}GPU"
+        self.sub_title = f"v{__version__} · {self._chip_name} · {topo}"
         self._stop_polling = threading.Event()
         self._sort_mode = SORT_CPU
         self._filter_regex = self._config.process_filter_pattern
