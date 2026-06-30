@@ -9,7 +9,7 @@ imported and compared, never hard-coded).
 Pure name -> profile mapping, no I/O — runs on every platform.
 """
 
-from agtop.soc_profiles import (
+from actop.soc_profiles import (
     GENERIC_APPLE_SILICON_PROFILE,
     KNOWN_SOC_PROFILES,
     TIER_FALLBACKS,

@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -21,9 +24,9 @@ jobs:
         id: formula-python
         run: |
           set -euo pipefail
-          FORMULA_PY="$(sed -n 's/.*depends_on "python@\([0-9]\+\.[0-9]\+\)".*/\1/p' Formula/agtop.rb | head -n1)"
+          FORMULA_PY="$(sed -n 's/.*depends_on "python@\([0-9]\+\.[0-9]\+\)".*/\1/p' Formula/actop.rb | head -n1)"
           if [ -z "$FORMULA_PY" ]; then
-            echo "Could not resolve python@X.Y from Formula/agtop.rb" >&2
+            echo "Could not resolve python@X.Y from Formula/actop.rb" >&2
             exit 1
           fi
           echo "version=$FORMULA_PY" >> "$GITHUB_OUTPUT"
@@ -46,10 +49,10 @@ jobs:
           from pathlib import Path
           import re
 
-          text = Path("Formula/agtop.rb").read_text(encoding="utf-8")
+          text = Path("Formula/actop.rb").read_text(encoding="utf-8")
           resources = re.findall(r'resource "([^"]+)" do\n\s+url "([^"]+)"', text)
           if not resources:
-              raise SystemExit("No resources found in Formula/agtop.rb")
+              raise SystemExit("No resources found in Formula/actop.rb")
 
           for name, url in resources:
               filename = url.rsplit("/", 1)[-1]
@@ -83,4 +86,4 @@ jobs:
           .ci-venv/bin/python -m pytest -m "not local" -q
 
       - name: CLI smoke test
-        run: .ci-venv/bin/python -m agtop.agtop --help
+        run: .ci-venv/bin/python -m actop.actop --help

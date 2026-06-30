@@ -6,7 +6,7 @@
 
 ## Question
 
-Can `agtop` read DRAM (DCS) memory bandwidth **in-process, unprivileged, via IOReport** — the same backend it already uses for power/frequency/residency — and at a per-sample cost that holds the Tier 1 `<0.5% idle CPU` budget?
+Can `actop` read DRAM (DCS) memory bandwidth **in-process, unprivileged, via IOReport** — the same backend it already uses for power/frequency/residency — and at a per-sample cost that holds the Tier 1 `<0.5% idle CPU` budget?
 
 This is a feasibility gate, not an implementation task. There is **no in-process precedent** for bandwidth in this codebase or its lineage: upstream `asitop` read the `DCS RD`/`DCS WR` rows from `powermetrics` plist output (a privileged subprocess). The hardcoded keys in `sampler.py` (`ECPU DCS RD`, `PCPU DCS RD`, `GFX DCS RD`, `MEDIA DCS`, `DCS RD`/`DCS WR`) are copied from that `powermetrics` schema — they are the *target shape*, not proof the data exists over IOReport.
 
@@ -24,7 +24,7 @@ The spike is **done** when each of these is answered with evidence captured in t
 
 ## Step 1 — Enumerate channels (existence + identity + units)
 
-The bindings in `agtop/ioreport.py` already cover everything except a whole-registry enumeration call. Add one binding for the spike:
+The bindings in `actop/ioreport.py` already cover everything except a whole-registry enumeration call. Add one binding for the spike:
 
 ```python
 # IOReportCopyAllChannels(uint64, uint64) -> CFDictionaryRef (all channels, all groups)
@@ -37,7 +37,7 @@ Discovery script — **save under `tmp/` (scratch)**, run on real hardware:
 ```python
 # tmp/dcs_discover.py
 import ctypes, time
-from agtop import ioreport as ir  # reuse _ior/_cf, cfstr, from_cfstr, cf_release
+from actop import ioreport as ir  # reuse _ior/_cf, cfstr, from_cfstr, cf_release
 
 ir._ior.IOReportCopyAllChannels.argtypes = [ctypes.c_uint64, ctypes.c_uint64]
 ir._ior.IOReportCopyAllChannels.restype = ctypes.c_void_p

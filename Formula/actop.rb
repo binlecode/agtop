@@ -1,9 +1,9 @@
-class Agtop < Formula
+class Actop < Formula
   include Language::Python::Virtualenv
 
   desc "Performance monitoring CLI tool for Apple Silicon"
-  homepage "https://github.com/binlecode/agtop"
-  url "https://github.com/binlecode/agtop/archive/refs/tags/v0.9.7.tar.gz"
+  homepage "https://github.com/binlecode/actop"
+  url "https://github.com/binlecode/actop/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "37294a2f4adaebbd06ff132dc0146728df15338ed09be81815bfa286c3091842"
   license "MIT"
 
@@ -64,7 +64,7 @@ class Agtop < Formula
   end
 
   test do
-    output = shell_output("#{bin}/agtop --help")
+    output = shell_output("#{bin}/actop --help")
     assert_match "Performance monitoring CLI tool for Apple Silicon", output
   end
 end

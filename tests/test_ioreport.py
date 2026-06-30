@@ -1,6 +1,6 @@
 import pytest
 
-from agtop.ioreport import cf_release, cfstr, from_cfstr, IOReportSubscription
+from actop.ioreport import cf_release, cfstr, from_cfstr, IOReportSubscription
 
 pytestmark = pytest.mark.local
 

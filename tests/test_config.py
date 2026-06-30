@@ -12,9 +12,9 @@ import re
 
 import pytest
 
-from agtop.agtop import build_parser
-from agtop.config import DashboardConfig, create_dashboard_config
-from agtop.utils import get_soc_info
+from actop.actop import build_parser
+from actop.config import DashboardConfig, create_dashboard_config
+from actop.utils import get_soc_info
 
 pytestmark = pytest.mark.local
 

@@ -7,7 +7,7 @@ This document serves two purposes:
 
 ## Homebrew Packaging Model
 
-`agtop` uses Homebrew's Python virtualenv formula pattern:
+`actop` uses Homebrew's Python virtualenv formula pattern:
 
 - Formula includes `Language::Python::Virtualenv` and depends on `python@3.13`.
 - `virtualenv_install_with_resources` creates a `libexec` venv and pip-installs declared `resource` blocks (blessed, dashing, psutil, wcwidth).
@@ -18,7 +18,7 @@ This document serves two purposes:
 | Component | Responsibility |
 | --- | --- |
 | **Maintainer** | Bumps `pyproject.toml` version, updates `CHANGELOG.md`, runs local checks, triggers release |
-| **`scripts/tag_release.sh`** | Verifies clean tree, validates version vs `pyproject.toml`, fast-forwards local `main`, pushes `main`, creates and pushes `vX.Y.Z` tag. Does **not** modify `Formula/agtop.rb` |
+| **`scripts/tag_release.sh`** | Verifies clean tree, validates version vs `pyproject.toml`, fast-forwards local `main`, pushes `main`, creates and pushes `vX.Y.Z` tag. Does **not** modify `Formula/actop.rb` |
 | **`main-ci.yml`** | Runs on `main` push. Resolves Python version from formula, installs formula-style deps, verifies resource alignment, runs lint/format/help/tests |
 | **`release-formula.yml`** | Runs on `v*` tag push (or manual `workflow_dispatch`). Validates tag/version match, computes tarball SHA256, updates formula `url` + `sha256`, regenerates `resource` blocks, pushes formula-sync commit to `main`. Serialized concurrency + retry to avoid push races |
 
@@ -31,7 +31,7 @@ local commit (version + changelog)
     -> push tag vX.Y.Z
       -> main-ci (main push)
       -> release-formula (tag push)
-         -> Formula/agtop.rb sync commit on main (url/sha/resources)
+         -> Formula/actop.rb sync commit on main (url/sha/resources)
             -> main-ci (formula-sync push)
 ```
 
@@ -52,7 +52,7 @@ Edit `pyproject.toml` (`[project].version`) and `CHANGELOG.md` (move items from 
 ```bash
 .venv/bin/python -m ruff check --fix .
 .venv/bin/python -m ruff format .
-.venv/bin/python -m agtop.agtop --help
+.venv/bin/python -m actop.actop --help
 .venv/bin/pytest -q
 ```
 
@@ -67,7 +67,7 @@ scripts/tag_release.sh "$VERSION"
 ### 5. Monitor CI
 
 ```bash
-gh run list -R binlecode/agtop --limit 10
+gh run list -R binlecode/actop --limit 10
 ```
 
 Wait for both `main-ci` and `release-formula` to complete successfully.
@@ -76,9 +76,9 @@ Wait for both `main-ci` and `release-formula` to complete successfully.
 
 ```bash
 git pull --ff-only origin main          # pull formula-sync commit
-sed -n '1,20p' Formula/agtop.rb        # confirm url + sha256
-brew update && brew upgrade binlecode/agtop/agtop
-brew info binlecode/agtop/agtop
+sed -n '1,20p' Formula/actop.rb        # confirm url + sha256
+brew update && brew upgrade binlecode/actop/actop
+brew info binlecode/actop/actop
 ```
 
 ## Rules
@@ -90,21 +90,21 @@ brew info binlecode/agtop/agtop
 - Keep `refresh_resources=true` (default) for normal releases.
 
 **Do not:**
-- Manually edit `Formula/agtop.rb` during releases.
+- Manually edit `Formula/actop.rb` during releases.
 - Push a tag before version/changelog are committed.
 - Force-push `main` during release windows.
 - Disable resource refresh except for emergency reruns.
 
 ## Homebrew Core Submission Guide
 
-To make `agtop` natively and automatically trusted by everyone's Homebrew installation without them needing to run local trust commands, it can be submitted to Homebrew Core:
+To make `actop` natively and automatically trusted by everyone's Homebrew installation without them needing to run local trust commands, it can be submitted to Homebrew Core:
 
 1. **Popularity Requirements**: Ensure the repository meets Homebrew Core's popularity requirements (usually 75+ GitHub stars and 30+ watchers).
 2. **Formula Audit**: Prepare the formula for Homebrew's strict linting by running:
    ```bash
-   brew audit --new-formula agtop
+   brew audit --new-formula actop
    ```
-3. **Open a Pull Request**: Submit a PR to the [homebrew-core](https://github.com/Homebrew/homebrew-core) repository. Once merged, `agtop` becomes an official formula and is implicitly trusted globally.
+3. **Open a Pull Request**: Submit a PR to the [homebrew-core](https://github.com/Homebrew/homebrew-core) repository. Once merged, `actop` becomes an official formula and is implicitly trusted globally.
 
 ## Failure Playbooks
 
@@ -130,7 +130,7 @@ Rare due to serialized concurrency. Wait for in-progress workflows to finish, th
 Inspect logs, fix on `main` in a follow-up commit. If caused by resource drift, re-run `release-formula` with resource refresh enabled.
 
 ```bash
-gh run view -R binlecode/agtop <RUN_ID> --log-failed
+gh run view -R binlecode/actop <RUN_ID> --log-failed
 ```
 
 ### Emergency rerun without resource refresh
@@ -140,10 +140,10 @@ Use `workflow_dispatch` with `refresh_resources=false` as a temporary workaround
 ## Quick Reference
 
 ```bash
-gh run list -R binlecode/agtop --limit 12          # recent CI runs
-gh run view -R binlecode/agtop <RUN_ID>             # inspect run
-gh run view -R binlecode/agtop <RUN_ID> --log-failed
+gh run list -R binlecode/actop --limit 12          # recent CI runs
+gh run view -R binlecode/actop <RUN_ID>             # inspect run
+gh run view -R binlecode/actop <RUN_ID> --log-failed
 git ls-remote --tags origin "v*"                     # remote tags
 ```
 
-**Source of truth:** version in `pyproject.toml`, notes in `CHANGELOG.md`, formula in `Formula/agtop.rb`, tag helper in `scripts/tag_release.sh`, CI in `.github/workflows/`.
+**Source of truth:** version in `pyproject.toml`, notes in `CHANGELOG.md`, formula in `Formula/actop.rb`, tag helper in `scripts/tag_release.sh`, CI in `.github/workflows/`.

@@ -7,10 +7,10 @@ import pytest
 
 
 @pytest.mark.local
-def test_agtop_runs_and_handles_sigint():
-    # Run agtop via subprocess, send SIGINT (Ctrl+C) and check it exits cleanly
+def test_actop_runs_and_handles_sigint():
+    # Run actop via subprocess, send SIGINT (Ctrl+C) and check it exits cleanly
     process = subprocess.Popen(
-        [sys.executable, "-m", "agtop.agtop", "--interval", "1"],
+        [sys.executable, "-m", "actop.actop", "--interval", "1"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -38,5 +38,5 @@ def test_agtop_runs_and_handles_sigint():
         process.kill()
         stdout, stderr = process.communicate()
         assert False, (
-            f"agtop did not quit within timeout after SIGINT. stderr: {stderr}"
+            f"actop did not quit within timeout after SIGINT. stderr: {stderr}"
         )

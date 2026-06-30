@@ -14,7 +14,7 @@ import asyncio
 from rich.text import Text
 from textual.app import App, ComposeResult
 
-from agtop.tui.widgets import BrailleChart, resolve_color_mode
+from actop.tui.widgets import BrailleChart, resolve_color_mode
 
 
 # --- NO_COLOR / tier resolution (https://no-color.org external contract) -----

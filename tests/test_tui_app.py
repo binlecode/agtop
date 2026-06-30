@@ -3,9 +3,9 @@ import asyncio
 import pytest
 from textual.widgets import Input, Static
 
-from agtop import __version__
-from agtop.agtop import build_parser
-from agtop.tui.app import AgtopApp, HelpScreen
+from actop import __version__
+from actop.actop import build_parser
+from actop.tui.app import ActopApp, HelpScreen
 
 pytestmark = pytest.mark.local
 
@@ -16,7 +16,7 @@ def test_opening_banner_and_header_show_version():
     # them off a mounted app through the rendered splash widget and public
     # sub_title, not the builder internals.
     async def _run():
-        app = AgtopApp(build_parser().parse_args([]))
+        app = ActopApp(build_parser().parse_args([]))
         async with app.run_test() as pilot:
             await pilot.pause()
             splash = str(app.query_one("#loading-splash", Static).render())
@@ -28,7 +28,7 @@ def test_opening_banner_and_header_show_version():
 
 
 def test_status_bar_exposes_only_supported_actions():
-    keys = {(b[0] if isinstance(b, tuple) else b.key) for b in AgtopApp.BINDINGS}
+    keys = {(b[0] if isinstance(b, tuple) else b.key) for b in ActopApp.BINDINGS}
 
     # Kept utilities, including the help overlay.
     assert {"q", "p", "s", "g", "t", "/", "question_mark"} <= keys
@@ -38,7 +38,7 @@ def test_status_bar_exposes_only_supported_actions():
     assert "space" not in keys
 
     # The framework command palette is disabled (no ^p in the status bar).
-    assert AgtopApp.ENABLE_COMMAND_PALETTE is False
+    assert ActopApp.ENABLE_COMMAND_PALETTE is False
 
 
 def test_help_overlay_documents_keys_metrics_and_alert_tokens():
@@ -46,7 +46,7 @@ def test_help_overlay_documents_keys_metrics_and_alert_tokens():
     # and read its rendered body, so the in-app docs are validated through the
     # real screen the user sees, not a module constant.
     async def _run():
-        app = AgtopApp(build_parser().parse_args([]))
+        app = ActopApp(build_parser().parse_args([]))
         async with app.run_test() as pilot:
             await pilot.pause()
             app.action_show_help()
@@ -79,7 +79,7 @@ def test_escape_cancels_filter_edit_and_hides_input():
     # widget state only (no private attributes).
     async def _run():
         # Opening the filter requires the process table to be visible.
-        app = AgtopApp(build_parser().parse_args(["--show-processes"]))
+        app = ActopApp(build_parser().parse_args(["--show-processes"]))
         async with app.run_test() as pilot:
             await pilot.pause()
             app.action_toggle_filter()  # open filter
@@ -105,7 +105,7 @@ def test_filter_unavailable_until_process_table_shown():
     # hidden + inert while the table is off, and become available once `t` shows
     # the table. Drive public actions / check_action / widget state only.
     async def _run():
-        app = AgtopApp(build_parser().parse_args([]))  # table off by default
+        app = ActopApp(build_parser().parse_args([]))  # table off by default
         async with app.run_test() as pilot:
             await pilot.pause()
             off = app.check_action("toggle_filter", ())  # hidden + inert

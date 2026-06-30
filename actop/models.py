@@ -1,4 +1,4 @@
-"""Public data model for agtop hardware snapshots."""
+"""Public data model for actop hardware snapshots."""
 
 from dataclasses import dataclass, field
 

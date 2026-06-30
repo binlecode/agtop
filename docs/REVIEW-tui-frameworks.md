@@ -1,16 +1,16 @@
-# REVIEW: TUI Framework Evaluation for `agtop`
+# REVIEW: TUI Framework Evaluation for `actop`
 
 ## 1. Context and Objective
 
 In the `REVIEW-architecture-comparison.md`, it was identified that the reference Go implementation (`mactop`) holds a distinct advantage in UI richness, interactivity, and rendering concurrency. Specifically, `mactop` utilizes `gotui` to provide complex grid layouts, tabs, mouse support, and background goroutines that prevent the terminal UI from freezing during expensive system calls.
 
-Currently, `agtop` uses a combination of `blessed` and `dashing` for its UI layer. While lightweight and functional, it lacks native reactive components, structured application state management, and built-in asynchronous UI updates required to achieve feature parity with `mactop`.
+Currently, `actop` uses a combination of `blessed` and `dashing` for its UI layer. While lightweight and functional, it lacks native reactive components, structured application state management, and built-in asynchronous UI updates required to achieve feature parity with `mactop`.
 
-This document evaluates the top production-grade Terminal User Interface (TUI) libraries in the Python ecosystem to determine the best path forward for `agtop` to close this UX gap.
+This document evaluates the top production-grade Terminal User Interface (TUI) libraries in the Python ecosystem to determine the best path forward for `actop` to close this UX gap.
 
 ---
 
-## 2. Core Requirements for `agtop`
+## 2. Core Requirements for `actop`
 
 To match or exceed `mactop`, the chosen Python TUI framework must support:
 1. **Asynchronous/Concurrent Rendering:** The UI main loop must not block while hardware metrics are polled via `ctypes` or `sysctl`.
@@ -26,11 +26,11 @@ To match or exceed `mactop`, the chosen Python TUI framework must support:
 ### 1. Textual (Winner / Highly Recommended)
 Built by Textualize (the creators of `Rich`), Textual is a Rapid Application Development framework for Python TUIs. It is currently the most advanced and actively maintained TUI framework in the Python ecosystem.
 
-*   **Concurrency Model:** Textual is built entirely on `asyncio`. It uses a reactive message-passing architecture with `Workers` (background tasks). This is the exact conceptual equivalent of `mactop`'s goroutine/channel architecture. `agtop` can run `api.py` in a background worker, streaming `PowerMetrics` objects to the main UI thread safely.
+*   **Concurrency Model:** Textual is built entirely on `asyncio`. It uses a reactive message-passing architecture with `Workers` (background tasks). This is the exact conceptual equivalent of `mactop`'s goroutine/channel architecture. `actop` can run `api.py` in a background worker, streaming `PowerMetrics` objects to the main UI thread safely.
 *   **Styling & Layout:** It uses a CSS-like dialect (`.tcss`) for styling, padding, layouts, and colors, completely decoupling the UI logic from the presentation layer.
 *   **Widgets:** Provides out-of-the-box `DataTable`, `TabbedContent`, `Sparkline`, and rich text components.
 *   **Interactivity:** Full mouse support (hover, click, scroll) and robust keyboard focus management.
-*   **Verdict:** **The clear choice.** Textual provides the exact feature set needed to make `agtop` look and feel like a native, premium dashboard application, easily surpassing `gotui` in developer ergonomics and aesthetics.
+*   **Verdict:** **The clear choice.** Textual provides the exact feature set needed to make `actop` look and feel like a native, premium dashboard application, easily surpassing `gotui` in developer ergonomics and aesthetics.
 
 ### 2. Urwid
 Urwid is a classic, battle-tested console UI library used in many complex production CLI tools (e.g., `mitmproxy`).
@@ -52,12 +52,12 @@ Famous for powering interactive REPLs (`ptpython`, `ipython`), Prompt Toolkit al
 
 ---
 
-## 4. Proposed Migration Architecture (Textual + `agtop`)
+## 4. Proposed Migration Architecture (Textual + `actop`)
 
-If `agtop` migrates to Textual, the architecture would shift as follows:
+If `actop` migrates to Textual, the architecture would shift as follows:
 
 1. **Application Loop:** Replace the blocking `blessed` `while True:` loop with `textual.app.App`.
-2. **Data Polling (Workers):** Wrap the existing `agtop.api.Profiler` with a `@work(thread=True)` decorator. This worker will poll Apple's `libIOReport` and `sysctl` natively and emit custom `Messages` (e.g., `MetricsUpdated`) to the UI.
+2. **Data Polling (Workers):** Wrap the existing `actop.api.Profiler` with a `@work(thread=True)` decorator. This worker will poll Apple's `libIOReport` and `sysctl` natively and emit custom `Messages` (e.g., `MetricsUpdated`) to the UI.
 3. **Process List:** Replace manual string truncation and sorting with `textual.widgets.DataTable`. This instantly provides sticky headers, column sorting on click, and scrolling.
 4. **Layout:** Use `TabbedContent` to separate concerns:
     *   **Tab 1 (Overview):** CPU/GPU Gauges, ANE metrics, Total RAM.
@@ -66,4 +66,4 @@ If `agtop` migrates to Textual, the architecture would shift as follows:
 
 ## 5. Conclusion
 
-Adopting **Textual** is the definitive strategy to resolve the "UI Library & UX" and "Desktop Integration" gaps identified against `mactop`. It will allow `agtop` to leverage its superior low-level Python `ctypes` bindings while presenting a visually stunning, highly concurrent, and interactive terminal dashboard that rivals or exceeds compiled Go applications.
+Adopting **Textual** is the definitive strategy to resolve the "UI Library & UX" and "Desktop Integration" gaps identified against `mactop`. It will allow `actop` to leverage its superior low-level Python `ctypes` bindings while presenting a visually stunning, highly concurrent, and interactive terminal dashboard that rivals or exceeds compiled Go applications.

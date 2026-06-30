@@ -1,8 +1,8 @@
-# agtop
+# actop
 
 **Watch your Apple Silicon Mac the way it actually works — and profile your own workloads from Python.**
 
-`agtop` is a sudoless, in-process performance monitor for M1–M4 Macs: a real-time
+`actop` is a sudoless, in-process performance monitor for M1–M4 Macs: a real-time
 TUI for CPU/GPU/ANE utilization, per-core frequency, memory **bandwidth**, power,
 and thermals — plus a **Python API** (`Monitor` / `Profiler`, `to_pandas()`) so you
 can instrument your *own* local LLM / MLX / CoreML inference and training runs with
@@ -10,7 +10,7 @@ SoC-accurate power and energy context.
 
 <!-- TODO: replace the static screenshot below with an animated capture (GIF/SVG) of
      the dashboard live during an MLX/Ollama inference run — motion is what gets shared. -->
-![agtop dashboard: live E-CPU/P-CPU/GPU/ANE utilization, per-core frequency, memory bandwidth, and power charts on Apple Silicon](images/agtop.png)
+![actop dashboard: live E-CPU/P-CPU/GPU/ANE utilization, per-core frequency, memory bandwidth, and power charts on Apple Silicon](images/actop.png)
 
 **Who it's for**
 
@@ -20,15 +20,15 @@ SoC-accurate power and energy context.
   pandas frame of power, frequency, residency, and cumulative session energy.
 - **Just want a clean `*top`** for Apple Silicon that needs **no `sudo`**.
 
-Install in one line — [Homebrew](#homebrew-recommended) or [uv](#uv-recommended-for-non-homebrew-users) — then run `agtop`.
+Install in one line — [Homebrew](#homebrew-recommended) or [uv](#uv-recommended-for-non-homebrew-users) — then run `actop`.
 
 ## Background
 
-`agtop` is an independent project with its own architecture, codebase, and release cycle. Originally inspired by `tlkh/asitop`, it has been completely redesigned and rewritten — new sampling backend, metric pipeline, dashboard rendering, and module structure. The name carries the Unix `*top` lineage: `agtop` (*Apple GPU top*) forks `asitop` (*Apple Silicon top*) — though it monitors well beyond the GPU (CPU, ANE, power, memory bandwidth, thermal).
+`actop` is an independent project with its own idea, architecture, codebase, and release cycle. It was inspired by `tlkh/asitop` — built to fill the gaps that tool left for whole-chip, sudoless, programmable monitoring. The name carries the Unix `*top` lineage: `actop` (*Apple **C**hip top*) follows `asitop` (*Apple Silicon top*), and covers the whole SoC — CPU, GPU, ANE, power, memory bandwidth, and thermal.
 
-The original `asitop` shells out to Apple's `powermetrics` CLI, a high-level tool that requires `sudo`, writes to temp files, and returns pre-aggregated metrics at a fixed cadence. `agtop` instead calls the underlying IOReport C library directly via Python ctypes — the same library that `powermetrics` itself uses internally. This low-level approach runs unprivileged, avoids subprocess and file I/O overhead, gives access to raw per-core residency states and energy counters, and lets the application control its own sampling interval and delta computation.
+The original `asitop` shells out to Apple's `powermetrics` CLI, a high-level tool that requires `sudo`, writes to temp files, and returns pre-aggregated metrics at a fixed cadence. `actop` instead calls the underlying IOReport C library directly via Python ctypes — the same library that `powermetrics` itself uses internally. This low-level approach runs unprivileged, avoids subprocess and file I/O overhead, gives access to raw per-core residency states and energy counters, and lets the application control its own sampling interval and delta computation.
 
-**Why another `*top`?** `mactop` (Go) and `macmon` (Rust) are excellent sudoless TUIs — mactop the broadest in features, macmon the leanest binary. `agtop`'s reason to exist is different: it is the **programmable, Python-native** one. A public API (`Monitor` / `Profiler`, `to_pandas()`) lets you instrument and profile your *own* workloads — local LLM / CoreML / MLX inference, training loops — from Python, with SoC-accurate power context and cumulative session energy. It's the data scientist's profiler, not just a dashboard — and unlike its `asitop` ancestor, it needs no `sudo`. See [Where agtop fits](#where-agtop-fits) for the head-to-head.
+**Why another `*top`?** `mactop` (Go) and `macmon` (Rust) are excellent sudoless TUIs — mactop the broadest in features, macmon the leanest binary. `actop`'s reason to exist is different: it is the **programmable, Python-native** one. A public API (`Monitor` / `Profiler`, `to_pandas()`) lets you instrument and profile your *own* workloads — local LLM / CoreML / MLX inference, training loops — from Python, with SoC-accurate power context and cumulative session energy. It's the data scientist's profiler, not just a dashboard — and unlike the `sudo`-bound `asitop` that inspired it, it needs no `sudo`. See [Where actop fits](#where-actop-fits) for the head-to-head.
 
 ## Key Features
 
@@ -41,11 +41,11 @@ The original `asitop` shells out to Apple's `powermetrics` CLI, a high-level too
 - **SoC compatibility**: 16 built-in M1–M4 profiles (base, Pro, Max, Ultra). Unknown future chips fall back to tier-based defaults using the latest generation's reference values.
 - **CPU/GPU temperature**: reads die temperatures from the Apple SMC (System Management Controller) via IOKit ctypes. Displayed inline in gauge titles (e.g. "P-CPU Usage: 12% @ 3504 MHz (58°C)"). No sudo required.
 
-## Where agtop fits
+## Where actop fits
 
 How the sudoless, in-process field stacks up:
 
-| | agtop | [mactop](https://github.com/metaspartan/mactop) | [macmon](https://github.com/vladkens/macmon) |
+| | actop | [mactop](https://github.com/metaspartan/mactop) | [macmon](https://github.com/vladkens/macmon) |
 |---|:---:|:---:|:---:|
 | Unprivileged, in-process (no sudo) | ✅ | ✅ | ✅ |
 | CPU/GPU/ANE power · temps · bandwidth | ✅ | ✅ | ✅ |
@@ -61,58 +61,58 @@ For the broadest TUI and DevOps feature set (network/disk I/O, a menu-bar app, m
 ### Homebrew (recommended)
 
 ```shell
-brew tap --custom-remote binlecode/agtop https://github.com/binlecode/agtop.git
-brew install binlecode/agtop/agtop
+brew tap --custom-remote binlecode/actop https://github.com/binlecode/actop.git
+brew install binlecode/actop/actop
 ```
 
 To tell Homebrew to trust your tap or specific formula:
 
 - Trust the specific formula only (Recommended):
   ```shell
-  brew trust --formula binlecode/agtop/agtop
+  brew trust --formula binlecode/actop/actop
   ```
 
 Upgrade / uninstall:
 
 ```shell
-brew upgrade binlecode/agtop/agtop
-brew uninstall binlecode/agtop/agtop
+brew upgrade binlecode/actop/actop
+brew uninstall binlecode/actop/actop
 ```
 
 ### uv (recommended for non-Homebrew users)
 
-[`uv`](https://docs.astral.sh/uv/) installs `agtop` into a sandboxed, per-tool
+[`uv`](https://docs.astral.sh/uv/) installs `actop` into a sandboxed, per-tool
 environment with its own managed CPython — no system Python required and no
 interpreter drift:
 
 ```shell
-uv tool install git+https://github.com/binlecode/agtop.git
+uv tool install git+https://github.com/binlecode/actop.git
 ```
 
 Upgrade / uninstall:
 
 ```shell
-uv tool upgrade agtop
-uv tool uninstall agtop
+uv tool upgrade actop
+uv tool uninstall actop
 ```
 
 ### pip
 
 ```shell
-pip install git+https://github.com/binlecode/agtop.git
+pip install git+https://github.com/binlecode/actop.git
 ```
 
 ## Quick Start
 
 ```shell
-agtop                                               # full dashboard with per-core panels, profile power scaling
-agtop --interval 1 --avg 10                        # faster refresh, shorter rolling window
-agtop --show-processes                              # include top process panel at startup
-agtop --proc-filter "python|ollama|vllm|docker|mlx"  # filter process panel at launch
-agtop --no-show_cores                               # cluster-level view without per-core panels
-agtop --chart-glyph block                           # square block chart glyphs
-agtop --json                                        # stream NDJSON metrics to stdout (no TUI)
-agtop --serve 9095                                  # serve Prometheus metrics at :9095/metrics (no TUI)
+actop                                               # full dashboard with per-core panels, profile power scaling
+actop --interval 1 --avg 10                        # faster refresh, shorter rolling window
+actop --show-processes                              # include top process panel at startup
+actop --proc-filter "python|ollama|vllm|docker|mlx"  # filter process panel at launch
+actop --no-show_cores                               # cluster-level view without per-core panels
+actop --chart-glyph block                           # square block chart glyphs
+actop --json                                        # stream NDJSON metrics to stdout (no TUI)
+actop --serve 9095                                  # serve Prometheus metrics at :9095/metrics (no TUI)
 ```
 
 Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `g` toggle chart glyph (`dots`/`block`) · `t` toggle process panel · `/` filter processes · `?` help overlay · `q` quit
@@ -138,7 +138,7 @@ Interactive keys: `p` pause · `s` cycle sort (CPU%→RSS→PID) · `g` toggle c
 
 ## Metrics Export
 
-Beyond the interactive dashboard, agtop can act as an observability source. Both
+Beyond the interactive dashboard, actop can act as an observability source. Both
 modes reuse the same unprivileged IOReport backend and exit on `Ctrl-C`.
 
 - **NDJSON stream** (`--json`): emits one compact JSON snapshot per `--interval`
@@ -146,26 +146,26 @@ modes reuse the same unprivileged IOReport backend and exit on `Ctrl-C`.
   `jq`, a log shipper, or a file:
 
   ```shell
-  agtop --json --interval 1 | jq '{cpu: .cpu_watts, pkg: .package_watts}'
+  actop --json --interval 1 | jq '{cpu: .cpu_watts, pkg: .package_watts}'
   ```
 
 - **Prometheus endpoint** (`--serve PORT`): exposes gauges at `/metrics`
-  (`agtop_cpu_power_watts`, `agtop_pcpu_utilization_percent`, per-core
-  `agtop_core_utilization_percent{cluster,core}`, …). A background sampler keeps
+  (`actop_cpu_power_watts`, `actop_pcpu_utilization_percent`, per-core
+  `actop_core_utilization_percent{cluster,core}`, …). A background sampler keeps
   the latest reading warm so scrapes return immediately:
 
   ```shell
-  agtop --serve 9095
+  actop --serve 9095
   curl -s localhost:9095/metrics
   ```
 
 ## How It Works
 
-agtop accesses Apple Silicon hardware telemetry through three OS-level interfaces, all called in-process:
+actop accesses Apple Silicon hardware telemetry through three OS-level interfaces, all called in-process:
 
 ### IOReport framework (`libIOReport.dylib`)
 
-The primary data source. agtop loads `libIOReport.dylib` and `CoreFoundation.framework` via `ctypes.cdll.LoadLibrary`, then:
+The primary data source. actop loads `libIOReport.dylib` and `CoreFoundation.framework` via `ctypes.cdll.LoadLibrary`, then:
 
 - Subscribes to three IOReport channel groups: **Energy Model** (CPU/GPU/ANE energy in nanojoules), **CPU Core Performance States** (per-core ECPU/PCPU DVFS residency), and **GPU Performance States** (GPU DVFS residency).
 - Takes periodic snapshots with `IOReportCreateSamples` and computes deltas between consecutive snapshots with `IOReportCreateSamplesDelta`.
@@ -220,19 +220,19 @@ No sudo required. Degrades to `Unknown` if the ObjC runtime call fails.
 
 | Module | Role |
 | --- | --- |
-| `agtop/agtop.py` | CLI entry point and argument parsing; thin wrapper launching the Textual TUI |
-| `agtop/ioreport.py` | ctypes bindings to `libIOReport.dylib` and CoreFoundation — `IOReportSubscription` lifecycle, snapshot, delta, and CF helpers |
-| `agtop/sampler.py` | `IOReportSampler`: two-snapshot delta logic, `SampleResult` conversion, DVFS table discovery from `ioreg pmgr`, SMC temperature integration |
-| `agtop/smc.py` | SMC temperature reader: IOKit ctypes bindings to `AppleSMC`, key discovery, CPU/GPU die temperature reads |
-| `agtop/utils.py` | System context: `psutil` RAM/swap, `sysctl`/`system_profiler` SoC info, process enumeration |
-| `agtop/soc_profiles.py` | 16 `SocProfile` dataclasses (M1–M4) with reference wattage/bandwidth; tier fallbacks for unknown chips |
-| `agtop/power_scaling.py` | `power_to_percent()`: profile mode (SoC reference) vs auto mode (rolling peak x1.25) |
-| `agtop/config.py` | `DashboardConfig` frozen dataclass; `create_dashboard_config()` merges CLI args with SoC info |
-| `agtop/models.py` | `SystemSnapshot` and `CoreSample` dataclasses (public API types) |
-| `agtop/api.py` | `Monitor`, `Profiler`, `AsyncMonitor` — public Python API for hardware profiling |
-| `agtop/tui/app.py` | `AgtopApp`: Textual `App` with polling worker, process table, interactive sort/filter/pause |
-| `agtop/tui/widgets.py` | `HardwareDashboard` widget with braille `Sparkline` charts, core rows, and alert computation |
-| `agtop/tui/styles.tcss` | Textual CSS layout for the dashboard |
+| `actop/actop.py` | CLI entry point and argument parsing; thin wrapper launching the Textual TUI |
+| `actop/ioreport.py` | ctypes bindings to `libIOReport.dylib` and CoreFoundation — `IOReportSubscription` lifecycle, snapshot, delta, and CF helpers |
+| `actop/sampler.py` | `IOReportSampler`: two-snapshot delta logic, `SampleResult` conversion, DVFS table discovery from `ioreg pmgr`, SMC temperature integration |
+| `actop/smc.py` | SMC temperature reader: IOKit ctypes bindings to `AppleSMC`, key discovery, CPU/GPU die temperature reads |
+| `actop/utils.py` | System context: `psutil` RAM/swap, `sysctl`/`system_profiler` SoC info, process enumeration |
+| `actop/soc_profiles.py` | 16 `SocProfile` dataclasses (M1–M4) with reference wattage/bandwidth; tier fallbacks for unknown chips |
+| `actop/power_scaling.py` | `power_to_percent()`: profile mode (SoC reference) vs auto mode (rolling peak x1.25) |
+| `actop/config.py` | `DashboardConfig` frozen dataclass; `create_dashboard_config()` merges CLI args with SoC info |
+| `actop/models.py` | `SystemSnapshot` and `CoreSample` dataclasses (public API types) |
+| `actop/api.py` | `Monitor`, `Profiler`, `AsyncMonitor` — public Python API for hardware profiling |
+| `actop/tui/app.py` | `ActopApp`: Textual `App` with polling worker, process table, interactive sort/filter/pause |
+| `actop/tui/widgets.py` | `HardwareDashboard` widget with braille `Sparkline` charts, core rows, and alert computation |
+| `actop/tui/styles.tcss` | Textual CSS layout for the dashboard |
 
 ```mermaid
 graph TD
@@ -252,7 +252,7 @@ graph TD
         TEXTUAL[textual<br/>terminal TUI framework]
     end
 
-    subgraph "agtop Modules"
+    subgraph "actop Modules"
         IORPY[ioreport.py<br/>ctypes bindings]
         SAMPLER[sampler.py<br/>IOReportSampler]
         SMC[smc.py<br/>SMC temperature reader]
@@ -261,7 +261,7 @@ graph TD
         POWER[power_scaling.py<br/>chart scaling]
         CONFIG[config.py<br/>DashboardConfig]
         TUI[tui/app.py + widgets.py<br/>Textual dashboard]
-        MAIN[agtop.py<br/>CLI entry point]
+        MAIN[actop.py<br/>CLI entry point]
     end
 
     IOR -->|ctypes.cdll| IORPY
@@ -295,8 +295,8 @@ graph TD
 
 ```bash
 .venv/bin/python -m pip install -e ".[dev]"    # install editable + dev deps
-.venv/bin/python -m agtop.agtop --help         # validate CLI
-.venv/bin/python -m agtop.agtop                # run with defaults
+.venv/bin/python -m actop.actop --help         # validate CLI
+.venv/bin/python -m actop.actop                # run with defaults
 .venv/bin/pytest -q                            # run tests
 .venv/bin/python -m ruff check . && .venv/bin/python -m ruff format .   # lint + format
 ```
@@ -311,7 +311,7 @@ edit pyproject.toml CHANGELOG.md
 
 # 2. Run checks
 .venv/bin/python -m ruff check --fix . && .venv/bin/python -m ruff format .
-.venv/bin/python -m agtop.agtop --help
+.venv/bin/python -m actop.actop --help
 .venv/bin/pytest -q
 
 # 3. Commit and tag
@@ -320,7 +320,7 @@ git commit -m "Release v$VERSION"
 scripts/tag_release.sh "$VERSION"
 
 # 4. Verify
-brew update && brew upgrade binlecode/agtop/agtop
+brew update && brew upgrade binlecode/actop/actop
 ```
 
 CI handles formula sync automatically on tag push.

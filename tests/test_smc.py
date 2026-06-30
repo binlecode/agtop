@@ -1,6 +1,6 @@
 import pytest
 
-from agtop.smc import SMCReader, TemperatureReading
+from actop.smc import SMCReader, TemperatureReading
 
 pytestmark = pytest.mark.local
 

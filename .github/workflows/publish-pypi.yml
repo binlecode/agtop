@@ -1,0 +1,75 @@
+name: publish-pypi
+run-name: "publish-pypi | ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }} | ${{ github.sha }}"
+
+# Publishes the actop package to PyPI on a version tag push using PyPI
+# Trusted Publishing (OIDC) — no API token is stored in the repo.
+#
+# One-time PyPI-side setup (do this once, signed in as the project owner):
+#   1. https://pypi.org/manage/account/publishing/  ->  "Add a new pending publisher"
+#   2. Project name: actop
+#      Owner: binlecode
+#      Repository name: actop
+#      Workflow name: publish-pypi.yml
+#      Environment name: pypi
+#   After the first successful publish the pending publisher becomes a normal
+#   trusted publisher for the project.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to publish (for example: v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # required for OIDC trusted publishing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate tag matches pyproject.toml version
+        env:
+          TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG_NAME#v}"
+          PROJECT_VERSION="$(
+            awk '
+              /^\[project\]/ { in_project=1; next }
+              /^\[/ && in_project { in_project=0 }
+              in_project && $1 == "version" { gsub(/"/, "", $3); print $3; exit }
+            ' pyproject.toml
+          )"
+          if [ "$PROJECT_VERSION" != "$VERSION" ]; then
+            echo "Tag version ($VERSION) does not match pyproject.toml version ($PROJECT_VERSION)" >&2
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true

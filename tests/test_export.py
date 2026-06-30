@@ -13,13 +13,13 @@ import time
 
 import pytest
 
-from agtop.export import (
+from actop.export import (
     run_json_stream,
     snapshot_to_dict,
     snapshot_to_json,
     snapshot_to_prometheus,
 )
-from agtop.models import CoreSample, SystemSnapshot
+from actop.models import CoreSample, SystemSnapshot
 
 
 def _sample_snapshot() -> SystemSnapshot:
@@ -69,14 +69,14 @@ def test_prometheus_exposition_is_well_formed():
     lines = body.strip().splitlines()
 
     # Scalar gauges carry a TYPE line and a value line.
-    assert "# TYPE agtop_cpu_power_watts gauge" in lines
-    assert "agtop_cpu_power_watts 12.5" in lines
-    assert "agtop_package_power_watts 16" in lines
-    assert "agtop_pcpu_utilization_percent 55.5" in lines
+    assert "# TYPE actop_cpu_power_watts gauge" in lines
+    assert "actop_cpu_power_watts 12.5" in lines
+    assert "actop_package_power_watts 16" in lines
+    assert "actop_pcpu_utilization_percent 55.5" in lines
 
     # Per-core gauges are labelled by cluster + core index.
-    assert 'agtop_core_utilization_percent{cluster="P",core="4"} 80' in lines
-    assert 'agtop_core_frequency_mhz{cluster="E",core="0"} 1100' in lines
+    assert 'actop_core_utilization_percent{cluster="P",core="4"} 80' in lines
+    assert 'actop_core_frequency_mhz{cluster="E",core="0"} 1100' in lines
 
     # Every non-comment line must be `name value` (with optional {labels}).
     for line in lines:
@@ -108,7 +108,7 @@ def test_serve_prometheus_endpoint_responds():
 
     port = 19991
     process = subprocess.Popen(
-        [sys.executable, "-m", "agtop.agtop", "--serve", str(port), "--interval", "1"],
+        [sys.executable, "-m", "actop.actop", "--serve", str(port), "--interval", "1"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -128,8 +128,8 @@ def test_serve_prometheus_endpoint_responds():
                 continue
 
         assert body is not None, "metrics endpoint never returned 200"
-        assert "agtop_cpu_power_watts" in body
-        assert "agtop_core_utilization_percent{" in body
+        assert "actop_cpu_power_watts" in body
+        assert "actop_core_utilization_percent{" in body
     finally:
         process.terminate()
         try:

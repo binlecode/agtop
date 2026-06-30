@@ -1,4 +1,4 @@
-"""Textual TUI application for agtop."""
+"""Textual TUI application for actop."""
 
 import os
 import re
@@ -11,11 +11,11 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Footer, Header, Input, Static
 
-from agtop import __version__
-from agtop.api import Monitor
-from agtop.config import create_dashboard_config
-from agtop.tui.widgets import HardwareDashboard, MetricsUpdated
-from agtop.utils import get_ram_metrics_dict, get_soc_info, get_top_processes
+from actop import __version__
+from actop.api import Monitor
+from actop.config import create_dashboard_config
+from actop.tui.widgets import HardwareDashboard, MetricsUpdated
+from actop.utils import get_ram_metrics_dict, get_soc_info, get_top_processes
 
 _SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -66,7 +66,7 @@ def _process_display_name(command, max_len=24):
 
 
 HELP_TEXT = """\
-[b]agtop — keybindings[/b]
+[b]actop — keybindings[/b]
 
   q          Quit
   p          Pause / resume sampling
@@ -123,10 +123,10 @@ class HelpScreen(ModalScreen):
         self.dismiss()
 
 
-class AgtopApp(App):
+class ActopApp(App):
     ENABLE_COMMAND_PALETTE = False
     DEFAULT_CSS = """
-    AgtopApp {
+    ActopApp {
         layout: vertical;
     }
     #main-section {
@@ -218,7 +218,7 @@ class AgtopApp(App):
         soc_info = get_soc_info()
         self._config = create_dashboard_config(args, soc_info)
         self._chip_name = soc_info.get("name", "Apple Silicon")
-        self.title = "agtop"
+        self.title = "actop"
         g = int(soc_info.get("gpu_core_count", 0) or 0)
         topo = f"{self._config.e_core_count}E+{self._config.p_core_count}P"
         if g:
@@ -239,7 +239,7 @@ class AgtopApp(App):
     def _build_splash(self) -> str:
         cfg = self._config
         return (
-            f"agtop v{__version__}\n\n"
+            f"actop v{__version__}\n\n"
             f"{self._chip_name}\n"
             f"E-cores: {cfg.e_core_count}   P-cores: {cfg.p_core_count}\n"
             f"interval: {cfg.sample_interval}s   subsamples: {cfg.subsamples}\n\n"

@@ -1,4 +1,4 @@
-"""Textual widgets for the agtop hardware dashboard."""
+"""Textual widgets for the actop hardware dashboard."""
 
 import os
 from collections import deque
@@ -10,8 +10,8 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static
 
-from agtop.models import SystemSnapshot
-from agtop.power_scaling import (
+from actop.models import SystemSnapshot
+from actop.power_scaling import (
     DEFAULT_CPU_FLOOR_W,
     DEFAULT_GPU_FLOOR_W,
     clamp_percent,
@@ -267,7 +267,7 @@ def _braille_spark(history, width_chars: int = 8) -> str:
 
 
 class MetricsUpdated(Message):
-    """Posted by AgtopApp when a new hardware snapshot is ready."""
+    """Posted by ActopApp when a new hardware snapshot is ready."""
 
     def __init__(self, snapshot: SystemSnapshot, ram: dict, processes: dict) -> None:
         self.snapshot = snapshot
@@ -418,7 +418,7 @@ class HardwareDashboard(Widget):
             )
 
     def update_metrics(self, message: MetricsUpdated) -> None:
-        """Update all dashboard widgets from new metrics. Called by AgtopApp."""
+        """Update all dashboard widgets from new metrics. Called by ActopApp."""
         s = message.snapshot
         ram = message.ram
         cfg = self._config

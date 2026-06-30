@@ -1,4 +1,4 @@
-"""Integration tests for the public agtop Python API.
+"""Integration tests for the public actop Python API.
 
 These tests require macOS with Apple Silicon hardware (marked local).
 """
@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from agtop import Monitor, Profiler, SystemSnapshot
+from actop import Monitor, Profiler, SystemSnapshot
 
 pytestmark = pytest.mark.local
 
