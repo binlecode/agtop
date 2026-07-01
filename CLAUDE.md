@@ -15,6 +15,7 @@ This file is the single source of truth for repository guidelines, used by Claud
 - Do not run `python`, `pip`, or `pytest` from the global environment for this repo.
 
 ## Build, Test, and Development Commands
+- `git config core.hooksPath .githooks`: **run once per clone** to activate the local hooks (`pre-commit` secret redaction + `pre-push` `main` guard). Fresh clones have no hooks until this is set.
 - `.venv/bin/python -m pip install -e ".[dev]"`: install editable + dev deps (ruff).
 - `.venv/bin/python -m actop.actop --help`: validate CLI parsing and flags.
 - `.venv/bin/python -m actop.actop --interval 2 --avg 30`: run the tool locally.
@@ -54,6 +55,8 @@ The `docs/` directory contains essential system reviews, research, operations gu
 - `docs/REVIEW-tui-frameworks.md`: Analysis of modern Python TUI frameworks and selection of Textual.
 - `docs/TODO-native-polling.md`: Detailed implementation plan for migrating to native macOS APIs (replacing `psutil`).
 - `docs/DESIGN-cicd-release.md`: CI/CD bottling and tap release operational runbook.
+
+**Conformance auditing:** the `/audit-conformance` skill (`.claude/skills/audit-conformance/`) periodically judgment-scans the whole tree against 12 coding rules (layering, dead code, DRY, naming, swallowed errors) — the whole-codebase counterpart to diff-scoped `/code-review`. It writes an actionable `docs/TODO-conformance-YYYY-MM-DD.md` and never proposes structural/guard tests (they would violate the functional-tests-only mandate).
 
 ## Coding Style & Naming Conventions
 - Follow existing Python style: 4-space indentation, snake_case for functions/variables, short focused modules.

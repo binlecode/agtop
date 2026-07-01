@@ -1,0 +1,33 @@
+# Dependabot keeps Python dependencies and pinned GitHub Actions current.
+# Free on public repos; update runs execute on GitHub's Dependabot infrastructure
+# and do NOT consume this repo's Actions minutes. PRs it opens go through the normal
+# PR-only flow and are validated by main-ci. See docs/DESIGN-cicd-release.md.
+version: 2
+updates:
+  # Python runtime + dev dependencies (declared in pyproject.toml).
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Collapse routine minor/patch bumps into one PR to cut review noise;
+      # major bumps still arrive as individual PRs.
+      python-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Action versions pinned in .github/workflows/*.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
