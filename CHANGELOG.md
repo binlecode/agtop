@@ -6,6 +6,27 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-01
+
+### Fixed
+- **RAM readout no longer fabricates a fallback figure.** When the native memory
+  read failed, `get_native_ram` returned a hardcoded `16 GB total / 8 GB
+  available`, which the dashboard rendered as if it were real. It now returns a
+  zero sentinel so the UI shows a visible `0/0 GB` ("unavailable") instead of a
+  plausible-but-wrong value. (No divide-by-zero: the consumer already guards
+  `total > 0`.)
+
+### Changed
+- Declare `rich` as a direct dependency (it is imported directly; previously it
+  was only pulled in transitively via `textual`).
+
+### Internal
+- Remove unused `DashboardConfig` fields (`usage_track_window`,
+  `core_history_window`, `max_media_bw`, `proc_filter_raw`) and the write-only
+  `Monitor.backend_name`; name the chart-history buffer cap
+  (`_CHART_HIST_MAXLEN`) and de-duplicate the bandwidth-percent calculation. No
+  behavior change.
+
 ## [1.0.0] - 2026-06-30
 
 ### Changed

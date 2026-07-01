@@ -495,9 +495,10 @@ def get_native_ram() -> VirtualMemory:
             return VirtualMemory(total=total_ram, available=available_bytes)
     except Exception:
         pass
-    return VirtualMemory(
-        total=16 * 1024 * 1024 * 1024, available=8 * 1024 * 1024 * 1024
-    )
+    # Native read failed: zero sentinel so the UI shows 0/0 GB (a visible
+    # "unavailable"), never a fabricated plausible figure. get_ram_metrics_dict
+    # already guards total > 0, so this cannot divide by zero.
+    return VirtualMemory(total=0, available=0)
 
 
 def get_native_swap() -> SwapMemory:

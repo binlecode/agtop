@@ -276,6 +276,18 @@ class MetricsUpdated(Message):
         super().__init__()
 
 
+def _bandwidth_percent(snapshot, cfg) -> float:
+    """Memory bandwidth as a percent of summed CPU+GPU channel capacity.
+
+    Returns 0 when bandwidth is unavailable. Shared by the chart and the
+    saturation alert so both normalise against the same reference.
+    """
+    total_bw_ref = max(cfg.max_cpu_bw + cfg.max_gpu_bw, 1.0)
+    if not snapshot.bandwidth_available:
+        return 0
+    return clamp_percent(snapshot.bandwidth_gbps / total_bw_ref * 100)
+
+
 class HardwareDashboard(Widget):
     """Hardware metrics panel: CPU/GPU/ANE/RAM/Power charts + status line."""
 
@@ -285,7 +297,7 @@ class HardwareDashboard(Widget):
         cfg = config
         self._chart_glyph = getattr(cfg, "chart_glyph", "dots")
 
-        maxlen = 500
+        maxlen = self._CHART_HIST_MAXLEN
         swap_maxlen = max(2, cfg.alert_sustain_samples + 1)
 
         self._ecpu_hist: deque = deque([0] * maxlen, maxlen=maxlen)
@@ -475,14 +487,9 @@ class HardwareDashboard(Widget):
 
         # Memory bandwidth chart percent (vs summed CPU+GPU channel capacity),
         # mirroring the BW alert normalisation in _compute_alerts.
-        total_bw_ref = max(cfg.max_cpu_bw + cfg.max_gpu_bw, 1.0)
-        bw_pct = (
-            clamp_percent(s.bandwidth_gbps / total_bw_ref * 100)
-            if s.bandwidth_available
-            else 0
-        )
+        bw_pct = _bandwidth_percent(s, cfg)
         if s.bandwidth_available and s.bandwidth_gbps > 0 and bw_pct == 0:
-            bw_pct = 1
+            bw_pct = 1  # nudge a tiny-but-nonzero draw off the floor for the chart
         self._bw_hist.append(bw_pct)
         self._bw_gbps_hist.append(s.bandwidth_gbps if s.bandwidth_available else 0.0)
 
@@ -592,7 +599,13 @@ class HardwareDashboard(Widget):
         self._compute_alerts(s, ram)
 
     _CORE_GRID_SEP = " │ "
-    _CORE_HIST_MAXLEN = 500
+    # History buffer depth (samples retained per metric/core). Must be >= the
+    # widest a chart can render (one sample per terminal column) so a very wide
+    # terminal never starves the sparkline. This is a space/width cap, not a
+    # time window — deliberately independent of --avg. Bump it if you expect
+    # terminals wider than this many columns.
+    _CHART_HIST_MAXLEN = 500
+    _CORE_HIST_MAXLEN = _CHART_HIST_MAXLEN
     _CORE_MIN_SPARK_CHARS = 3
 
     def _avg_max(self, hist) -> tuple[float, float]:
@@ -714,12 +727,7 @@ class HardwareDashboard(Widget):
         # The old dashing TUI fired on the hottest individual channel; since
         # SystemSnapshot only exposes the aggregate total, we normalise against
         # the sum of cpu and gpu channel references — the closest equivalent.
-        total_bw_ref = max(cfg.max_cpu_bw + cfg.max_gpu_bw, 1.0)
-        bw_pct = (
-            clamp_percent(s.bandwidth_gbps / total_bw_ref * 100)
-            if s.bandwidth_available
-            else 0
-        )
+        bw_pct = _bandwidth_percent(s, cfg)
         if s.bandwidth_available and bw_pct >= cfg.alert_bw_sat_percent:
             self._high_bw_counter += 1
         else:

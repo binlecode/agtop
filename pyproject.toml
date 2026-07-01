@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "actop"
-version = "1.0.0"
+version = "1.0.1"
 description = "Performance monitoring CLI tool for Apple Silicon"
 readme = "README.md"
 license = { text = "MIT" }
@@ -24,6 +24,7 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
   "textual>=0.60",
+  "rich>=13.0",  # imported directly (tui/widgets.py); do not rely on textual's transitive pin
 ]
 
 [project.optional-dependencies]
