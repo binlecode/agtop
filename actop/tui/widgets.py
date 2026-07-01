@@ -311,6 +311,15 @@ def _bandwidth_percent(snapshot, cfg) -> float:
     return clamp_percent(snapshot.bandwidth_gbps / total_bw_ref * 100)
 
 
+def _package_power_percent(snapshot, cfg) -> float:
+    """Package power as a percent of the SoC reference rail.
+
+    Shared by the chart and the PKG alert so both normalise against the
+    same reference.
+    """
+    return clamp_percent(snapshot.package_watts / max(cfg.package_ref_w, 1.0) * 100)
+
+
 _RESIDENCY_ORDER = ("idle", "low", "mid", "high")
 _RESIDENCY_GLYPHS = {"idle": "░", "low": "▒", "mid": "▓", "high": "█"}
 
@@ -546,7 +555,7 @@ class HardwareDashboard(Widget):
 
         # Package power chart percent (vs SoC reference rail), mirroring the
         # PKG alert normalisation in _compute_alerts.
-        pkg_pwr_pct = clamp_percent(s.package_watts / max(cfg.package_ref_w, 1.0) * 100)
+        pkg_pwr_pct = _package_power_percent(s, cfg)
         if s.package_watts > 0 and pkg_pwr_pct == 0:
             pkg_pwr_pct = 1
         self._pkgpwr_hist.append(pkg_pwr_pct)
@@ -816,7 +825,7 @@ class HardwareDashboard(Widget):
         bw_alert = self._high_bw_counter >= cfg.alert_sustain_samples
 
         # Package power
-        pkg_pct = clamp_percent(s.package_watts / max(cfg.package_ref_w, 1.0) * 100)
+        pkg_pct = _package_power_percent(s, cfg)
         if pkg_pct >= cfg.alert_package_power_percent:
             self._high_pkg_counter += 1
         else:
