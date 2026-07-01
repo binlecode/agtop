@@ -24,21 +24,22 @@ This document provides a highly detailed system design and implementation refere
 ┌──────────────────────────────────────┴───────────────────────────────────────┐
 │                           METRIC SAMPLING ENGINE                             │
 │       (sampler.py / utils.py: IOReportSampler, RAM/CPU/GPU aggregators)      │
-└──────────┬───────────────────────────┬───────────────────────────┬───────────┘
-           │                           │                           │
-           ▼                           ▼                           ▼
-┌────────────────────┐      ┌────────────────────┐      ┌────────────────────┐
-│      ioreport      │      │     native_sys     │      │        smc         │
-│ (ioreport.py:      │      │ (native_sys.py:    │      │ (smc.py: SMC-key   │
-│  libIOReport.dylib │      │  libSystem,        │      │  reads via         │
-│  bindings)         │      │  sysctl, IOKit)    │      │  AppleSMC service) │
-└────────────────────┘      └────────────────────┘      └────────────────────┘
+└──────────┬─────────────────┬─────────────────┬─────────────────┬──────────┘
+           │                 │                 │                 │
+           ▼                 ▼                 ▼                 ▼
+┌──────────────────┐┌──────────────────┐┌──────────────────┐┌──────────────────┐
+│     ioreport      ││    native_sys    ││       smc        ││   gpu_registry   │
+│ (ioreport.py:     ││ (native_sys.py:  ││ (smc.py: SMC-key ││ (gpu_registry.py:│
+│  libIOReport.dylib││  libSystem,      ││  reads via       ││  IOAccelerator   │
+│  bindings)        ││  sysctl, IOKit)  ││  AppleSMC service││  per-pid GPU time│
+└──────────────────┘└──────────────────┘└──────────────────┘└──────────────────┘
 ```
 
 ### Core Architecture Pillars:
 1. **Direct Memory Access via `ctypes`**: Zero spawning of shell commands. All virtual memory, swap space, and process listings are pulled directly from memory in microsecond ranges.
 2. **Private API Interop**: Uses the private C library `libIOReport.dylib` to capture real-time Energy Model (Joules), DVFS (residency/frequencies), and core active percentages.
 3. **Zero Sudo Requirements**: Does not require root privileges. By querying the `AppleSMC` service and targeting the safe non-root `IOReport` channels, the tool runs securely under ordinary user accounts.
+4. **Cross-Platform-Safe Imports**: All four native ctypes modules (`ioreport.py`, `native_sys.py`, `smc.py`, `gpu_registry.py`) guard their `ctypes.cdll.LoadLibrary` calls under `sys.platform == "darwin"`, so `import actop` and `python -m actop.actop --help` succeed on non-Darwin CI runners; public entry points degrade to empty/unavailable sentinels off-Darwin instead of crashing at import time.
 
 ### 1.1 Identity, Naming & Distribution Model (since v1.0.0)
 
