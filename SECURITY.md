@@ -35,5 +35,5 @@ release before reporting.
 ## Handling
 
 Verified reports are fixed through the normal **PR-only** flow and shipped as a patch
-release (see [`docs/DESIGN-cicd-release.md`](docs/DESIGN-cicd-release.md)). We credit
+release (see [`docs/DESIGN-sdlc-cicd-release.md`](docs/DESIGN-sdlc-cicd-release.md)). We credit
 reporters unless you ask to remain anonymous.
