@@ -6,119 +6,123 @@ requiring sudo or a powermetrics subprocess.
 """
 
 import ctypes
+import sys
 from collections import namedtuple
+
+_DARWIN = sys.platform == "darwin"
 
 # --- CoreFoundation bindings ---
 
-_cf = ctypes.cdll.LoadLibrary(
-    "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
-)
+if _DARWIN:
+    _cf = ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
+    )
 
-kCFStringEncodingUTF8 = 0x08000100
+    kCFStringEncodingUTF8 = 0x08000100
 
-_cf.CFRelease.argtypes = [ctypes.c_void_p]
-_cf.CFRelease.restype = None
+    _cf.CFRelease.argtypes = [ctypes.c_void_p]
+    _cf.CFRelease.restype = None
 
-_cf.CFStringCreateWithCString.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_char_p,
-    ctypes.c_uint32,
-]
-_cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+    _cf.CFStringCreateWithCString.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_uint32,
+    ]
+    _cf.CFStringCreateWithCString.restype = ctypes.c_void_p
 
-_cf.CFStringGetCString.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_char_p,
-    ctypes.c_long,
-    ctypes.c_uint32,
-]
-_cf.CFStringGetCString.restype = ctypes.c_bool
+    _cf.CFStringGetCString.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_long,
+        ctypes.c_uint32,
+    ]
+    _cf.CFStringGetCString.restype = ctypes.c_bool
 
-_cf.CFDictionaryGetValue.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_cf.CFDictionaryGetValue.restype = ctypes.c_void_p
+    _cf.CFDictionaryGetValue.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    _cf.CFDictionaryGetValue.restype = ctypes.c_void_p
 
-_cf.CFDictionaryCreateMutableCopy.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_long,
-    ctypes.c_void_p,
-]
-_cf.CFDictionaryCreateMutableCopy.restype = ctypes.c_void_p
+    _cf.CFDictionaryCreateMutableCopy.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_long,
+        ctypes.c_void_p,
+    ]
+    _cf.CFDictionaryCreateMutableCopy.restype = ctypes.c_void_p
 
-_cf.CFArrayGetCount.argtypes = [ctypes.c_void_p]
-_cf.CFArrayGetCount.restype = ctypes.c_long
+    _cf.CFArrayGetCount.argtypes = [ctypes.c_void_p]
+    _cf.CFArrayGetCount.restype = ctypes.c_long
 
-_cf.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_long]
-_cf.CFArrayGetValueAtIndex.restype = ctypes.c_void_p
+    _cf.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_long]
+    _cf.CFArrayGetValueAtIndex.restype = ctypes.c_void_p
 
-# --- IOReport bindings ---
+    # --- IOReport bindings ---
 
-_ior = ctypes.cdll.LoadLibrary("/usr/lib/libIOReport.dylib")
+    _ior = ctypes.cdll.LoadLibrary("/usr/lib/libIOReport.dylib")
 
-_ior.IOReportCopyChannelsInGroup.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-    ctypes.c_uint64,
-]
-_ior.IOReportCopyChannelsInGroup.restype = ctypes.c_void_p
+    _ior.IOReportCopyChannelsInGroup.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_uint64,
+        ctypes.c_uint64,
+        ctypes.c_uint64,
+    ]
+    _ior.IOReportCopyChannelsInGroup.restype = ctypes.c_void_p
 
-_ior.IOReportMergeChannels.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-]
-_ior.IOReportMergeChannels.restype = None
+    _ior.IOReportMergeChannels.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    _ior.IOReportMergeChannels.restype = None
 
-_ior.IOReportCreateSubscription.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-    ctypes.POINTER(ctypes.c_void_p),
-    ctypes.c_uint64,
-    ctypes.c_void_p,
-]
-_ior.IOReportCreateSubscription.restype = ctypes.c_void_p
+    _ior.IOReportCreateSubscription.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_uint64,
+        ctypes.c_void_p,
+    ]
+    _ior.IOReportCreateSubscription.restype = ctypes.c_void_p
 
-_ior.IOReportCreateSamples.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-]
-_ior.IOReportCreateSamples.restype = ctypes.c_void_p
+    _ior.IOReportCreateSamples.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    _ior.IOReportCreateSamples.restype = ctypes.c_void_p
 
-_ior.IOReportCreateSamplesDelta.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-    ctypes.c_void_p,
-]
-_ior.IOReportCreateSamplesDelta.restype = ctypes.c_void_p
+    _ior.IOReportCreateSamplesDelta.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    _ior.IOReportCreateSamplesDelta.restype = ctypes.c_void_p
 
-_ior.IOReportChannelGetGroup.argtypes = [ctypes.c_void_p]
-_ior.IOReportChannelGetGroup.restype = ctypes.c_void_p
+    _ior.IOReportChannelGetGroup.argtypes = [ctypes.c_void_p]
+    _ior.IOReportChannelGetGroup.restype = ctypes.c_void_p
 
-_ior.IOReportChannelGetSubGroup.argtypes = [ctypes.c_void_p]
-_ior.IOReportChannelGetSubGroup.restype = ctypes.c_void_p
+    _ior.IOReportChannelGetSubGroup.argtypes = [ctypes.c_void_p]
+    _ior.IOReportChannelGetSubGroup.restype = ctypes.c_void_p
 
-_ior.IOReportChannelGetChannelName.argtypes = [ctypes.c_void_p]
-_ior.IOReportChannelGetChannelName.restype = ctypes.c_void_p
+    _ior.IOReportChannelGetChannelName.argtypes = [ctypes.c_void_p]
+    _ior.IOReportChannelGetChannelName.restype = ctypes.c_void_p
 
-_ior.IOReportChannelGetUnitLabel.argtypes = [ctypes.c_void_p]
-_ior.IOReportChannelGetUnitLabel.restype = ctypes.c_void_p
+    _ior.IOReportChannelGetUnitLabel.argtypes = [ctypes.c_void_p]
+    _ior.IOReportChannelGetUnitLabel.restype = ctypes.c_void_p
 
-_ior.IOReportSimpleGetIntegerValue.argtypes = [ctypes.c_void_p, ctypes.c_int]
-_ior.IOReportSimpleGetIntegerValue.restype = ctypes.c_int64
+    _ior.IOReportSimpleGetIntegerValue.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    _ior.IOReportSimpleGetIntegerValue.restype = ctypes.c_int64
 
-_ior.IOReportStateGetCount.argtypes = [ctypes.c_void_p]
-_ior.IOReportStateGetCount.restype = ctypes.c_int32
+    _ior.IOReportStateGetCount.argtypes = [ctypes.c_void_p]
+    _ior.IOReportStateGetCount.restype = ctypes.c_int32
 
-_ior.IOReportStateGetNameForIndex.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_int32,
-]
-_ior.IOReportStateGetNameForIndex.restype = ctypes.c_void_p
+    _ior.IOReportStateGetNameForIndex.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int32,
+    ]
+    _ior.IOReportStateGetNameForIndex.restype = ctypes.c_void_p
 
-_ior.IOReportStateGetResidency.argtypes = [ctypes.c_void_p, ctypes.c_int32]
-_ior.IOReportStateGetResidency.restype = ctypes.c_int64
+    _ior.IOReportStateGetResidency.argtypes = [ctypes.c_void_p, ctypes.c_int32]
+    _ior.IOReportStateGetResidency.restype = ctypes.c_int64
 
 
 # --- Public helpers ---
