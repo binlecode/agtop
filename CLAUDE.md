@@ -45,7 +45,7 @@ This file is the single source of truth for repository guidelines, used by Claud
 
 ## Release Process
 
-`main` is **PR-only** (branch protection + `.githooks/pre-commit` redaction check and `.githooks/pre-push` guard; run `git config core.hooksPath .githooks` once). Bump the version + CHANGELOG via a PR, merge, then tag with `scripts/tag_release.sh [version]`. The Homebrew formula lives in the separate tap repo `binlecode/homebrew-actop` (not this repo); CI syncs it on tag and publishes to PyPI via OIDC. See `docs/GUIDE-cicd-release.md` for the full runbook.
+`main` is **PR-only** (branch protection + `.githooks/pre-commit` redaction check and `.githooks/pre-push` guard; run `git config core.hooksPath .githooks` once). Bump the version + CHANGELOG via a PR, merge, then tag with `scripts/tag_release.sh [version]`. The Homebrew formula lives in the separate tap repo `binlecode/homebrew-actop` (not this repo); CI syncs it on tag and publishes to PyPI via OIDC. See `docs/DESIGN-cicd-release.md` for the full runbook.
 
 ## SDLC & Architectural Documentation
 
@@ -53,7 +53,7 @@ The `docs/` directory contains essential system reviews, research, operations gu
 - `docs/REVIEW-architecture-comparison.md`: Performance and architectural comparison between `actop` (Python) and `mactop` (Go).
 - `docs/REVIEW-tui-frameworks.md`: Analysis of modern Python TUI frameworks and selection of Textual.
 - `docs/TODO-native-polling.md`: Detailed implementation plan for migrating to native macOS APIs (replacing `psutil`).
-- `docs/GUIDE-cicd-release.md`: CI/CD bottling and tap release operational runbook.
+- `docs/DESIGN-cicd-release.md`: CI/CD bottling and tap release operational runbook.
 
 ## Coding Style & Naming Conventions
 - Follow existing Python style: 4-space indentation, snake_case for functions/variables, short focused modules.
@@ -83,6 +83,7 @@ The `docs/` directory contains essential system reviews, research, operations gu
 - For parser or metric changes, include a reproducible sample input/output note in the PR description.
 
 ## Commit & Pull Request Guidelines
+- **Branch from `main`; PR strictly into `main`.** Every branch forks from `main` and targets `main`. **Never fork a feature branch off another feature branch** (no stacked PRs): if you need work that is still on an unmerged branch, wait for it to merge and re-branch from `main`. This holds especially for CI/CD and release changes — they land via a single PR into `main`, never a chained branch.
 - Use concise, imperative commit subjects (as seen in history), e.g. `Add support for M1 Ultra` or `actop/utils.py: add bandwidth of M2`.
 - Keep commits scoped to one logical change.
 - Before every commit and before every push, always run:

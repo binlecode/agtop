@@ -31,11 +31,11 @@ Everything below is feasible on the existing **sudoless in-process** stack.
 
 ## Tier 1 — headline differentiators (build on what exists; ship these as "why actop")
 
-### 1. Per-process power / energy attribution ⭐ *the flagship* — [impl-ready spec →](TODO-t1-per-process-power.md)
+### 1. Per-process power / energy attribution ⭐ *the flagship* — ✅ **SHIPPED (v1.0.2)** · [spec / as-built →](TODO-t1-per-process-power.md)
 - **What**: an **Energy/Power (`PWR`) column** in the process table — "which process is drawing the watts." Activity Monitor's "Energy Impact," but in a sudoless TUI.
 - **Why white space**: asitop/mactop/macmon/silitop show *system-total* power and a CPU%/RSS process list; **none attributes power/energy per process**. Nobody does it.
-- **Plan**: fully split out — native `proc_pid_rusage` binding, `RUsageInfoV4` struct, the `native_sys → utils → tui/widgets → export` data flow, TUI mockup, edge cases, and the functional test plan are in **[`TODO-t1-per-process-power.md`](TODO-t1-per-process-power.md)**.
-- **Effort**: S–M (revised down after a Phase-0 spike: no new native binding — attribute `cpu_watts` by each process's existing CPU-time share). **Acceptance**: per-process `PWR` tracks a known busy process (e.g. an inference run) and Σ(per-proc CPU power) reconciles to package CPU power by construction.
+- **As built** (PR #11, `d659853`): **no new native binding.** A Phase-0 spike disproved the original `proc_pid_rusage`/`RUsageInfoV4` energy path (`ri_billed_energy`/`ri_serviced_energy` stay flat at 0 for ordinary compute). Instead `PWR` partitions `SystemSnapshot.cpu_watts` by each process's **CPU-time share** — reusing the `cpu_time_ns` already gathered by `PROC_PIDTASKALLINFO` for the `CPU%` column. Data flow `native_sys → utils.get_top_processes → tui/app.py` (process table lives in `ActopApp._refresh_process_table`, not `tui/widgets.py`). Ships with `SORT_POWER`, a `Σ shown / pkg CPU` reconciliation token, and a labelled P-vs-E estimate caveat.
+- **Effort**: S–M (as delivered). **Acceptance met**: `PWR` tracks a known busy process and Σ(per-proc CPU power) reconciles to package CPU power by construction. **Remaining (optional):** `export.py` per-process output + `DESIGN-system.md` fold-in (see spec).
 
 ### 2. Bandwidth as % of SoC peak + saturation indicator ⭐ *the LLM answer*
 - **What**: render memory bandwidth not just as GB/s but as **% of this chip's theoretical peak**, with a saturation/`MEM-BOUND` indicator.

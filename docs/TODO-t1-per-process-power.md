@@ -1,6 +1,6 @@
 # TODO — Tier 1 #1: Per-process power / energy attribution ⭐
 
-**Status:** implemented (pending live visual check + PR) · **Effort:** S–M (revised down after Phase-0) · **Parent:** [`TODO-actop-feature-gap-roadmap.md`](TODO-actop-feature-gap-roadmap.md) Tier 1 #1 (the flagship differentiator).
+**Status:** ✅ **shipped in v1.0.2** — core feature merged via PR #11 (`d659853`), host-dependent tests marked CI-local via PR #12 (`dab5d4f`). **Outstanding (optional follow-ups):** (a) fold the shipped design into `DESIGN-system.md` + tick the roadmap; (b) `export.py` per-process output. · **Effort:** S–M (revised down after Phase-0) · **Parent:** [`TODO-actop-feature-gap-roadmap.md`](TODO-actop-feature-gap-roadmap.md) Tier 1 #1 (the flagship differentiator).
 
 ## Goal
 
