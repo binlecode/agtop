@@ -1,8 +1,10 @@
 # TODO — `actop` rename + `*top`-driven differentiation roadmap
 
-Status: **Part A (rename) shipped — merged to `main` in #1 on 2026-06-30; release
-publish pending.** This is the single source of truth for (A) the `agtop → actop`
-rename and (B) the mission-specific feature roadmap that justifies staying a `*top`.
+Status: **Part A (rename) — ✅ DONE.** Released as `v1.0.0` on 2026-06-30: tag pushed,
+PyPI published via OIDC, Homebrew tap synced, and validated with a real local
+`brew install`. **Part B (feature roadmap) is the only remaining open work.** This is
+the single source of truth for (A) the `agtop → actop` rename and (B) the
+mission-specific feature roadmap that justifies staying a `*top`.
 
 > **What shipped vs. the original plan (deviations):**
 > - **Clean break, no `agtop` alias.** No deprecated `agtop` command, module, or
@@ -14,8 +16,9 @@ rename and (B) the mission-specific feature roadmap that justifies staying a `*t
 >   in this repo) so `main` can be strictly PR-only — CI never pushes to `main`.
 > - **`main` is now branch-protected** (PR-only, `enforce_admins`, no force-push)
 >   plus a local `.githooks/pre-push` guard.
-> - **Still pending (maintainer actions):** PyPI name claim (`twine upload`),
->   `HOMEBREW_TAP_TOKEN` secret, optional OIDC pending-publisher, then tag `v1.0.0`.
+> - **All release actions completed (2026-06-30):** tagged `v1.0.0`, `HOMEBREW_TAP_TOKEN`
+>   secret configured, PyPI published via OIDC trusted publishing, Homebrew tap synced,
+>   local `brew install` validated. Only soft follow-up left: **announce**.
 
 ## Mission (first principles)
 
@@ -63,12 +66,13 @@ throttled right now."*
 1. ~~Rename GitHub repo~~ ✅ (redirects keep old links alive).
 2. ~~Code/package rename + tests green~~ ✅ (`ruff` clean, 86 tests pass; no alias).
 3. ~~Formula/CI/tag-script updates~~ ✅ (+ formula relocated to tap repo).
-4. **Cut the rename release** — version is `1.0.0`; **pending** `git tag v1.0.0`.
-5. **PyPI** — claim/publish `actop`: **pending** maintainer token (`twine upload`) and/or OIDC pending-publisher.
+4. ~~Cut the rename release~~ ✅ — tagged `v1.0.0` on 2026-06-30; `release-formula` + `publish-pypi` both green.
+5. ~~PyPI~~ ✅ — `actop` 1.0.0 live on PyPI via OIDC trusted publishing.
 6. ~~Update README/docs/positioning~~ ✅; **announce** pending.
 
-Remaining maintainer actions before release: `twine upload dist/*` (claim PyPI),
-add `HOMEBREW_TAP_TOKEN` secret, optional OIDC pending-publisher, then `scripts/tag_release.sh`.
+Release completed 2026-06-30 via `scripts/tag_release.sh 1.0.0`: PyPI (OIDC) and the
+Homebrew tap sync are both green, `HOMEBREW_TAP_TOKEN` is configured, and a local
+`brew install` was validated. Only soft follow-up left: **announce**.
 
 ### Risks / notes
 - In-flight `0.9.x` releases: rename landed on a clean tree, not interleaved with a release. ✅
