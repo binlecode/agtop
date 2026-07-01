@@ -14,10 +14,13 @@ authors = [
 keywords = ["actop", "apple-silicon", "ioreport", "performance-monitor"]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "License :: OSI Approved :: MIT License",
   "Operating System :: MacOS",
 ]
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.11,<3.14"
 dependencies = [
   "textual>=0.60",
 ]
