@@ -4,7 +4,7 @@ import dataclasses
 import threading
 import time
 
-from .models import CoreSample, SystemSnapshot
+from .models import _EMPTY_RESIDENCY, CoreSample, SystemSnapshot
 from .sampler import SampleResult, create_sampler
 from .utils import get_ram_metrics_dict
 
@@ -53,6 +53,9 @@ def _sample_to_snapshot(
         ecpu_max_freq_mhz=int(cm.get("E-Cluster_max_freq_Mhz", 0)),
         pcpu_max_freq_mhz=int(cm.get("P-Cluster_max_freq_Mhz", 0)),
         gpu_max_freq_mhz=int(gm.get("max_freq_MHz", 0)),
+        ecpu_residency_pct=dict(cm.get("E-Cluster_residency_pct", _EMPTY_RESIDENCY)),
+        pcpu_residency_pct=dict(cm.get("P-Cluster_residency_pct", _EMPTY_RESIDENCY)),
+        gpu_residency_pct=dict(gm.get("residency_pct", _EMPTY_RESIDENCY)),
         ram_used_gb=float(ram.get("used_GB", 0.0)),
         swap_used_gb=float(ram.get("swap_used_GB", 0.0)),
         thermal_state=sample.thermal_pressure,

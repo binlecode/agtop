@@ -68,12 +68,12 @@ Everything below is feasible on the existing **sudoless in-process** stack.
 
 ## Tier 2 — deep-silicon signals (unique to in-process IOReport; harder)
 
-### 4. DVFS P-state residency distribution
+### 4. DVFS P-state residency distribution — ✅ **SHIPPED**
 - **What**: per-cluster **time-in-each-frequency-state** histogram (how the silicon actually behaved, not just instantaneous freq).
 - **Why white space**: only your in-process IOReport access makes this cheap; powermetrics-based tools (asitop/silitop) can't easily match it.
-- **Build on**: the **DVFS table discovery already in `sampler.py`** + residency data in `ioreport.py`; new compact widget in `tui/widgets.py`.
-- **Effort**: M.
-- **Acceptance**: residency distribution shifts toward high-freq states under load and idle states at rest.
+- **As built**: `sampler._compute_residency_distribution()` buckets each cluster's per-state nanosecond residencies (summed across all cores in the cluster) into **idle / low (<40%) / mid (40–74%) / high (≥75%)** shares, relative to the cluster's own DVFS ceiling (`ecpu_freqs`/`pcpu_freqs`/`gpu_freqs` from the existing DVFS table discovery) so buckets are comparable across chips. Surfaced as `SystemSnapshot.{ecpu,pcpu,gpu}_residency_pct` dicts, rendered by `tui/widgets._format_residency_row()` as a fixed-width proportional block-density bar (`░▒▓█`) plus a percent breakdown, one row per cluster/domain. Gated by `--show-residency`/`--no-show-residency` (`DashboardConfig.show_residency`, default **on** — a startup-only density choice like `--show_cores`, not runtime-toggled).
+- **Effort**: M (as delivered).
+- **Acceptance met**: `test_residency_row_leans_high_under_sustained_load` / `test_residency_row_leans_idle_at_rest` (`tests/test_dashboard_metrics.py`) drive the real widget through a busy/high-freq snapshot and an idle/low-freq snapshot and assert the rendered distribution shifts accordingly; `test_residency_bar_has_no_gaps_or_overflow_at_fixed_width` proves the largest-remainder bar allocation is always exact.
 
 ### 5. Per-process GPU / ANE attribution (stretch)
 - **What**: extend #1 to GPU/ANE share per process.
@@ -111,4 +111,4 @@ Tier 2 #4 ships.
 # Suggested overall order
 1. ~~Rename to `actop`~~ ✅ shipped as `v1.0.0` (record in [`DESIGN-system.md` §1.1](DESIGN-system.md)) — cleared install friction + set the brand.
 2. Ship **Tier 1** (#1–#3) as the launch story ("the `*top` that shows what others don't"). ✅ **All shipped**: #1 per-process power (v1.0.2, [`DESIGN-system.md` §5.7](DESIGN-system.md)); #2 bandwidth % + `MEM-BOUND`; #3 `THROTTLING`. Tier 1 is the complete launch differentiator set.
-3. Then **Tier 2** (#4–#5); **Tier 3** only as parity demand arises.
+3. Then **Tier 2** (#4–#5). ✅ #4 DVFS residency distribution shipped; #5 per-process GPU/ANE (stretch) remains. **Tier 3** only as parity demand arises.

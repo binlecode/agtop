@@ -33,6 +33,13 @@ def build_parser():
         help="Enable per-core panels (disable with --no-show_cores)",
     )
     parser.add_argument(
+        "--show-residency",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable per-cluster DVFS residency distribution rows "
+        "(disable with --no-show-residency)",
+    )
+    parser.add_argument(
         "--power-scale",
         choices=["auto", "profile"],
         default="profile",

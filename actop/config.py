@@ -25,6 +25,7 @@ class DashboardConfig:
     power_scale: str
     chart_glyph: str
     show_cores: bool
+    show_residency: bool
 
     alert_bw_sat_percent: int
     alert_package_power_percent: int
@@ -74,6 +75,7 @@ def create_dashboard_config(args, soc_info_dict):
         power_scale=args.power_scale,
         chart_glyph=getattr(args, "chart_glyph", "dots"),
         show_cores=args.show_cores,
+        show_residency=bool(getattr(args, "show_residency", True)),
         alert_bw_sat_percent=args.alert_bw_sat_percent,
         alert_package_power_percent=args.alert_package_power_percent,
         alert_throttle_freq_percent=args.alert_throttle_freq_percent,

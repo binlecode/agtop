@@ -98,6 +98,10 @@ HELP_TEXT = """\
   Mem BW          Unified-memory bandwidth in GB/s (hidden if unavailable)
   CPU/GPU Power   Live package-rail power draw in watts
   Package Power   Total SoC power draw in watts (CPU + GPU + ANE + other rails)
+  idle/low/mid/high  DVFS residency: % of time since the last sample spent
+             idle vs. below 40% / 40-74% / ≥75% of the cluster's max
+             frequency (not just the instantaneous clock). Hidden with
+             --no-show-residency
 
 [b]Process table[/b]
 
@@ -187,6 +191,10 @@ class ActopApp(App):
         color: $text-muted;
     }
     .cpu-summary-row {
+        height: 1;
+        color: $text-muted;
+    }
+    .residency-row {
         height: 1;
         color: $text-muted;
     }

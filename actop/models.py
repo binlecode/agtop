@@ -2,6 +2,12 @@
 
 from dataclasses import dataclass, field
 
+_EMPTY_RESIDENCY = {"idle": 0, "low": 0, "mid": 0, "high": 0}
+
+
+def _default_residency() -> dict:
+    return dict(_EMPTY_RESIDENCY)
+
 
 @dataclass
 class CoreSample:
@@ -38,3 +44,11 @@ class SystemSnapshot:
     gpu_max_freq_mhz: int = 0
     e_cores: list = field(default_factory=list)  # list[CoreSample]
     p_cores: list = field(default_factory=list)  # list[CoreSample]
+    # P-state residency distribution: percent of time (ints summing to ~100)
+    # spent in idle/low/mid/high DVFS buckets since the last sample, per
+    # domain. Bucketed relative to the domain's DVFS ceiling (see
+    # sampler._compute_residency_distribution), not raw MHz, so it's
+    # comparable across chips.
+    ecpu_residency_pct: dict = field(default_factory=_default_residency)
+    pcpu_residency_pct: dict = field(default_factory=_default_residency)
+    gpu_residency_pct: dict = field(default_factory=_default_residency)

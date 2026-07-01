@@ -311,6 +311,45 @@ def _bandwidth_percent(snapshot, cfg) -> float:
     return clamp_percent(snapshot.bandwidth_gbps / total_bw_ref * 100)
 
 
+_RESIDENCY_ORDER = ("idle", "low", "mid", "high")
+_RESIDENCY_GLYPHS = {"idle": "░", "low": "▒", "mid": "▓", "high": "█"}
+
+
+def _residency_bar_widths(percentages: dict, bar_width: int) -> dict:
+    """Largest-remainder allocation of `bar_width` chars across buckets.
+
+    Plain per-bucket rounding can under/overshoot the total width (gaps or
+    overflow) when percentages don't divide evenly; this guarantees the
+    allocated widths sum to exactly `bar_width`.
+    """
+    if bar_width <= 0:
+        return {name: 0 for name in _RESIDENCY_ORDER}
+    raw = {
+        name: percentages.get(name, 0) / 100.0 * bar_width for name in _RESIDENCY_ORDER
+    }
+    floors = {name: int(raw[name]) for name in _RESIDENCY_ORDER}
+    remainder = bar_width - sum(floors.values())
+    fracs = sorted(_RESIDENCY_ORDER, key=lambda n: raw[n] - floors[n], reverse=True)
+    for name in fracs[: max(0, remainder)]:
+        floors[name] += 1
+    return floors
+
+
+def _format_residency_bar(percentages: dict, bar_width: int = 16) -> str:
+    """Fixed-width proportional block-density bar for one cluster/domain."""
+    widths = _residency_bar_widths(percentages, bar_width)
+    return "".join(_RESIDENCY_GLYPHS[name] * widths[name] for name in _RESIDENCY_ORDER)
+
+
+def _format_residency_row(label: str, percentages: dict, bar_width: int = 16) -> str:
+    """`P-CPU  [bar]  idleN lowN midN highN` DVFS residency summary line."""
+    bar = _format_residency_bar(percentages, bar_width)
+    breakdown = " ".join(
+        "{}{}".format(name, percentages.get(name, 0)) for name in _RESIDENCY_ORDER
+    )
+    return "{:<6} [{}]  {}".format(label, bar, breakdown)
+
+
 class HardwareDashboard(Widget):
     """Hardware metrics panel: CPU/GPU/ANE/RAM/Power charts + status line."""
 
@@ -383,6 +422,8 @@ class HardwareDashboard(Widget):
                 )
                 if cfg.show_cores:
                     yield Static("", id="pcores-grid", classes="core-grid")
+                if cfg.show_residency:
+                    yield Static("", id="pcpu-residency-row", classes="residency-row")
             with Vertical(classes="cpu-half"):
                 yield Static(
                     "E-CPU   0% @0MHz",
@@ -396,11 +437,15 @@ class HardwareDashboard(Widget):
                 )
                 if cfg.show_cores:
                     yield Static("", id="ecores-grid", classes="core-grid")
+                if cfg.show_residency:
+                    yield Static("", id="ecpu-residency-row", classes="residency-row")
 
         yield Static("GPU 0% @0MHz", id="gpu-label", classes="metric-label")
         yield BrailleChart(
             glyph_mode=self._chart_glyph, id="gpu-chart", classes="metric-chart"
         )
+        if cfg.show_residency:
+            yield Static("", id="gpu-residency-row", classes="residency-row")
 
         yield Static("ANE 0%", id="ane-label", classes="metric-label")
         yield BrailleChart(
@@ -554,11 +599,22 @@ class HardwareDashboard(Widget):
             cpu_temp,
             self._pct_stats_suffix(self._ecpu_hist),
         )
+        if cfg.show_residency:
+            self.query_one("#pcpu-residency-row", Static).update(
+                _format_residency_row("P-CPU", s.pcpu_residency_pct)
+            )
+            self.query_one("#ecpu-residency-row", Static).update(
+                _format_residency_row("E-CPU", s.ecpu_residency_pct)
+            )
         self.query_one("#gpu-label", Static).update(
             "GPU {}% @{}MHz{}{}".format(
                 gpu, s.gpu_freq_mhz, gpu_temp, self._pct_stats_suffix(self._gpu_hist)
             )
         )
+        if cfg.show_residency:
+            self.query_one("#gpu-residency-row", Static).update(
+                _format_residency_row("GPU", s.gpu_residency_pct)
+            )
         self.query_one("#ane-label", Static).update(
             "ANE {}% ({:.1f}W){}".format(
                 ane_pct, s.ane_watts, self._pct_stats_suffix(self._ane_hist)
