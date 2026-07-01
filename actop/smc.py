@@ -9,56 +9,60 @@ Temperature keys have SMC type "flt " (4-byte IEEE 754 float).
 
 import ctypes
 import struct
+import sys
 from typing import NamedTuple
+
+_DARWIN = sys.platform == "darwin"
 
 # --- IOKit bindings ---
 
-_iokit = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/IOKit.framework/IOKit")
+if _DARWIN:
+    _iokit = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/IOKit.framework/IOKit")
 
-_iokit.IOServiceMatching.restype = ctypes.c_void_p
-_iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
+    _iokit.IOServiceMatching.restype = ctypes.c_void_p
+    _iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
 
-_iokit.IOServiceGetMatchingServices.restype = ctypes.c_int
-_iokit.IOServiceGetMatchingServices.argtypes = [
-    ctypes.c_uint32,
-    ctypes.c_void_p,
-    ctypes.POINTER(ctypes.c_uint32),
-]
+    _iokit.IOServiceGetMatchingServices.restype = ctypes.c_int
+    _iokit.IOServiceGetMatchingServices.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
 
-_iokit.IOIteratorNext.restype = ctypes.c_uint32
-_iokit.IOIteratorNext.argtypes = [ctypes.c_uint32]
+    _iokit.IOIteratorNext.restype = ctypes.c_uint32
+    _iokit.IOIteratorNext.argtypes = [ctypes.c_uint32]
 
-_iokit.IORegistryEntryGetName.restype = ctypes.c_int
-_iokit.IORegistryEntryGetName.argtypes = [ctypes.c_uint32, ctypes.c_char_p]
+    _iokit.IORegistryEntryGetName.restype = ctypes.c_int
+    _iokit.IORegistryEntryGetName.argtypes = [ctypes.c_uint32, ctypes.c_char_p]
 
-_iokit.IOServiceOpen.restype = ctypes.c_int
-_iokit.IOServiceOpen.argtypes = [
-    ctypes.c_uint32,
-    ctypes.c_uint32,
-    ctypes.c_uint32,
-    ctypes.POINTER(ctypes.c_uint32),
-]
+    _iokit.IOServiceOpen.restype = ctypes.c_int
+    _iokit.IOServiceOpen.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
 
-_iokit.IOServiceClose.restype = ctypes.c_int
-_iokit.IOServiceClose.argtypes = [ctypes.c_uint32]
+    _iokit.IOServiceClose.restype = ctypes.c_int
+    _iokit.IOServiceClose.argtypes = [ctypes.c_uint32]
 
-_iokit.IOConnectCallStructMethod.restype = ctypes.c_int
-_iokit.IOConnectCallStructMethod.argtypes = [
-    ctypes.c_uint32,
-    ctypes.c_uint32,
-    ctypes.c_void_p,
-    ctypes.c_size_t,
-    ctypes.c_void_p,
-    ctypes.POINTER(ctypes.c_size_t),
-]
+    _iokit.IOConnectCallStructMethod.restype = ctypes.c_int
+    _iokit.IOConnectCallStructMethod.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
 
-_iokit.IOObjectRelease.restype = ctypes.c_int
-_iokit.IOObjectRelease.argtypes = [ctypes.c_uint32]
+    _iokit.IOObjectRelease.restype = ctypes.c_int
+    _iokit.IOObjectRelease.argtypes = [ctypes.c_uint32]
 
-# libc for mach_task_self
-_libc = ctypes.cdll.LoadLibrary("/usr/lib/libSystem.B.dylib")
-_libc.mach_task_self.restype = ctypes.c_uint32
-_libc.mach_task_self.argtypes = []
+    # libc for mach_task_self
+    _libc = ctypes.cdll.LoadLibrary("/usr/lib/libSystem.B.dylib")
+    _libc.mach_task_self.restype = ctypes.c_uint32
+    _libc.mach_task_self.argtypes = []
 
 
 # --- SMC KeyData structure ---
@@ -311,6 +315,9 @@ class SMCReader:
         """Lazily open connection and discover keys."""
         if self._available is not None:
             return self._available
+        if not _DARWIN:
+            self._available = False
+            return False
         self._conn = _open_smc()
         if self._conn is None:
             self._available = False

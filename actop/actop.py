@@ -33,6 +33,13 @@ def build_parser():
         help="Enable per-core panels (disable with --no-show_cores)",
     )
     parser.add_argument(
+        "--show-residency",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable per-cluster DVFS residency distribution rows "
+        "(disable with --no-show-residency)",
+    )
+    parser.add_argument(
         "--power-scale",
         choices=["auto", "profile"],
         default="profile",
@@ -67,6 +74,13 @@ def build_parser():
         type=_validate_percent_threshold,
         default=85,
         help="Package power alert threshold percent (1-100, profile-relative)",
+    )
+    parser.add_argument(
+        "--alert-throttle-freq-percent",
+        type=_validate_percent_threshold,
+        default=90,
+        help="Throttle alert: flag when a busy, hot cluster holds below this "
+        "percent of its DVFS max frequency (1-100)",
     )
     parser.add_argument(
         "--alert-swap-rise-gb",

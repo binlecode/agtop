@@ -24,6 +24,7 @@ objective — new metrics earn their place only if they stay within it.
     *   [x] **(b) Implement.** ✅ `("PMP","DCS BW")` added to the subscription; `_convert` sums all `AMCC* RD+WR` residency histograms into `total_gbps` (`_compute_bandwidth_gbps`), multi-die safe; `api.py` maps it straight to `bandwidth_gbps`. The stub byte-counter keys are gone.
     *   ⚠️ **Per-agent breakdown dropped (deliberately).** The per-agent DCS channels (`EACC/PACC/AGX/AVE/…`) **hard-cap at 32 GB/s** while `AMCC` spans ~1 TB/s — under a 350 GB/s load both P-clusters peg at 32, so per-agent attribution is unreliable at the bandwidths that matter. Only the AMCC total is trustworthy, so only the total ships.
     *   📐 **Budget held via state-extraction filter.** Subscribing to the 94-channel group is the irreducible kernel cost; the dominant *parse* cost is per-state extraction. `IOReportSubscription.delta()` now takes an `extract_states` predicate so only `AMCC*` states are read (the other ~90 channels are skipped). Measured marginal cost: **+0.39% @1s with the filter** vs. +0.70% unfiltered — the filter is what keeps it under the `<0.5% idle CPU` budget.
+*   [x] **Cross-platform-safe native ctypes imports** — done. `gpu_registry.py` and `smc.py`/`ioreport.py` performed unguarded module-scope `ctypes.cdll.LoadLibrary` calls, crashing `import actop` on non-Darwin (breaking CI's `ubuntu-latest` matrix). All three now guard the load under `sys.platform == "darwin"`, matching `native_sys.py`'s pre-existing pattern; public entry points (`get_gpu_time_by_pid()`, `SMCReader`) degrade to empty/unavailable sentinels off-Darwin instead of raising at import time.
 
 ---
 
@@ -68,5 +69,8 @@ Catch: the user must have `uv` installed — but `uv` is the de-facto standard a
 
 ## Tier 3 — Hardware & Metric Coverage
 
-*   [ ] **Unknown-SoC fallback engine** — estimate reference package power/bandwidth from PMGR voltage states when `soc_profiles.py` has no match for a new chip (M5/M6+).
-*   [ ] **Local JSON telemetry socket** — unprivileged socket/named pipe streaming metrics, so menu-bar apps and widgets can consume them without a full TUI.
+*   [ ] **Unknown-SoC fallback engine** — estimate reference package power/bandwidth from PMGR voltage states when `soc_profiles.py` has no match for a new chip (M5/M6+). Today `get_soc_profile()` (`soc_profiles.py`) falls back to *static* per-tier defaults (base/Pro/Max/Ultra); this item is the dynamic, voltage-state-derived successor.
+*   [~] **Headless metrics export** — largely shipped in `actop/export.py`; two CLI-exposed backends let consumers read metrics without the full TUI:
+    *   [x] **NDJSON stream** (`--json` → `run_json_stream`): line-delimited `SystemSnapshot` JSON on stdout.
+    *   [x] **Prometheus endpoint** (`--serve PORT` → `serve_prometheus`): an unprivileged HTTP `/metrics` socket for scrapers and dashboards.
+    *   [ ] **Dedicated JSON push socket / named pipe** — the one transport not yet built. Only pursue if a concrete menu-bar/widget consumer needs a persistent local push channel that the Prometheus scrape endpoint and NDJSON stream don't already cover.

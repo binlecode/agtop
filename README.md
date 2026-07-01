@@ -49,6 +49,10 @@ How the sudoless, in-process field stacks up:
 |---|:---:|:---:|:---:|
 | Unprivileged, in-process (no sudo) | ✅ | ✅ | ✅ |
 | CPU/GPU/ANE power · temps · bandwidth | ✅ | ✅ | ✅ |
+| Per-process power/energy attribution (`PWR` column) | ✅ | — | — |
+| Bandwidth % of SoC peak + `MEM-BOUND` saturation alert | ✅ | — | — |
+| Throttle-state indicator (`THROTTLING:CPU/GPU`) | ✅ | — | — |
+| DVFS P-state residency distribution (per-cluster) | ✅ | — | — |
 | Python API (`Monitor`/`Profiler`, `to_pandas()`) | ✅ | — | — |
 | SoC-accurate power scaling (M1–M4 profiles) | ✅ | rolling peak | rolling peak |
 | Session energy (∫ package power) | ✅ | — | — |
@@ -290,6 +294,7 @@ graph TD
 - **Thermal shows "Unknown"**: ObjC runtime failed to read `NSProcessInfo.thermalState` (unexpected on macOS 12+).
 - **Frequencies show 0 MHz**: DVFS table discovery failed. File an issue with `sysctl -n machdep.cpu.brand_string` output.
 - **Metric differences vs other tools**: expected due to sampling window and source timing differences.
+- **ANE reads `0% (0.0W)`**: expected when idle — the Neural Engine is power-gated unless an app runs CoreML inference. To confirm the gauge works, drive a load with `scripts/ane_load.py` (see Development) or trigger on-device ML (Photos library scan, Live Text, dictation). Note: MLX/Ollama/llama.cpp use the **GPU**, not the ANE.
 
 ## Development
 
@@ -299,6 +304,18 @@ graph TD
 .venv/bin/python -m actop.actop                # run with defaults
 .venv/bin/pytest -q                            # run tests
 .venv/bin/python -m ruff check . && .venv/bin/python -m ruff format .   # lint + format
+```
+
+### Exercising the ANE gauge
+
+The Neural Engine idles at `0% (0.0W)` unless something runs CoreML inference.
+`scripts/ane_load.py` generates a deterministic ANE load so you can verify the
+gauge. Its deps (`coremltools`, `numpy`) are macOS-only and heavy, so they live
+in a separate `ane` extra — deliberately kept out of `dev` so Linux CI stays lean.
+
+```bash
+.venv/bin/python -m pip install -e ".[ane]"     # one-time, macOS only
+.venv/bin/python scripts/ane_load.py --duration 60   # then watch actop's ANE gauge
 ```
 
 ## Release

@@ -261,11 +261,6 @@ class BrailleChart(Widget):
         return out
 
 
-def _braille_spark(history, width_chars: int = 8) -> str:
-    """Inline braille sparkline, 1 sample per character, 4 levels per cell."""
-    return _inline_spark(history=history, width_chars=width_chars, glyph_mode="dots")
-
-
 class MetricsUpdated(Message):
     """Posted by ActopApp when a new hardware snapshot is ready."""
 
@@ -274,6 +269,29 @@ class MetricsUpdated(Message):
         self.ram = ram  # from get_ram_metrics_dict()
         self.processes = processes  # {"cpu": [...], "memory": [...]}
         super().__init__()
+
+
+# Throttle detection gates (heuristics). A cluster is only "throttling" when it is
+# working hard yet held below its DVFS ceiling while hot — an idle or power-capped
+# cluster at low freq is not throttling. The thermal-pressure signal is the primary
+# "hot" test; the die-temp gate is a fallback for machines whose SMC temps read 0.
+_THROTTLE_UTIL_GATE = 80.0  # percent: cluster must be at least this busy
+_THROTTLE_TEMP_C = 90.0  # °C: die-temp fallback when thermal_state stays Nominal
+
+
+def _domain_throttling(util, freq, max_freq, temp, thermal_state, cfg) -> bool:
+    """True when a silicon domain is busy + slow + hot (see gates above).
+
+    slow = current freq below `alert_throttle_freq_percent`% of the DVFS ceiling.
+    Returns False when the ceiling is unknown (max_freq <= 0) — the ratio is
+    uncomputable, so we cannot claim throttling.
+    """
+    if max_freq <= 0:
+        return False
+    busy = util >= _THROTTLE_UTIL_GATE
+    slow = freq < (cfg.alert_throttle_freq_percent / 100.0) * max_freq
+    hot = thermal_state not in ("Nominal", "Unknown") or temp >= _THROTTLE_TEMP_C
+    return busy and slow and hot
 
 
 def _bandwidth_percent(snapshot, cfg) -> float:
@@ -286,6 +304,54 @@ def _bandwidth_percent(snapshot, cfg) -> float:
     if not snapshot.bandwidth_available:
         return 0
     return clamp_percent(snapshot.bandwidth_gbps / total_bw_ref * 100)
+
+
+def _package_power_percent(snapshot, cfg) -> float:
+    """Package power as a percent of the SoC reference rail.
+
+    Shared by the chart and the PKG alert so both normalise against the
+    same reference.
+    """
+    return clamp_percent(snapshot.package_watts / max(cfg.package_ref_w, 1.0) * 100)
+
+
+_RESIDENCY_ORDER = ("idle", "low", "mid", "high")
+_RESIDENCY_GLYPHS = {"idle": "░", "low": "▒", "mid": "▓", "high": "█"}
+
+
+def _residency_bar_widths(percentages: dict, bar_width: int) -> dict:
+    """Largest-remainder allocation of `bar_width` chars across buckets.
+
+    Plain per-bucket rounding can under/overshoot the total width (gaps or
+    overflow) when percentages don't divide evenly; this guarantees the
+    allocated widths sum to exactly `bar_width`.
+    """
+    if bar_width <= 0:
+        return {name: 0 for name in _RESIDENCY_ORDER}
+    raw = {
+        name: percentages.get(name, 0) / 100.0 * bar_width for name in _RESIDENCY_ORDER
+    }
+    floors = {name: int(raw[name]) for name in _RESIDENCY_ORDER}
+    remainder = bar_width - sum(floors.values())
+    fracs = sorted(_RESIDENCY_ORDER, key=lambda n: raw[n] - floors[n], reverse=True)
+    for name in fracs[: max(0, remainder)]:
+        floors[name] += 1
+    return floors
+
+
+def _format_residency_bar(percentages: dict, bar_width: int = 16) -> str:
+    """Fixed-width proportional block-density bar for one cluster/domain."""
+    widths = _residency_bar_widths(percentages, bar_width)
+    return "".join(_RESIDENCY_GLYPHS[name] * widths[name] for name in _RESIDENCY_ORDER)
+
+
+def _format_residency_row(label: str, percentages: dict, bar_width: int = 16) -> str:
+    """`P-CPU  [bar]  idleN lowN midN highN` DVFS residency summary line."""
+    bar = _format_residency_bar(percentages, bar_width)
+    breakdown = " ".join(
+        "{}{}".format(name, percentages.get(name, 0)) for name in _RESIDENCY_ORDER
+    )
+    return "{:<6} [{}]  {}".format(label, bar, breakdown)
 
 
 class HardwareDashboard(Widget):
@@ -330,6 +396,8 @@ class HardwareDashboard(Widget):
 
         self._high_bw_counter: int = 0
         self._high_pkg_counter: int = 0
+        self._throttle_cpu_counter: int = 0
+        self._throttle_gpu_counter: int = 0
 
         # Cumulative session energy (joules), integrated as package_watts ×
         # interval each frame — the "what did this run cost" readout, mirroring
@@ -358,6 +426,8 @@ class HardwareDashboard(Widget):
                 )
                 if cfg.show_cores:
                     yield Static("", id="pcores-grid", classes="core-grid")
+                if cfg.show_residency:
+                    yield Static("", id="pcpu-residency-row", classes="residency-row")
             with Vertical(classes="cpu-half"):
                 yield Static(
                     "E-CPU   0% @0MHz",
@@ -371,11 +441,15 @@ class HardwareDashboard(Widget):
                 )
                 if cfg.show_cores:
                     yield Static("", id="ecores-grid", classes="core-grid")
+                if cfg.show_residency:
+                    yield Static("", id="ecpu-residency-row", classes="residency-row")
 
         yield Static("GPU 0% @0MHz", id="gpu-label", classes="metric-label")
         yield BrailleChart(
             glyph_mode=self._chart_glyph, id="gpu-chart", classes="metric-chart"
         )
+        if cfg.show_residency:
+            yield Static("", id="gpu-residency-row", classes="residency-row")
 
         yield Static("ANE 0%", id="ane-label", classes="metric-label")
         yield BrailleChart(
@@ -476,7 +550,7 @@ class HardwareDashboard(Widget):
 
         # Package power chart percent (vs SoC reference rail), mirroring the
         # PKG alert normalisation in _compute_alerts.
-        pkg_pwr_pct = clamp_percent(s.package_watts / max(cfg.package_ref_w, 1.0) * 100)
+        pkg_pwr_pct = _package_power_percent(s, cfg)
         if s.package_watts > 0 and pkg_pwr_pct == 0:
             pkg_pwr_pct = 1
         self._pkgpwr_hist.append(pkg_pwr_pct)
@@ -529,11 +603,22 @@ class HardwareDashboard(Widget):
             cpu_temp,
             self._pct_stats_suffix(self._ecpu_hist),
         )
+        if cfg.show_residency:
+            self.query_one("#pcpu-residency-row", Static).update(
+                _format_residency_row("P-CPU", s.pcpu_residency_pct)
+            )
+            self.query_one("#ecpu-residency-row", Static).update(
+                _format_residency_row("E-CPU", s.ecpu_residency_pct)
+            )
         self.query_one("#gpu-label", Static).update(
             "GPU {}% @{}MHz{}{}".format(
                 gpu, s.gpu_freq_mhz, gpu_temp, self._pct_stats_suffix(self._gpu_hist)
             )
         )
+        if cfg.show_residency:
+            self.query_one("#gpu-residency-row", Static).update(
+                _format_residency_row("GPU", s.gpu_residency_pct)
+            )
         self.query_one("#ane-label", Static).update(
             "ANE {}% ({:.1f}W){}".format(
                 ane_pct, s.ane_watts, self._pct_stats_suffix(self._ane_hist)
@@ -735,12 +820,40 @@ class HardwareDashboard(Widget):
         bw_alert = self._high_bw_counter >= cfg.alert_sustain_samples
 
         # Package power
-        pkg_pct = clamp_percent(s.package_watts / max(cfg.package_ref_w, 1.0) * 100)
+        pkg_pct = _package_power_percent(s, cfg)
         if pkg_pct >= cfg.alert_package_power_percent:
             self._high_pkg_counter += 1
         else:
             self._high_pkg_counter = 0
         pkg_alert = self._high_pkg_counter >= cfg.alert_sustain_samples
+
+        # Thermal throttle, per silicon domain (P-cluster CPU, GPU): busy + held
+        # below the DVFS ceiling + hot. Sustained like the other alerts.
+        if _domain_throttling(
+            s.pcpu_util_pct,
+            s.pcpu_freq_mhz,
+            s.pcpu_max_freq_mhz,
+            s.cpu_temp_c,
+            s.thermal_state,
+            cfg,
+        ):
+            self._throttle_cpu_counter += 1
+        else:
+            self._throttle_cpu_counter = 0
+        cpu_throttle = self._throttle_cpu_counter >= cfg.alert_sustain_samples
+
+        if _domain_throttling(
+            s.gpu_util_pct,
+            s.gpu_freq_mhz,
+            s.gpu_max_freq_mhz,
+            s.gpu_temp_c,
+            s.thermal_state,
+            cfg,
+        ):
+            self._throttle_gpu_counter += 1
+        else:
+            self._throttle_gpu_counter = 0
+        gpu_throttle = self._throttle_gpu_counter >= cfg.alert_sustain_samples
 
         # Swap rise
         swap_history_points = cfg.alert_sustain_samples + 1
@@ -766,8 +879,13 @@ class HardwareDashboard(Widget):
         active_alerts = []
         if thermal_alert:
             active_alerts.append("THERMAL")
+        throttled = [
+            name for name, on in (("CPU", cpu_throttle), ("GPU", gpu_throttle)) if on
+        ]
+        if throttled:
+            active_alerts.append("THROTTLING:{}".format(",".join(throttled)))
         if bw_alert:
-            active_alerts.append("BW>{}%".format(cfg.alert_bw_sat_percent))
+            active_alerts.append("MEM-BOUND>{}%".format(cfg.alert_bw_sat_percent))
         if swap_alert:
             active_alerts.append("SWAP+{:.1f}G".format(swap_rise))
         if pkg_alert:

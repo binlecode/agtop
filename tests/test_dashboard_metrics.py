@@ -22,7 +22,7 @@ from actop.models import SystemSnapshot
 from actop.tui.widgets import BrailleChart, HardwareDashboard, MetricsUpdated
 
 
-def _config() -> DashboardConfig:
+def _config(show_residency: bool = True) -> DashboardConfig:
     return DashboardConfig(
         sample_interval=1,
         avg_window=30,
@@ -37,8 +37,10 @@ def _config() -> DashboardConfig:
         power_scale="profile",
         chart_glyph="dots",
         show_cores=False,
+        show_residency=show_residency,
         alert_bw_sat_percent=85,
         alert_package_power_percent=85,
+        alert_throttle_freq_percent=90,
         alert_swap_rise_gb=1.0,
         alert_sustain_samples=3,
         subsamples=1,
@@ -49,8 +51,24 @@ def _config() -> DashboardConfig:
 
 
 def _snapshot(
-    bandwidth_gbps: float, bandwidth_available: bool, package_watts: float = 21.5
+    bandwidth_gbps: float,
+    bandwidth_available: bool,
+    package_watts: float = 21.5,
+    *,
+    pcpu_util_pct: float = 20.0,
+    gpu_util_pct: float = 30.0,
+    pcpu_freq_mhz: int = 3200,
+    gpu_freq_mhz: int = 900,
+    pcpu_max_freq_mhz: int = 3200,
+    gpu_max_freq_mhz: int = 1000,
+    cpu_temp_c: float = 0.0,
+    gpu_temp_c: float = 0.0,
+    thermal_state: str = "Nominal",
+    ecpu_residency_pct: dict = None,
+    pcpu_residency_pct: dict = None,
+    gpu_residency_pct: dict = None,
 ) -> SystemSnapshot:
+    idle_residency = {"idle": 100, "low": 0, "mid": 0, "high": 0}
     return SystemSnapshot(
         timestamp=0.0,
         cpu_watts=8.0,
@@ -58,18 +76,23 @@ def _snapshot(
         ane_watts=0.0,
         package_watts=package_watts,
         ecpu_util_pct=10.0,
-        pcpu_util_pct=20.0,
-        gpu_util_pct=30.0,
-        cpu_temp_c=0.0,
-        gpu_temp_c=0.0,
+        pcpu_util_pct=pcpu_util_pct,
+        gpu_util_pct=gpu_util_pct,
+        cpu_temp_c=cpu_temp_c,
+        gpu_temp_c=gpu_temp_c,
         ecpu_freq_mhz=1200,
-        pcpu_freq_mhz=3200,
-        gpu_freq_mhz=900,
+        pcpu_freq_mhz=pcpu_freq_mhz,
+        gpu_freq_mhz=gpu_freq_mhz,
         ram_used_gb=18.0,
         swap_used_gb=0.0,
-        thermal_state="Nominal",
+        thermal_state=thermal_state,
         bandwidth_gbps=bandwidth_gbps,
         bandwidth_available=bandwidth_available,
+        pcpu_max_freq_mhz=pcpu_max_freq_mhz,
+        gpu_max_freq_mhz=gpu_max_freq_mhz,
+        ecpu_residency_pct=dict(ecpu_residency_pct or idle_residency),
+        pcpu_residency_pct=dict(pcpu_residency_pct or idle_residency),
+        gpu_residency_pct=dict(gpu_residency_pct or idle_residency),
     )
 
 
@@ -93,9 +116,9 @@ class _Host(App):
         yield self._dashboard
 
 
-async def _drive(snapshots):
+async def _drive(snapshots, config=None):
     """Mount the dashboard, push each snapshot, return the final widget state."""
-    dash = HardwareDashboard(config=_config())
+    dash = HardwareDashboard(config=config or _config())
     app = _Host(dash)
     async with app.run_test() as pilot:
         for snap in snapshots:
@@ -103,13 +126,26 @@ async def _drive(snapshots):
                 MetricsUpdated(snap, dict(_RAM), {"cpu": [], "memory": []})
             )
             await pilot.pause()
-        return {
+        state = {
             "pkg_label": str(dash.query_one("#pkgpwr-label", Static).render()),
             "bw_label": str(dash.query_one("#bw-label", Static).render()),
             "bw_label_display": dash.query_one("#bw-label", Static).display,
             "bw_chart_display": dash.query_one("#bw-chart", BrailleChart).display,
             "status": str(dash.query_one("#status-line", Static).render()),
         }
+        residency_ids = (
+            "pcpu-residency-row",
+            "ecpu-residency-row",
+            "gpu-residency-row",
+        )
+        for widget_id in residency_ids:
+            try:
+                widget = dash.query_one("#" + widget_id, Static)
+            except Exception:
+                state[widget_id.replace("-", "_")] = None
+            else:
+                state[widget_id.replace("-", "_")] = str(widget.render())
+        return state
 
 
 def test_package_power_headline_renders_total_soc_watts():
@@ -162,6 +198,116 @@ def test_status_line_reports_cumulative_session_energy():
         )
     )
     assert "energy 33mWh" in state["status"]
+
+
+def test_throttling_fires_when_busy_slow_and_hot():
+    # A busy P-cluster held well below its DVFS ceiling while thermals are
+    # elevated must raise THROTTLING:CPU once sustained past alert_sustain_samples.
+    busy_slow_hot = [
+        _snapshot(
+            0.0,
+            False,
+            pcpu_util_pct=95.0,
+            pcpu_freq_mhz=2000,  # 2000/3200 = 62% < 90%
+            pcpu_max_freq_mhz=3200,
+            thermal_state="Serious",
+        )
+        for _ in range(4)  # > alert_sustain_samples (3)
+    ]
+    state = asyncio.run(_drive(busy_slow_hot))
+    assert "THROTTLING:CPU" in state["status"]
+
+
+def test_throttling_clears_when_frequency_recovers():
+    # After sustained throttling, a frame where the clock returns to the ceiling
+    # must clear the indicator (counter resets, so the token disappears).
+    busy_slow_hot = _snapshot(
+        0.0,
+        False,
+        pcpu_util_pct=95.0,
+        pcpu_freq_mhz=2000,
+        pcpu_max_freq_mhz=3200,
+        thermal_state="Serious",
+    )
+    recovered = _snapshot(
+        0.0,
+        False,
+        pcpu_util_pct=95.0,
+        pcpu_freq_mhz=3200,  # back at ceiling -> not "slow"
+        pcpu_max_freq_mhz=3200,
+        thermal_state="Nominal",
+    )
+    state = asyncio.run(_drive([busy_slow_hot] * 4 + [recovered]))
+    assert "THROTTLING" not in state["status"]
+
+
+def test_throttling_does_not_fire_when_idle_at_low_freq():
+    # Low frequency at low utilization is normal idle behaviour, not throttling —
+    # the load gate must suppress a false positive even across many frames.
+    idle_low_freq = [
+        _snapshot(
+            0.0,
+            False,
+            pcpu_util_pct=5.0,  # below the load gate
+            pcpu_freq_mhz=600,
+            pcpu_max_freq_mhz=3200,
+            thermal_state="Nominal",
+        )
+        for _ in range(5)
+    ]
+    state = asyncio.run(_drive(idle_low_freq))
+    assert "THROTTLING" not in state["status"]
+
+
+def test_residency_row_leans_high_under_sustained_load():
+    # Acceptance: "residency distribution shifts toward high-freq states
+    # under load." A cluster pinned mostly in the high bucket must render a
+    # dominant 'high' share, not idle.
+    busy = _snapshot(
+        0.0,
+        False,
+        pcpu_residency_pct={"idle": 2, "low": 3, "mid": 10, "high": 85},
+    )
+    state = asyncio.run(_drive([busy]))
+    assert "high85" in state["pcpu_residency_row"]
+    assert "P-CPU" in state["pcpu_residency_row"]
+
+
+def test_residency_row_leans_idle_at_rest():
+    # Acceptance: "... and idle states at rest." An at-rest cluster must
+    # render a dominant 'idle' share.
+    idle = _snapshot(
+        0.0,
+        False,
+        ecpu_residency_pct={"idle": 92, "low": 8, "mid": 0, "high": 0},
+    )
+    state = asyncio.run(_drive([idle]))
+    assert "idle92" in state["ecpu_residency_row"]
+
+
+def test_residency_bar_has_no_gaps_or_overflow_at_fixed_width():
+    # Largest-remainder allocation must always fill the bar exactly: the
+    # glyph count inside the brackets must equal the configured bar width,
+    # even for percentages that don't divide evenly.
+    skewed = _snapshot(
+        0.0,
+        False,
+        gpu_residency_pct={"idle": 33, "low": 34, "mid": 17, "high": 16},
+    )
+    state = asyncio.run(_drive([skewed]))
+    bar = re.search(r"\[(.*?)\]", state["gpu_residency_row"]).group(1)
+    assert len(bar) == 16
+
+
+def test_residency_rows_hidden_when_show_residency_disabled():
+    # show_residency is a startup-only density choice baked into compose(),
+    # like show_cores — disabled means the rows never exist at all.
+    state = asyncio.run(
+        _drive([_snapshot(0.0, False)], config=_config(show_residency=False))
+    )
+    assert state["pcpu_residency_row"] is None
+    assert state["ecpu_residency_row"] is None
+    assert state["gpu_residency_row"] is None
 
 
 def test_status_line_surfaces_chart_time_window_span():

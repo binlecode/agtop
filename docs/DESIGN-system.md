@@ -24,21 +24,22 @@ This document provides a highly detailed system design and implementation refere
 ┌──────────────────────────────────────┴───────────────────────────────────────┐
 │                           METRIC SAMPLING ENGINE                             │
 │       (sampler.py / utils.py: IOReportSampler, RAM/CPU/GPU aggregators)      │
-└──────────┬───────────────────────────┬───────────────────────────┬───────────┘
-           │                           │                           │
-           ▼                           ▼                           ▼
-┌────────────────────┐      ┌────────────────────┐      ┌────────────────────┐
-│      ioreport      │      │     native_sys     │      │        smc         │
-│ (ioreport.py:      │      │ (native_sys.py:    │      │ (smc.py: SMC-key   │
-│  libIOReport.dylib │      │  libSystem,        │      │  reads via         │
-│  bindings)         │      │  sysctl, IOKit)    │      │  AppleSMC service) │
-└────────────────────┘      └────────────────────┘      └────────────────────┘
+└──────────┬─────────────────┬─────────────────┬─────────────────┬──────────┘
+           │                 │                 │                 │
+           ▼                 ▼                 ▼                 ▼
+┌──────────────────┐┌──────────────────┐┌──────────────────┐┌──────────────────┐
+│     ioreport      ││    native_sys    ││       smc        ││   gpu_registry   │
+│ (ioreport.py:     ││ (native_sys.py:  ││ (smc.py: SMC-key ││ (gpu_registry.py:│
+│  libIOReport.dylib││  libSystem,      ││  reads via       ││  IOAccelerator   │
+│  bindings)        ││  sysctl, IOKit)  ││  AppleSMC service││  per-pid GPU time│
+└──────────────────┘└──────────────────┘└──────────────────┘└──────────────────┘
 ```
 
 ### Core Architecture Pillars:
 1. **Direct Memory Access via `ctypes`**: Zero spawning of shell commands. All virtual memory, swap space, and process listings are pulled directly from memory in microsecond ranges.
 2. **Private API Interop**: Uses the private C library `libIOReport.dylib` to capture real-time Energy Model (Joules), DVFS (residency/frequencies), and core active percentages.
 3. **Zero Sudo Requirements**: Does not require root privileges. By querying the `AppleSMC` service and targeting the safe non-root `IOReport` channels, the tool runs securely under ordinary user accounts.
+4. **Cross-Platform-Safe Imports**: All four native ctypes modules (`ioreport.py`, `native_sys.py`, `smc.py`, `gpu_registry.py`) guard their `ctypes.cdll.LoadLibrary` calls under `sys.platform == "darwin"`, so `import actop` and `python -m actop.actop --help` succeed on non-Darwin CI runners; public entry points degrade to empty/unavailable sentinels off-Darwin instead of crashing at import time.
 
 ### 1.1 Identity, Naming & Distribution Model (since v1.0.0)
 
@@ -174,7 +175,7 @@ In contrast, the GPU stats channel only exposes a single unified channel named *
 
 These boundaries are intentional and recorded here so they are not mistaken for oversights or re-litigated. actop's sampling layer deliberately captures only what the IOReport-first, unprivileged, SoC-power thesis can support cleanly:
 
-- **Memory bandwidth is exposed as a single aggregate.** `SystemSnapshot.bandwidth_gbps` is the total (read + write) across channels, which is what the Mem BW readout and `BW>` alert consume (see §5.3). A per-channel breakdown (CPU / GPU / media / DCS) is feasible in principle but would require the sampler to surface per-channel figures rather than the aggregate — deferred as a sampler change, not a presentation gap.
+- **Memory bandwidth is exposed as a single aggregate.** `SystemSnapshot.bandwidth_gbps` is the total (read + write) across channels, which is what the Mem BW readout and `MEM-BOUND>` alert consume (see §5.3). A per-channel breakdown (CPU / GPU / media / DCS) is feasible in principle but would require the sampler to surface per-channel figures rather than the aggregate — deferred as a sampler change, not a presentation gap.
 - **Network / disk I/O is a non-goal.** Present in `psutil`-based tools (mactop / btop) but orthogonal to the IOReport-first SoC-power focus; adding it would reintroduce the `psutil` dependency surface actop is moving away from.
 - **Per-process CPU power *is* attributed (since v1.0.2); GPU / ANE / true-energy per process are not.** actop partitions `SystemSnapshot.cpu_watts` across processes by each PID's CPU-time share (the `PWR` column, see §5.7) — an estimate, since a P-core-second draws more than an E-core-second, but one that reconciles to package CPU power by construction. This is white space no direct peer (asitop / mactop / macmon) fills. What remains unavailable sudoless: per-process **GPU / ANE** power, and a true hardware per-process **energy** counter (`proc_pid_rusage`'s `ri_*_energy` fields stay flat at 0 for ordinary compute — a Phase-0 spike disproved that path). Per-process CPU/RSS/threads come from the native process enumeration in §2.3.
 - **GPU per-core metrics** are a hardware limitation, not a scope choice — see §3.4.
@@ -244,10 +245,10 @@ The `BrailleChart` widget is designed to render charts efficiently inside Termin
 ### 5.3 Metric Label Context (cur / avg / max)
 Each live reading carries rolling context, matching frontier monitors (btop / bottom / macmon). The dashboard retains 500-sample deques per metric; histories are zero-padded for chart right-alignment, so avg/max ignore the leading padding (`_avg_max` reads only the last `_sample_count` real samples). Avg is taken over the `--avg` window; max is the session peak. Every stat carries its unit (`avg N% \u00B7 max N%`, watt labels show `W`, bandwidth shows `GB/s`) so it stays unambiguous beside a headline in a different unit (MHz / GB / W / GB/s). Applied to per-cluster CPU summary rows, GPU, ANE, RAM, memory-bandwidth, and CPU/GPU/package power labels.
 
-The dashboard also surfaces two SoC-level headline metrics whose data already flowed through `SystemSnapshot` but was previously only consumed by alerts: **Mem BW** (unified-memory bandwidth in GB/s, the headline bottleneck for LLM inference) and **Package Power** (total SoC draw = CPU + GPU + ANE + other rails). Their chart percents reuse the same normalisation as the `BW>` / `PKG>` alerts (bandwidth vs summed CPU+GPU channel capacity; package vs `package_ref_w`). The Mem BW row is hidden when `SystemSnapshot.bandwidth_available` is false (no DCS channel on the platform).
+The dashboard also surfaces two SoC-level headline metrics whose data already flowed through `SystemSnapshot` but was previously only consumed by alerts: **Mem BW** (unified-memory bandwidth in GB/s, the headline bottleneck for LLM inference) and **Package Power** (total SoC draw = CPU + GPU + ANE + other rails). Their chart percents reuse the same normalisation as the `MEM-BOUND>` / `PKG>` alerts (bandwidth vs summed CPU+GPU channel capacity; package vs `package_ref_w`). The Mem BW row is hidden when `SystemSnapshot.bandwidth_available` is false (no DCS channel on the platform).
 
 ### 5.4 Help Overlay (`HelpScreen`)
-A `ModalScreen` bound to `?` (toggle), `esc`, and `q` documents the keybindings, every metric label, and \u2014 critically \u2014 the otherwise-undocumented status-line tokens (`span`, `energy`, `THERMAL`, `BW>`, `PKG>`, `SWAP+`) and the color-degradation / `NO_COLOR` behavior. The `energy` token is the cumulative session energy (\u222b package power dt since launch, displayed in mWh/Wh), the live-TUI counterpart to `Profiler.total_package_joules`.
+A `ModalScreen` bound to `?` (toggle), `esc`, and `q` documents the keybindings, every metric label, and \u2014 critically \u2014 the otherwise-undocumented status-line tokens (`span`, `energy`, `THERMAL`, `THROTTLING:CPU/GPU`, `MEM-BOUND>`, `PKG>`, `SWAP+`) and the color-degradation / `NO_COLOR` behavior. The `THROTTLING` token fires when a silicon domain is busy yet held below its DVFS max frequency while hot (see §5.3 alert path). The `energy` token is the cumulative session energy (\u222b package power dt since launch, displayed in mWh/Wh), the live-TUI counterpart to `Profiler.total_package_joules`.
 
 ### 5.5 Alert Counters & Threshold Validation
 To alert users of resource bottlenecks, the `HardwareDashboard` monitors and tracks resource usage:
@@ -263,12 +264,14 @@ The same `Monitor` sampling layer feeds two non-TUI output modes, routed from `m
 
 > The export modes are `SystemSnapshot`-only today; per-process rows (§5.7) are **not** exported. Adding them means bounding cardinality (top-N, `comm` label not `pid`) — tracked in `TODO-actop-feature-gap-roadmap.md`, not yet built.
 
-### 5.7 Per-Process Power Attribution (`PWR`) — shipped v1.0.2
-The process table's `PWR` column answers "which process is drawing the watts" sudoless — Activity Monitor's "Energy Impact" without `sudo`. No new native binding was added: it reuses the per-PID CPU-time deltas already computed for `CPU%` (§2.3).
-- **Model**: `PWR = (proc CPU-time Δ / Σ all-procs CPU-time Δ) × SystemSnapshot.cpu_watts`. This is a **partition** of package CPU power, so `Σ(PWR)` reconciles to `cpu_watts` by construction — surfaced as a `Σ shown N.NW / pkg CPU M.MW` token in the table's border subtitle.
-- **Labelled estimate**: attribution is by wall CPU-time, so a process pinned to E-cores is over-attributed and one on P-cores under-attributed (DVFS scales it further). The token carries an `est` marker and the `HelpScreen` documents the P-vs-E caveat. A cycle-/per-core-power-weighted refinement is a future improvement.
-- **Lifecycle**: first sample / just-resumed / dead PID render `–`, never a wrong `0.0`. A fully idle poll (Σ Δ = 0) yields all-zero shares with no divide-by-zero.
-- **Where it lives**: `utils.get_top_processes` emits `cpu_time_share` (watts stay out of `utils`); the process table (`ActopApp._refresh_process_table` in `tui/app.py`) multiplies by `snapshot.cpu_watts` and adds the `SORT_POWER` sort mode. Rejected alternatives (`proc_pid_rusage` energy fields, `TASK_POWER_INFO_V2`) and the validating spike are recorded in git history (PR #11).
+### 5.7 Per-Process Power Attribution (`PWR`) — CPU shipped v1.0.2, GPU shipped v1.2.0
+The process table's `PWR` column answers "which process is drawing the watts" sudoless — Activity Monitor's "Energy Impact" without `sudo`. The CPU half reuses the per-PID CPU-time deltas already computed for `CPU%` (§2.3); the GPU half adds one new native binding, `gpu_registry.py`.
+- **CPU model**: `PWR_cpu = (proc CPU-time Δ / Σ all-procs CPU-time Δ) × SystemSnapshot.cpu_watts`. This is a **partition** of package CPU power, so `Σ(PWR_cpu)` reconciles to `cpu_watts` by construction.
+- **GPU model**: `gpu_registry.get_gpu_time_by_pid()` reads each `AGXDeviceUserClient`'s `IOUserClientCreator`/`AppUsage` properties off every `IOAccelerator`-matched service (`IOServiceMatching(b"IOAccelerator")` + `IORegistryEntryGetChildIterator`), summing `accumulatedGPUTime` ns per pid across every client and every accelerator (multi-die safe). `utils.get_top_processes()` deltas this the same way it deltas CPU time — via a shared `_delta_ns()` helper factored out of the CPU pass — into `gpu_time_share`, a partition of `Σ all-procs GPU-time Δ` mirroring the CPU model. `utils.attribute_power(share_cpu, share_gpu, cpu_watts, gpu_watts)` combines both into the final `PWR` value: `PWR = share_cpu × cpu_watts + share_gpu × gpu_watts`. `Σ(PWR)` now reconciles to `cpu_watts + gpu_watts`, surfaced as a `Σ shown N.NW / pkg CPU+GPU M.MW` token in the table's border subtitle.
+- **Denominator/visibility symmetry**: IOKit's registry has no same-UID restriction, so it sees privileged system processes (e.g. `WindowServer`) that `native_sys.get_native_processes()` silently drops. Those pids can never get a process-table row, so the GPU pass excludes them from `total_gpu_delta_ns` too (skip caching/summing any pid absent from that poll's `native_procs`) — otherwise every visible process's `gpu_time_share` would be diluted against GPU time no row could ever claim, breaking the "numerator and denominator drawn from the same visible set" invariant the CPU pass relies on.
+- **Labelled estimate**: attribution is by wall time, so a process pinned to E-cores is over-attributed and one on P-cores under-attributed (DVFS scales it further); GPU has no equivalent per-core skew. The token carries an `est` marker and the `HelpScreen` documents the caveat. A cycle-/per-core-power-weighted refinement is a future improvement.
+- **Lifecycle**: `cpu_time_share` is `None` (pending, first sample) or a real share; `gpu_time_share` is `0.0` (real — never opened a GPU client) or `None` (pending — has a client, no delta yet) or a real share. The `PWR` cell's `–` (first-sample) rule triggers on `cpu_time_share is None` alone — every process eventually gets a CPU reading, most never get a GPU one at all, so GPU stays the secondary/additive signal. A fully idle poll (Σ Δ = 0 in either domain) yields all-zero shares with no divide-by-zero.
+- **Where it lives**: `utils.get_top_processes` emits `cpu_time_share`/`gpu_time_share` (watts stay out of `utils`); the process table (`ActopApp._refresh_process_table` in `tui/app.py`) calls `attribute_power` and adds the `SORT_POWER` sort mode (now `cpu_watts`/`gpu_watts`-aware, since ordering by attributed watts isn't equivalent to ordering by `cpu_time_share` alone once GPU is involved). Rejected alternatives (`proc_pid_rusage` energy fields, `TASK_POWER_INFO_V2`) and the validating spike are recorded in git history (PR #11). ANE has no per-process registry entry (confirmed via a full `ioreg -l` scan) and stays out of scope.
 
 ---
 

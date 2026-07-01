@@ -2,6 +2,7 @@
 
 import re
 import time
+from collections import defaultdict
 from typing import NamedTuple
 
 from .native_sys import get_dvfs_tables_native, get_thermal_pressure
@@ -177,6 +178,9 @@ class IOReportSampler:
         gpu_freq_mhz = 0
         gpu_active_pct = 0
         dram_bw_residencies = []
+        e_cluster_residency_ns = defaultdict(int)
+        p_cluster_residency_ns = defaultdict(int)
+        gpu_state_residencies = []
 
         ecpu_freqs = self._dvfs.get("ecpu", [])
         pcpu_freqs = self._dvfs.get("pcpu", [])
@@ -203,6 +207,8 @@ class IOReportSampler:
                     idx = _parse_core_index(item.channel, "ECPU")
                     if idx is not None:
                         e_core_data[idx] = (freq, active)
+                    for name, ns in item.state_residencies:
+                        e_cluster_residency_ns[name] += ns
                 elif "PCPU" in item.channel:
                     freq, active = _compute_residency_metrics(
                         item.state_residencies, pcpu_freqs
@@ -210,6 +216,8 @@ class IOReportSampler:
                     idx = _parse_core_index(item.channel, "PCPU")
                     if idx is not None:
                         p_core_data[idx] = (freq, active)
+                    for name, ns in item.state_residencies:
+                        p_cluster_residency_ns[name] += ns
 
             elif (
                 item.group == "GPU Stats" and item.subgroup == "GPU Performance States"
@@ -218,6 +226,7 @@ class IOReportSampler:
                     gpu_freq_mhz, gpu_active_pct = _compute_residency_metrics(
                         item.state_residencies, gpu_freqs
                     )
+                    gpu_state_residencies = list(item.state_residencies)
 
             elif item.group == "PMP" and item.subgroup == "DCS BW":
                 # Total DRAM bandwidth = sum over all AMCC RD+WR instances
@@ -240,9 +249,23 @@ class IOReportSampler:
 
         cpu_metrics = {
             "E-Cluster_active": 0,
-            "E-Cluster_freq_Mhz": 0,
+            "E-Cluster_freq_MHz": 0,
+            # DVFS ceiling per cluster (silicon max), from the frequency table
+            # discovered at startup; used by the throttle indicator.
+            "E-Cluster_max_freq_MHz": max(ecpu_freqs) if ecpu_freqs else 0,
             "P-Cluster_active": 0,
-            "P-Cluster_freq_Mhz": 0,
+            "P-Cluster_freq_MHz": 0,
+            "P-Cluster_max_freq_MHz": max(pcpu_freqs) if pcpu_freqs else 0,
+            # Time-in-frequency-state distribution over the sample interval
+            # (idle/low/mid/high buckets, relative to the cluster's DVFS
+            # ceiling); the throttle indicator above uses only the ceiling
+            # and instantaneous freq, this keeps the full-interval shape.
+            "E-Cluster_residency_pct": _compute_residency_distribution(
+                list(e_cluster_residency_ns.items()), ecpu_freqs
+            ),
+            "P-Cluster_residency_pct": _compute_residency_distribution(
+                list(p_cluster_residency_ns.items()), pcpu_freqs
+            ),
             "ane_W": ane_e,
             "cpu_W": cpu_e,
             "gpu_W": gpu_e,
@@ -258,12 +281,12 @@ class IOReportSampler:
             sys_idx = cluster_idx
             cpu_metrics["e_core"].append(sys_idx)
             cpu_metrics["E-Cluster" + str(sys_idx) + "_active"] = active
-            cpu_metrics["E-Cluster" + str(sys_idx) + "_freq_Mhz"] = freq
+            cpu_metrics["E-Cluster" + str(sys_idx) + "_freq_MHz"] = freq
             e_freqs.append(freq)
             e_actives.append(active)
 
         if e_freqs:
-            cpu_metrics["E-Cluster_freq_Mhz"] = max(e_freqs)
+            cpu_metrics["E-Cluster_freq_MHz"] = max(e_freqs)
         if e_actives:
             cpu_metrics["E-Cluster_active"] = int(sum(e_actives) / len(e_actives))
 
@@ -274,18 +297,22 @@ class IOReportSampler:
             sys_idx = cluster_idx
             cpu_metrics["p_core"].append(sys_idx)
             cpu_metrics["P-Cluster" + str(sys_idx) + "_active"] = active
-            cpu_metrics["P-Cluster" + str(sys_idx) + "_freq_Mhz"] = freq
+            cpu_metrics["P-Cluster" + str(sys_idx) + "_freq_MHz"] = freq
             p_freqs.append(freq)
             p_actives.append(active)
 
         if p_freqs:
-            cpu_metrics["P-Cluster_freq_Mhz"] = max(p_freqs)
+            cpu_metrics["P-Cluster_freq_MHz"] = max(p_freqs)
         if p_actives:
             cpu_metrics["P-Cluster_active"] = int(sum(p_actives) / len(p_actives))
 
         gpu_metrics = {
             "freq_MHz": gpu_freq_mhz,
+            "max_freq_MHz": max(gpu_freqs) if gpu_freqs else 0,
             "active": gpu_active_pct,
+            "residency_pct": _compute_residency_distribution(
+                gpu_state_residencies, gpu_freqs
+            ),
         }
 
         total_gbps = _compute_bandwidth_gbps(dram_bw_residencies)
@@ -367,12 +394,12 @@ _CORE_INDEX_PATTERN = re.compile(r"^[EP]CPU(\d+)")
 def _is_int_cpu_metric(key):
     if key in (
         "E-Cluster_active",
-        "E-Cluster_freq_Mhz",
+        "E-Cluster_freq_MHz",
         "P-Cluster_active",
-        "P-Cluster_freq_Mhz",
+        "P-Cluster_freq_MHz",
     ):
         return True
-    return key.endswith("_active") or key.endswith("_freq_Mhz")
+    return key.endswith("_active") or key.endswith("_freq_MHz")
 
 
 def _parse_core_index(channel_name, prefix):
@@ -436,6 +463,63 @@ def _compute_residency_metrics(residencies, freq_table=None):
     avg_freq = int(weighted_freq_sum / active_ns)
     active_pct = int(active_ns / total_ns * 100)
     return (avg_freq, active_pct)
+
+
+_RESIDENCY_BUCKETS = ("idle", "low", "mid", "high")
+
+
+def _bucket_for_freq_ratio(ratio):
+    """Map a freq/max_freq ratio to a residency bucket name."""
+    if ratio >= 0.75:
+        return "high"
+    if ratio >= 0.40:
+        return "mid"
+    return "low"
+
+
+def _compute_residency_distribution(residencies, freq_table=None):
+    """Bucket per-state ns residencies into idle/low/mid/high percent shares.
+
+    Relative to max(freq_table) (the DVFS ceiling), so buckets are comparable
+    across chips with different absolute clock ranges — mirrors the ceiling-
+    relative ratio used by the throttle indicator. Unresolvable states and an
+    unknown ceiling both bucket as idle: "low" should only mean "resolved to
+    a real, low frequency," not "we couldn't tell."
+
+    Returns {"idle": int, "low": int, "mid": int, "high": int} summing to
+    ~100 (all zero when there is no residency to bucket).
+    """
+    if freq_table is None:
+        freq_table = []
+    max_freq = max(freq_table) if freq_table else 0
+
+    bucket_ns = {name: 0 for name in _RESIDENCY_BUCKETS}
+    total_ns = 0
+    for name, ns in residencies:
+        total_ns += ns
+        if name.upper() in ("IDLE", "DOWN", "OFF", "UNKNOWN", ""):
+            bucket_ns["idle"] += ns
+            continue
+        freq_mhz = _resolve_state_freq(name, freq_table)
+        if freq_mhz is None or freq_mhz <= 0 or max_freq <= 0:
+            bucket_ns["idle"] += ns
+            continue
+        bucket_ns[_bucket_for_freq_ratio(freq_mhz / max_freq)] += ns
+
+    if total_ns <= 0:
+        return dict(bucket_ns)
+    return _largest_remainder_percentages(bucket_ns, total_ns, _RESIDENCY_BUCKETS)
+
+
+def _largest_remainder_percentages(bucket_ns, total_ns, order):
+    """Round bucket_ns/total_ns shares to ints that sum exactly to 100."""
+    raw = {name: (bucket_ns[name] / total_ns) * 100.0 for name in order}
+    floors = {name: int(raw[name]) for name in order}
+    remainder = 100 - sum(floors.values())
+    fracs = sorted(order, key=lambda n: raw[n] - floors[n], reverse=True)
+    for name in fracs[:remainder]:
+        floors[name] += 1
+    return floors
 
 
 _VP_PATTERN = re.compile(r"^V(\d+)P\d+$")

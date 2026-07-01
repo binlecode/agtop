@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "actop"
-version = "1.0.4"
+version = "1.2.0"
 description = "Performance monitoring CLI tool for Apple Silicon"
 readme = "README.md"
 license = { text = "MIT" }
@@ -30,6 +30,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["ruff", "pytest"]
 pandas = ["pandas>=1.3"]
+# ANE load generator (scripts/ane_load.py) only; macOS-only + heavy, kept out
+# of `dev` so Linux CI (`pip install -e ".[dev]"`) stays lean and green.
+ane = ["coremltools>=7.0", "numpy>=1.21"]
 
 [project.urls]
 Homepage = "https://github.com/binlecode/actop"
