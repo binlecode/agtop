@@ -261,11 +261,6 @@ class BrailleChart(Widget):
         return out
 
 
-def _braille_spark(history, width_chars: int = 8) -> str:
-    """Inline braille sparkline, 1 sample per character, 4 levels per cell."""
-    return _inline_spark(history=history, width_chars=width_chars, glyph_mode="dots")
-
-
 class MetricsUpdated(Message):
     """Posted by ActopApp when a new hardware snapshot is ready."""
 

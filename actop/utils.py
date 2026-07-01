@@ -102,18 +102,6 @@ def get_soc_info():
     return soc_info
 
 
-def _normalize_process_command(cmdline, fallback_name):
-    if isinstance(cmdline, (list, tuple)):
-        command = " ".join(str(part) for part in cmdline if part)
-    else:
-        command = ""
-    command = command.strip()
-    if command:
-        return command
-    fallback = str(fallback_name or "").strip()
-    return fallback if fallback else "?"
-
-
 _PROCESS_CPU_CACHE = {}
 
 

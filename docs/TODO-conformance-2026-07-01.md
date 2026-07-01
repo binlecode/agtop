@@ -49,6 +49,6 @@ No behavior change on Darwin (the guard is a no-op there); on non-Darwin, `impor
 
 ## Deferred backlog (P2 + P3 — 4 violations)
 
-- **P2** R11 duplication: 1 (`_package_power_percent` extraction in `tui/widgets.py`)
-- **P3** R9 naming drift: 1 (CPU `_Mhz` vs GPU `_MHz` casing in `sampler.py`, 8 CPU-side sites + `api.py` lookups — larger blast radius than a one-line fix, better as its own small PR)
-- **P3** R10 dead code: 2 (`_braille_spark`, `_normalize_process_command` — trivial deletes, bundle with whichever PR touches those files next)
+- [x] **P2** R11 duplication: 1 (`_package_power_percent` extraction in `tui/widgets.py`) — extracted alongside `_bandwidth_percent`; both `update_metrics` (`:549`) and `_compute_alerts` (`:819`) now call it.
+- [x] **P3** R9 naming drift: 1 (CPU `_Mhz` vs GPU `_MHz` casing in `sampler.py`, 8 CPU-side sites + `api.py` lookups — larger blast radius than a one-line fix, better as its own small PR) — standardized all CPU keys to `_MHz` in `sampler.py`, `api.py`, and `tests/test_sampler.py`.
+- [x] **P3** R10 dead code: 2 (`_braille_spark`, `_normalize_process_command` — trivial deletes, bundle with whichever PR touches those files next) — both deleted.
