@@ -15,6 +15,7 @@ This file is the single source of truth for repository guidelines, used by Claud
 - Do not run `python`, `pip`, or `pytest` from the global environment for this repo.
 
 ## Build, Test, and Development Commands
+- `git config core.hooksPath .githooks`: **run once per clone** to activate the local hooks (`pre-commit` secret redaction + `pre-push` `main` guard). Fresh clones have no hooks until this is set.
 - `.venv/bin/python -m pip install -e ".[dev]"`: install editable + dev deps (ruff).
 - `.venv/bin/python -m actop.actop --help`: validate CLI parsing and flags.
 - `.venv/bin/python -m actop.actop --interval 2 --avg 30`: run the tool locally.
@@ -45,7 +46,7 @@ This file is the single source of truth for repository guidelines, used by Claud
 
 ## Release Process
 
-`main` is **PR-only** (branch protection + `.githooks/pre-commit` redaction check and `.githooks/pre-push` guard; run `git config core.hooksPath .githooks` once). Bump the version + CHANGELOG via a PR, merge, then tag with `scripts/tag_release.sh [version]`. The Homebrew formula lives in the separate tap repo `binlecode/homebrew-actop` (not this repo); CI syncs it on tag and publishes to PyPI via OIDC. See `docs/DESIGN-cicd-release.md` for the full runbook.
+`main` is **PR-only** (branch protection + `.githooks/pre-commit` redaction check and `.githooks/pre-push` guard; run `git config core.hooksPath .githooks` once). Bump the version + CHANGELOG via a PR, merge, then tag with `scripts/tag_release.sh [version]`. The Homebrew formula lives in the separate tap repo `binlecode/homebrew-actop` (not this repo); CI syncs it on tag and publishes to PyPI via OIDC. See `docs/DESIGN-sdlc-cicd-release.md` for the full runbook.
 
 ## SDLC & Architectural Documentation
 
@@ -53,7 +54,9 @@ The `docs/` directory contains essential system reviews, research, operations gu
 - `docs/REVIEW-architecture-comparison.md`: Performance and architectural comparison between `actop` (Python) and `mactop` (Go).
 - `docs/REVIEW-tui-frameworks.md`: Analysis of modern Python TUI frameworks and selection of Textual.
 - `docs/TODO-native-polling.md`: Detailed implementation plan for migrating to native macOS APIs (replacing `psutil`).
-- `docs/DESIGN-cicd-release.md`: CI/CD bottling and tap release operational runbook.
+- `docs/DESIGN-sdlc-cicd-release.md`: CI/CD bottling and tap release operational runbook.
+
+**Conformance auditing:** the `/audit-conformance` skill (`.claude/skills/audit-conformance/`) periodically judgment-scans the whole tree against 12 coding rules (layering, dead code, DRY, naming, swallowed errors) — the whole-codebase counterpart to diff-scoped `/code-review`. It writes an actionable `docs/TODO-conformance-YYYY-MM-DD.md` and never proposes structural/guard tests (they would violate the functional-tests-only mandate).
 
 ## Coding Style & Naming Conventions
 - Follow existing Python style: 4-space indentation, snake_case for functions/variables, short focused modules.
@@ -84,6 +87,7 @@ The `docs/` directory contains essential system reviews, research, operations gu
 
 ## Commit & Pull Request Guidelines
 - **Branch from `main`; PR strictly into `main`.** Every branch forks from `main` and targets `main`. **Never fork a feature branch off another feature branch** (no stacked PRs): if you need work that is still on an unmerged branch, wait for it to merge and re-branch from `main`. This holds especially for CI/CD and release changes — they land via a single PR into `main`, never a chained branch.
+- **Bump the version in every PR.** Each PR updates `pyproject.toml` version + moves `CHANGELOG.md` `[Unreleased]` into a new dated section, in the same PR: **patch bump by default, minor only for a milestone PR** (major reserved for breaking API/CLI changes). Tagging (`scripts/tag_release.sh`) is a separate step after merge and is what publishes — see `docs/DESIGN-sdlc-cicd-release.md`.
 - Use concise, imperative commit subjects (as seen in history), e.g. `Add support for M1 Ultra` or `actop/utils.py: add bandwidth of M2`.
 - Keep commits scoped to one logical change.
 - Before every commit and before every push, always run:

@@ -1,11 +1,68 @@
-# CI/CD & Release Design
+# SDLC, CI/CD & Release Design
 
-This document serves two purposes:
+This document serves three purposes:
 
-1. **Design / tutorial** — explains the Homebrew packaging model, CI/CD component ownership, the CI validation matrix, and the end-to-end release flow so that new contributors (human or AI) can understand how releases work without reading CI workflow files.
-2. **Runbook** — provides step-by-step release instructions, operational rules, and failure recovery playbooks for day-to-day release execution.
+1. **SDLC governance** — the rules every change follows: branching, versioning, review gates, guardrails (hooks + GitHub-native scanning), dependencies, and the functional-tests mandate.
+2. **Design / tutorial** — explains the Homebrew packaging model, CI/CD component ownership, the CI validation matrix, and the end-to-end release flow so that new contributors (human or AI) can understand how releases work without reading CI workflow files.
+3. **Runbook** — provides step-by-step release instructions, operational rules, and failure recovery playbooks for day-to-day release execution.
 
-> **Architecture note (since v1.0.0):** `main` of `binlecode/actop` is **strictly PR-only** (branch protection + `.githooks/pre-commit` redaction check + `.githooks/pre-push` guard). CI never pushes to `main`. The Homebrew formula lives in a **separate tap repo**, `binlecode/homebrew-actop`, and the release workflow syncs it there using a **token-driven** push (`HOMEBREW_TAP_TOKEN`). PyPI publishing supports **two flows**: the current **tokenless OIDC Trusted Publishing** flow and a legacy **token-driven** (`twine` + API token) flow retained as fallback — both are detailed below.
+> **Architecture note (since v1.0.0):** `main` of `binlecode/actop` is **strictly PR-only** (branch protection + `enforce_admins` + `.githooks/pre-commit` redaction check + `.githooks/pre-push` guard). CI never pushes to `main`. The Homebrew formula lives in a **separate tap repo**, `binlecode/homebrew-actop`, and the release workflow syncs it there using a **token-driven** push (`HOMEBREW_TAP_TOKEN`). PyPI publishing supports **two flows**: the current **tokenless OIDC Trusted Publishing** flow and a legacy **token-driven** (`twine` + API token) flow retained as fallback — both are detailed below.
+
+## SDLC Rules & Guardrails
+
+The rules below bind every change. They are enforced by a mix of local hooks, GitHub
+branch protection, GitHub-native scanning, and CI — with `CLAUDE.md` as the canonical
+short-form rules file for AI/human contributors and this section as the rationale.
+
+### Branching & PR model
+
+- **Branch from `main`; PR strictly into `main`.** Every branch forks from `main` and
+  targets `main`. **Never fork a feature branch off another feature branch** (no stacked
+  PRs): if you need work that's still on an unmerged branch, wait for it to land and
+  re-branch from `main`. This holds especially for CI/CD and release changes.
+- **One logical change per branch**, with concise imperative commit subjects.
+- **`main` is PR-only**, enforced three ways: server-side branch protection
+  (`enforce_admins=true`), a local `.githooks/pre-push` guard, and the fact that CI never
+  pushes to `main`.
+
+### Versioning (patch-per-PR)
+
+- **Every PR bumps the version** in `pyproject.toml` **and** moves `CHANGELOG.md`
+  `[Unreleased]` into a new dated section — **in the same PR**. There is no separate
+  "release-only" PR; each merged PR is a releasable increment.
+- **Patch bump by default** (`X.Y.Z` → `X.Y.(Z+1)`). **Minor bump only for milestone
+  PRs** (a headline feature / flagship differentiator). Majors are reserved for breaking
+  public-API/CLI changes.
+- **Tagging is a separate, explicit step after merge** (`scripts/tag_release.sh`), which
+  triggers the PyPI + Homebrew publish. Bumping the version in a PR does **not** publish;
+  merging without tagging just stages the next release.
+
+### Guardrails
+
+| Guardrail | Mechanism | Scope |
+| --- | --- | --- |
+| No direct push to `main` | branch protection + `.githooks/pre-push` | push time |
+| No committed secrets | `.githooks/pre-commit` redaction (length-anchored patterns) **and** GitHub **secret scanning + push protection** (free on public repos; the backstop for clones that never ran `core.hooksPath`) | commit + push time |
+| Hooks activation | `git config core.hooksPath .githooks` — **run once per clone** (fresh clones have no hooks until set) | first clone |
+| Lint / format / tests | `main-ci.yml` on every PR: `ruff check` + `ruff format --check` + `pytest -m "not local"` across Python 3.11–3.14 (+ 3.15 canary) | PR |
+| Functional tests only | `CLAUDE.md` "Testing Guidelines" (no structural/mock-the-data/coverage-only tests); reviewed at PR and swept whole-tree by `/audit-conformance` | PR + periodic |
+| Dependency freshness / CVEs | `.github/dependabot.yml` (weekly `pip` + `github-actions`, grouped minor/patch) | scheduled |
+| PR completeness | `.github/PULL_REQUEST_TEMPLATE.md` (validation commands, Apple-Silicon run, functional-tests attestation) | PR |
+| Vulnerability disclosure | `SECURITY.md` (private reporting; sudoless-posture scope) | ongoing |
+
+> **One-time GitHub setup (maintainer, public-repo, free):** enable **Secret scanning**,
+> **Push protection**, and **Private vulnerability reporting** under
+> *Settings → Code security*. These are platform features — they consume **no** Actions
+> minutes.
+
+### Conformance auditing
+
+`/code-review` catches what a *diff* introduces; the **`/audit-conformance`** skill
+(`.claude/skills/audit-conformance/`) is the whole-tree counterpart — it periodically
+scans the codebase against 12 coding rules (layering, dead code, DRY, naming, swallowed
+errors) and writes an actionable `docs/TODO-conformance-YYYY-MM-DD.md`. By doctrine it
+**never** proposes structural/guard tests (they would violate the functional-tests
+mandate); fixes flow through the normal branch → PR → `/code-review` → merge cycle.
 
 ## Homebrew Packaging Model
 
@@ -219,8 +276,8 @@ brew info binlecode/actop/actop
 
 **Do:**
 - **Branch from `main` and PR strictly into `main`** — one logical change per branch. **Never fork a feature branch off another feature branch** (no stacked PRs); if you need unmerged work, wait for it to land and re-branch from `main`. CI/CD and release changes in particular go in via a single PR to `main`.
-- Bump version/changelog through a **PR** (never push `main` directly).
-- Use `scripts/tag_release.sh` for all release tags.
+- **Bump the version + CHANGELOG in the same PR** (never push `main` directly): patch by default, minor for a milestone PR. See *SDLC Rules → Versioning*.
+- Use `scripts/tag_release.sh` for all release tags **after** the bump PR merges.
 - Let `release-formula.yml` own formula sync commits (in the tap repo).
 - Verify `release-formula` and `publish-pypi` after each release.
 - Keep `refresh_resources=true` (default) for normal releases.
