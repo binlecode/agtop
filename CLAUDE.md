@@ -30,6 +30,7 @@ This file is the single source of truth for repository guidelines, used by Claud
 | `actop/sampler.py` | `IOReportSampler`: subscription lifecycle, delta computation, `SampleResult` conversion, DVFS table discovery via native ctypes |
 | `actop/ioreport.py` | ctypes bindings to `libIOReport.dylib` and CoreFoundation (`IOReportSubscription`, `cfstr`, `cf_release`) |
 | `actop/smc.py` | SMC temperature reader: IOKit ctypes bindings to `AppleSMC`, key discovery, CPU/GPU die temperature reads |
+| `actop/gpu_registry.py` | Per-process GPU time via IOKit ctypes bindings: `get_gpu_time_by_pid()` sums `accumulatedGPUTime` off each `AGXDeviceUserClient` |
 | `actop/utils.py` | System queries: `psutil` RAM/swap metrics, `sysctl`/`system_profiler` SoC info, `psutil` process collection |
 | `actop/soc_profiles.py` | 16 built-in M1–M4 SoC profiles with power/bandwidth reference values; tier fallbacks for unknown chips |
 | `actop/power_scaling.py` | Power chart scaling: `auto` mode (rolling peak x1.25) vs `profile` mode (SoC reference wattage) |
@@ -76,7 +77,8 @@ The `docs/` directory contains essential system reviews, research, operations gu
   - reads or writes private attributes to arrange or assert state (e.g. `dash._sample_count = 5`, `dash._core_hist`, `dash._chart_glyph`);
   - asserts internal implementation details, helper math constants, or a private function's output in isolation;
   - uses a mock, fake, monkeypatch, or a synthetic subclass/harness that overrides real behavior to fake layout, I/O, or data;
-  - exists only to raise coverage.
+  - exists only to raise coverage;
+  - asserts only shape/bounds on real public data (e.g. "returns a non-negative dict", "values partition to ≤ 1.0") with no real workload behind it, when a behavioral test already exercises the same code path — the bounds/invariant becomes an assertion *inside* that behavioral test, not a standalone test of its own.
 - **Accept a test (it is functional) when it drives a public surface:** CLI invocation (`subprocess` / `build_parser().parse_args`), the public API (`Monitor` / `Profiler`), the real config merge (`create_dashboard_config`), documented public module functions (e.g. `power_to_percent`, `get_soc_profile`), real export/format contracts (NDJSON / Prometheus), real hardware/file I/O paths, or a real widget rendered through its public path (`BrailleChart.render()` via the `data` setter, or a `HardwareDashboard` mounted with Textual `App.run_test()` and fed real `SystemSnapshot`s through `update_metrics`).
 - A minimal Textual host `App` used solely to mount a real widget is allowed (it is a mount point, not a fake); faking the data or the logic under test is not.
 - Minimum checks before opening a PR:

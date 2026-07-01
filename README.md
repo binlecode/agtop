@@ -52,6 +52,7 @@ How the sudoless, in-process field stacks up:
 | Per-process power/energy attribution (`PWR` column) | ✅ | — | — |
 | Bandwidth % of SoC peak + `MEM-BOUND` saturation alert | ✅ | — | — |
 | Throttle-state indicator (`THROTTLING:CPU/GPU`) | ✅ | — | — |
+| DVFS P-state residency distribution (per-cluster) | ✅ | — | — |
 | Python API (`Monitor`/`Profiler`, `to_pandas()`) | ✅ | — | — |
 | SoC-accurate power scaling (M1–M4 profiles) | ✅ | rolling peak | rolling peak |
 | Session energy (∫ package power) | ✅ | — | — |
