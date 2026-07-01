@@ -138,6 +138,8 @@ class Profiler:
             for metric, threshold, callback in self._alerts:
                 val = getattr(snapshot, metric, None)
                 if val is not None and val >= threshold:
+                    # Deliberate fault isolation: a raising user callback must
+                    # not kill the sampling thread. Best-effort by design.
                     try:
                         callback(val)
                     except Exception:
