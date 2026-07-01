@@ -6,6 +6,30 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-01
+
+### Changed
+- Documentation & SDLC governance only (no runtime code changes):
+  - Consolidated the release runbook into `docs/DESIGN-sdlc-cicd-release.md` (renamed
+    from `GUIDE-cicd-release.md`) as the single SDLC + CI/CD + release design doc;
+    documented both PyPI publish flows (OIDC default, token-driven fallback) and the CI
+    validation matrix.
+  - Baked branching + versioning rules into `CLAUDE.md` and the design doc: branch from
+    `main`, PR strictly into `main` (no stacked branches); patch bump per PR merge,
+    minor only for milestone PRs.
+  - Marked the Tier-1 per-process-power feature shipped and corrected the roadmap.
+
+### Added
+- `.github/dependabot.yml` — weekly `pip` + `github-actions` dependency updates
+  (grouped minor/patch to cut PR noise).
+- `.github/PULL_REQUEST_TEMPLATE.md` — PR checklist mirroring the contributor guidelines
+  (validation commands, Apple-Silicon run, functional-tests attestation).
+
+### Security
+- `SECURITY.md` — private vulnerability reporting policy scoped to actop's sudoless,
+  in-process posture; documented enabling GitHub secret scanning + push protection as
+  the redaction backstop for clones that never activated the local hooks.
+
 ## [1.0.2] - 2026-07-01
 
 ### Added
