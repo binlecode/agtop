@@ -6,6 +6,33 @@ This project follows a Keep a Changelog-style format and uses version tags for r
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-01
+
+### Added
+- **Per-process GPU attribution** — the `PWR` column now covers GPU, not just CPU.
+  A new `gpu_registry.py` module reads per-pid `accumulatedGPUTime` off each
+  `AGXDeviceUserClient` via IOKit, sudoless. `utils.get_top_processes()` exposes
+  a `gpu_time_share` alongside the existing `cpu_time_share`, and
+  `utils.attribute_power()` combines both into the final watts value used by
+  `PWR` and `SORT_POWER`. Completes Tier 2 of the feature-gap roadmap. Documented
+  in `DESIGN-system.md` §5.7.
+- `scripts/ane_load.py` — a CoreML-based Apple Neural Engine load generator for
+  verifying that the ANE gauge reports power/percent correctly (the ANE reads
+  `0% (0.0W)` when idle because it is power-gated). Builds an fp16 conv stack in
+  memory, pins compute units to CPU+ANE, and loops inference.
+- New `ane` optional-dependencies extra (`coremltools`, `numpy`) for the load
+  generator. Kept out of the `dev` extra so Linux CI (`pip install -e ".[dev]"`)
+  stays lean and unaffected.
+- README: DVFS residency comparison row, a Troubleshooting FAQ entry explaining
+  the expected idle `ANE 0%` reading, and a Development note documenting the
+  `ane` extra + `scripts/ane_load.py`.
+
+### Fixed
+- Guarded native `ctypes` library loads in `gpu_registry.py`, `smc.py`, and
+  `ioreport.py` under `sys.platform == "darwin"` (matching `native_sys.py`'s
+  existing pattern) — an unguarded load in `gpu_registry.py` was crashing
+  `import actop` on non-Darwin, breaking CI's `ubuntu-latest` matrix.
+
 ## [1.1.0] - 2026-07-01
 
 ### Added
