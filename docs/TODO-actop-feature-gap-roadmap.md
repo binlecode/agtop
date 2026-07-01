@@ -35,7 +35,7 @@ Everything below is feasible on the existing **sudoless in-process** stack.
 - **What**: an **Energy/Power (`PWR`) column** in the process table — "which process is drawing the watts." Activity Monitor's "Energy Impact," but in a sudoless TUI.
 - **Why white space**: asitop/mactop/macmon/silitop show *system-total* power and a CPU%/RSS process list; **none attributes power/energy per process**. Nobody does it.
 - **Plan**: fully split out — native `proc_pid_rusage` binding, `RUsageInfoV4` struct, the `native_sys → utils → tui/widgets → export` data flow, TUI mockup, edge cases, and the functional test plan are in **[`TODO-t1-per-process-power.md`](TODO-t1-per-process-power.md)**.
-- **Effort**: M–L. **Acceptance**: per-process `PWR` tracks a known busy process (e.g. an inference run) and Σ(per-proc CPU power) ≈ sampled package CPU power.
+- **Effort**: S–M (revised down after a Phase-0 spike: no new native binding — attribute `cpu_watts` by each process's existing CPU-time share). **Acceptance**: per-process `PWR` tracks a known busy process (e.g. an inference run) and Σ(per-proc CPU power) reconciles to package CPU power by construction.
 
 ### 2. Bandwidth as % of SoC peak + saturation indicator ⭐ *the LLM answer*
 - **What**: render memory bandwidth not just as GB/s but as **% of this chip's theoretical peak**, with a saturation/`MEM-BOUND` indicator.
