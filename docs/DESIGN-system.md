@@ -138,8 +138,9 @@ The macOS system thermal pressure state is queried cleanly via the Objective-C r
 ### 3.1 `libIOReport` Channel Management
 The `ioreport.py` module defines direct ctypes structures for accessing the private `libIOReport.dylib`. It creates subscriptions to low-level hardware performance channels:
 - `"Energy Model"`: Tracks raw energy counters.
-- `"CPU Stats"`: Handles CPU cores and clusters residency.
-- `"GPU Stats"`: Monitors GPU performance states.
+- `"CPU Stats"` / `"CPU Core Performance States"`: Handles CPU cores and clusters residency.
+- `"GPU Stats"` / `"GPU Performance States"`: Monitors GPU performance states.
+- `"PMP"` / `"DCS BW"`: DRAM controller bandwidth residency histograms — see §3.5.
 
 The subscription pipeline coordinates raw state pointers via:
 ```python
@@ -171,11 +172,24 @@ In `actop/sampler.py`, CPU statistics are fetched via channel loops looking for 
 
 In contrast, the GPU stats channel only exposes a single unified channel named **`GPUPH`** (GPU Performance Handler) inside `GPU Performance States`. Because Apple Silicon's GPU acts as a monolithic co-processor governed under a unified dynamic voltage/clock domain, macOS does not record or publish individual ALUs/cores metrics inside `libIOReport`. Therefore, only global GPU utilization and average frequencies can be derived.
 
-### 3.5 Metric Coverage: Aggregation Limits and Deliberate Non-Goals
+### 3.5 Memory Bandwidth via `PMP` / `DCS BW`
+
+Total DRAM bandwidth is read in-process and unprivileged, the same way DVFS residency is (§3.3) — this group was not part of the original three-group subscription; it was added after a feasibility spike confirmed a `GO` (findings folded in here; see git history for the original spike record).
+
+- **Group / subgroup**: `"PMP"` / `"DCS BW"`, found by enumerating all ~11,400 IOReport channels (`IOReportCopyAllChannels(0, 0)`). Energy-group `DCS`/`DRAM`/`AMCC` channels exist too but report **mJ energy**, not bandwidth; the IOReport `"Bandwidth"` group is PCIe-only.
+- **Not a byte counter.** `IOReportChannelGetUnitLabel` reports `"events"` and `IOReportSimpleGetIntegerValue` returns the sentinel `INT64_MIN` — these are **state/residency channels**, structurally identical to the DVFS P-state residencies already parsed (§3.3). Each channel has 32 states named as bandwidth buckets (`"32GB/s"`, `"64GB/s"`, …) whose *values* are nanoseconds of residency at that level.
+  $$\text{GB/s} = \frac{\sum(\text{bucket GB/s} \times \text{residency}_{ns})}{\sum \text{residency}_{ns}}$$
+  already in GB/s — no division by the sample interval (`sampler._compute_bandwidth_gbps`).
+- **Channel → agent mapping**: `AMCC RD/WR/RD+WR` = total DRAM controller (the authoritative total); `EACC0` = E-cores; `PACC0`/`PACC1` = P-clusters; `AGX` = GPU; `ANE0 L0/L1` = Neural Engine; `AVE*`/`AVD*`/`PRORES*`/`SCODEC*`/`JPEG*` = media; plus `ISP*`, `DISP*`, `ATC*` (Thunderbolt), `ANS` (storage) — none of the latter are surfaced today.
+- **Per-agent breakdown was investigated and deliberately dropped, not deferred.** The per-agent channels (`EACC`/`PACC`/`AGX`/`AVE`/…) step in 1 GB/s buckets and **hard-cap at 32 GB/s**, while `AMCC` spans ~1 TB/s in 32 GB/s steps. Under an 8-worker `memcpy` load, `AMCC RD+WR` correctly read 350 GB/s while both P-cluster channels pegged at their 32 GB/s ceiling — per-agent attribution is unreliable at exactly the bandwidths that matter, so **only the `AMCC` total ships**; `SystemSnapshot.bandwidth_gbps` is a single aggregate by design, not a stopgap.
+- **Cost control**: subscribing to the ~90-channel `PMP` group is the irreducible kernel cost, but extracting per-state residency for all of them is not. `sampler._keep_states()` filters `IOReportSubscription.delta()`'s per-state extraction to `AMCC*` channels only. Measured marginal idle-CPU cost @1s interval: **+0.39%** filtered vs. **+0.70%** unfiltered, against a 3-group baseline of ~0.54% — the filter is what keeps the whole sampler under the `<0.5%` idle-CPU budget (`TODO-architecture-roadmap.md` Tier 1).
+- **Availability**: `SystemSnapshot.bandwidth_available` is `False` when the platform exposes no `DCS BW` channel, hiding the Mem BW row rather than showing a fabricated `0.0` (§5.3, §6).
+
+### 3.6 Metric Coverage: Aggregation Limits and Deliberate Non-Goals
 
 These boundaries are intentional and recorded here so they are not mistaken for oversights or re-litigated. actop's sampling layer deliberately captures only what the IOReport-first, unprivileged, SoC-power thesis can support cleanly:
 
-- **Memory bandwidth is exposed as a single aggregate.** `SystemSnapshot.bandwidth_gbps` is the total (read + write) across channels, which is what the Mem BW readout and `MEM-BOUND>` alert consume (see §5.3). A per-channel breakdown (CPU / GPU / media / DCS) is feasible in principle but would require the sampler to surface per-channel figures rather than the aggregate — deferred as a sampler change, not a presentation gap.
+- **Memory bandwidth is exposed as a single aggregate** (`SystemSnapshot.bandwidth_gbps`, the `AMCC` total) — see §3.5 for why the per-agent channels can't be attributed and are excluded.
 - **Network / disk I/O is a non-goal.** Present in `psutil`-based tools (mactop / btop) but orthogonal to the IOReport-first SoC-power focus; adding it would reintroduce the `psutil` dependency surface actop is moving away from.
 - **Per-process CPU power *is* attributed (since v1.0.2); GPU / ANE / true-energy per process are not.** actop partitions `SystemSnapshot.cpu_watts` across processes by each PID's CPU-time share (the `PWR` column, see §5.7) — an estimate, since a P-core-second draws more than an E-core-second, but one that reconciles to package CPU power by construction. This is white space no direct peer (asitop / mactop / macmon) fills. What remains unavailable sudoless: per-process **GPU / ANE** power, and a true hardware per-process **energy** counter (`proc_pid_rusage`'s `ri_*_energy` fields stay flat at 0 for ordinary compute — a Phase-0 spike disproved that path). Per-process CPU/RSS/threads come from the native process enumeration in §2.3.
 - **GPU per-core metrics** are a hardware limitation, not a scope choice — see §3.4.
